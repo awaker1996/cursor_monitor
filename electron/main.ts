@@ -1,0 +1,316 @@
+import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
+import { SettingsStore } from '../src/settings/SettingsStore';
+import { credentialVault } from '../src/security/CredentialVault';
+import { ProviderManager } from '../src/core/providers/ProviderManager';
+import { Poller } from '../src/core/poller';
+import { createFloatingBallWindow, getFloatingBallWindow, sendToFloatingBall } from './windows/floatingBall';
+import { createSettingsWindow } from './windows/settings';
+import { createTray, destroyTray, updateTrayIcon } from './tray';
+import {
+  getDockState,
+  handleMoveWhileDocked,
+  tryDockWindow,
+  undockWindow,
+} from './floatingBallDock';
+import {
+  clearCustomIconFile,
+  getIconPreviewDataUrl,
+  loadTrayIcon,
+  saveCustomIcon,
+} from './iconManager';
+import {
+  REFRESH_INTERVAL_MAX,
+  REFRESH_INTERVAL_MIN,
+  type AppSettings,
+  type TestConnectionResult,
+} from '../src/shared/types';
+import { createLogger } from '../src/utils/logger';
+
+const log = createLogger('Main');
+const isDev = !app.isPackaged;
+
+let settingsStore: SettingsStore;
+let providerManager: ProviderManager;
+let poller: Poller;
+let isPaused = false;
+
+function validateInterval(sec: number): string | null {
+  if (!Number.isInteger(sec)) return '刷新间隔必须是整数';
+  if (sec < REFRESH_INTERVAL_MIN || sec > REFRESH_INTERVAL_MAX) {
+    return `刷新间隔必须在 ${REFRESH_INTERVAL_MIN}-${REFRESH_INTERVAL_MAX} 秒之间`;
+  }
+  return null;
+}
+
+function broadcastSnapshot(): void {
+  const snapshot = providerManager.getLastSnapshot();
+  if (snapshot) {
+    sendToFloatingBall('snapshot-updated', snapshot);
+  }
+}
+
+function broadcastPollerState(): void {
+  sendToFloatingBall('poller-state', poller.getState());
+}
+
+function broadcastDockState(edge: import('../src/shared/types').DockEdge | null): void {
+  sendToFloatingBall('dock-state-changed', edge);
+}
+
+function refreshAppIcons(): void {
+  updateTrayIcon(loadTrayIcon(settingsStore.get()));
+}
+
+function resizeFloatingBallWindow(win: BrowserWindow, width: number, height: number): void {
+  const bounds = win.getBounds();
+  if (bounds.width === width && bounds.height === height) return;
+
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+  const nextX = Math.min(
+    Math.max(bounds.x + bounds.width - width, workArea.x),
+    workArea.x + workArea.width - width,
+  );
+  const nextY = Math.min(
+    Math.max(bounds.y + bounds.height - height, workArea.y),
+    workArea.y + workArea.height - height,
+  );
+
+  win.setBounds({
+    x: Math.round(nextX),
+    y: Math.round(nextY),
+    width,
+    height,
+  });
+}
+
+function setupIpc(): void {
+  ipcMain.handle('get-snapshot', () => providerManager.getLastSnapshot());
+
+  ipcMain.handle('get-poller-state', () => poller.getState());
+
+  ipcMain.handle('get-settings', () => settingsStore.get());
+
+  ipcMain.handle('update-settings', (_event, partial: Partial<AppSettings>) => {
+    if (partial.refreshIntervalSec !== undefined) {
+      const err = validateInterval(partial.refreshIntervalSec);
+      if (err) throw new Error(err);
+    }
+    const settings = settingsStore.update(partial);
+    poller.applySettingsChange();
+    if (partial.edgeAutoDockEnabled === false) {
+      const floatWin = getFloatingBallWindow();
+      if (floatWin && !floatWin.isDestroyed() && getDockState().docked) {
+        undockWindow(floatWin);
+        broadcastDockState(null);
+      }
+    }
+    refreshAppIcons();
+    BrowserWindow.getAllWindows().forEach((win) => {
+      win.webContents.send('settings-changed', settings);
+    });
+    return settings;
+  });
+
+  ipcMain.handle('save-cookie', async (_event, cookie: string) => {
+    if (!cookie || !cookie.trim()) throw new Error('Cookie 不能为空');
+    await credentialVault.saveCookie(cookie.trim());
+    log.info('Cookie saved');
+  });
+
+  ipcMain.handle('clear-cookie', async () => {
+    await credentialVault.clearCookie();
+    log.info('Cookie cleared');
+    return true;
+  });
+
+  ipcMain.handle('has-cookie', () => credentialVault.hasCookie());
+
+  ipcMain.handle('test-connection', async (): Promise<TestConnectionResult> => {
+    try {
+      const hasCookie = await credentialVault.hasCookie();
+      if (!hasCookie) {
+        return { success: false, message: '请先配置 Cookie' };
+      }
+      const snapshot = await providerManager.testCookieConnection();
+      broadcastSnapshot();
+      return { success: true, message: '连接成功', snapshot };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, message };
+    }
+  });
+
+  ipcMain.handle('manual-refresh', async () => {
+    await poller.manualRefresh();
+    broadcastSnapshot();
+    broadcastPollerState();
+  });
+
+  ipcMain.handle('toggle-pause', () => {
+    if (isPaused) {
+      isPaused = false;
+      settingsStore.update({ autoRefreshEnabled: true });
+      poller.resume();
+    } else {
+      isPaused = true;
+      settingsStore.update({ autoRefreshEnabled: false });
+      poller.pause();
+    }
+    broadcastPollerState();
+    return isPaused;
+  });
+
+  ipcMain.on('open-settings', () => {
+    createSettingsWindow(isDev, settingsStore.get());
+  });
+
+  ipcMain.on('set-orb-mode', (_event, mode: 'collapsed' | 'hover' | 'expanded') => {
+    const win = getFloatingBallWindow();
+    if (!win || win.isDestroyed()) return;
+    if (getDockState().docked) return;
+    const sizes: Record<'collapsed' | 'hover' | 'expanded', [number, number]> = {
+      collapsed: [80, 80],
+      hover: [280, 200],
+      expanded: [300, 448],
+    };
+    const [width, height] = sizes[mode] ?? sizes.collapsed;
+    resizeFloatingBallWindow(win, width, height);
+  });
+
+  // Backward compatibility for older renderer builds
+  ipcMain.on('set-expanded', (_event, expanded: boolean) => {
+    const win = getFloatingBallWindow();
+    if (!win || win.isDestroyed()) return;
+    if (getDockState().docked) return;
+    resizeFloatingBallWindow(win, 300, expanded ? 420 : 80);
+  });
+
+  ipcMain.on('move-window', (event, { dx, dy }: { dx: number; dy: number }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return;
+    if (getDockState().docked) {
+      const undocked = handleMoveWhileDocked(win, dx, dy);
+      if (undocked) broadcastDockState(null);
+    }
+    const [x, y] = win.getPosition();
+    win.setPosition(Math.round(x + dx), Math.round(y + dy));
+  });
+
+  ipcMain.on('finish-window-move', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return;
+    const edge = tryDockWindow(win, settingsStore.get().edgeAutoDockEnabled);
+    broadcastDockState(edge);
+  });
+
+  ipcMain.on('undock-window', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return;
+    if (getDockState().docked) {
+      undockWindow(win);
+      broadcastDockState(null);
+    }
+  });
+
+  ipcMain.handle('get-icon-preview', () => getIconPreviewDataUrl(settingsStore.get()));
+
+  ipcMain.handle('select-custom-icon', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择应用图标',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Images', extensions: ['png', 'ico', 'jpg', 'jpeg'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, message: '未选择文件' };
+    }
+    const customIconPath = saveCustomIcon(result.filePaths[0]);
+    const settings = settingsStore.update({ customIconPath });
+    refreshAppIcons();
+    BrowserWindow.getAllWindows().forEach((win) => {
+      win.webContents.send('settings-changed', settings);
+    });
+    return { success: true, message: '图标已更新', preview: getIconPreviewDataUrl(settings) };
+  });
+
+  ipcMain.handle('clear-custom-icon', async () => {
+    clearCustomIconFile();
+    const settings = settingsStore.update({ customIconPath: null });
+    refreshAppIcons();
+    BrowserWindow.getAllWindows().forEach((win) => {
+      win.webContents.send('settings-changed', settings);
+    });
+    return { success: true, preview: getIconPreviewDataUrl(settings) };
+  });
+}
+
+function setupPollerEvents(): void {
+  poller.onEvent((event) => {
+    if (event.type === 'snapshot' && event.snapshot) {
+      sendToFloatingBall('snapshot-updated', event.snapshot);
+    }
+    if (event.type === 'state' && event.state) {
+      sendToFloatingBall('poller-state', event.state);
+    }
+    if (event.type === 'error' && event.error) {
+      sendToFloatingBall('poller-state', poller.getState());
+    }
+  });
+}
+
+app.whenReady().then(() => {
+  credentialVault.setFallbackPath(app.getPath('userData'));
+  settingsStore = new SettingsStore();
+  providerManager = new ProviderManager(settingsStore);
+  poller = new Poller(providerManager, settingsStore);
+
+  setupIpc();
+  setupPollerEvents();
+
+  createFloatingBallWindow(isDev);
+
+  createTray({
+    getIcon: () => loadTrayIcon(settingsStore.get()),
+    onRefresh: () => void poller.manualRefresh(),
+    onTogglePause: () => {
+      if (isPaused) {
+        isPaused = false;
+        settingsStore.update({ autoRefreshEnabled: true });
+        poller.resume();
+      } else {
+        isPaused = true;
+        settingsStore.update({ autoRefreshEnabled: false });
+        poller.pause();
+      }
+      broadcastPollerState();
+    },
+    isPaused: () => isPaused || !settingsStore.get().autoRefreshEnabled,
+    onOpenSettings: () => createSettingsWindow(isDev, settingsStore.get()),
+    onQuit: () => app.quit(),
+  });
+
+  refreshAppIcons();
+
+  isPaused = !settingsStore.get().autoRefreshEnabled;
+  poller.start();
+
+  log.info('Application started');
+});
+
+app.on('window-all-closed', () => {
+  // Keep running in tray on Windows
+});
+
+app.on('before-quit', () => {
+  poller.destroy();
+  providerManager.destroy();
+  destroyTray();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createFloatingBallWindow(isDev);
+  }
+});

@@ -1,0 +1,15 @@
+appId: com.cursor.token.monitor
+productName: Cursor Token Monitor
+directories:
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+win:
+  target:
+    - nsis
+    - portable
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
