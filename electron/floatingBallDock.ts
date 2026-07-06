@@ -1,10 +1,12 @@
 import { BrowserWindow, screen } from 'electron';
 import type { DockEdge } from '../src/shared/types';
+import { ORB_WINDOW_HEIGHT, ORB_WINDOW_WIDTH } from './windows/floatingBall';
 
 export const DOCK_THRESHOLD = 24;
-export const PEEK_TAB_WIDTH = 20;
-export const PEEK_TAB_LENGTH = 56;
+export const PEEK_TAB_WIDTH = 32;
+export const PEEK_TAB_LENGTH = 72;
 export const ORB_WINDOW_PADDING = 12;
+export const ORB_ANCHOR_SIZE = 80;
 export const UNDOCK_DRAG = 4;
 
 /** @deprecated use PEEK_TAB_WIDTH */
@@ -42,17 +44,34 @@ function distToEdges(
   };
 }
 
-function getOrbAnchorBounds(bounds: Electron.Rectangle): Electron.Rectangle {
-  const collapsed = 80;
-  if (bounds.width > collapsed || bounds.height > collapsed) {
-    return {
-      x: bounds.x + bounds.width - collapsed,
-      y: bounds.y + bounds.height - collapsed,
-      width: collapsed,
-      height: collapsed,
-    };
+function getDockedWindowBounds(
+  edge: DockEdge,
+  saved: Electron.Rectangle,
+  workArea: Electron.Rectangle,
+): Electron.Rectangle {
+  const next: Electron.Rectangle = {
+    x: saved.x,
+    y: saved.y,
+    width: ORB_WINDOW_WIDTH,
+    height: ORB_WINDOW_HEIGHT,
+  };
+
+  switch (edge) {
+    case 'right':
+      next.x = workArea.x + workArea.width - ORB_WINDOW_WIDTH;
+      break;
+    case 'left':
+      next.x = workArea.x;
+      break;
+    case 'bottom':
+      next.y = workArea.y + workArea.height - ORB_WINDOW_HEIGHT;
+      break;
+    case 'top':
+      next.y = workArea.y;
+      break;
   }
-  return bounds;
+
+  return next;
 }
 
 export function tryDockWindow(win: BrowserWindow, enabled: boolean): DockEdge | null {
@@ -89,38 +108,11 @@ export function tryDockWindow(win: BrowserWindow, enabled: boolean): DockEdge | 
   }
 
   if (!dockState.docked) {
-    dockState.savedBounds = getOrbAnchorBounds(bounds);
+    dockState.savedBounds = bounds;
   }
 
-  const saved = dockState.savedBounds ?? getOrbAnchorBounds(bounds);
-  const next: Electron.Rectangle = { ...bounds };
-
-  switch (nearest) {
-    case 'right':
-      next.width = PEEK_TAB_WIDTH;
-      next.height = PEEK_TAB_LENGTH;
-      next.x = workArea.x + workArea.width - PEEK_TAB_WIDTH;
-      next.y = saved.y + saved.height - ORB_WINDOW_PADDING - PEEK_TAB_LENGTH;
-      break;
-    case 'left':
-      next.width = PEEK_TAB_WIDTH;
-      next.height = PEEK_TAB_LENGTH;
-      next.x = workArea.x;
-      next.y = saved.y + saved.height - ORB_WINDOW_PADDING - PEEK_TAB_LENGTH;
-      break;
-    case 'bottom':
-      next.width = PEEK_TAB_LENGTH;
-      next.height = PEEK_TAB_WIDTH;
-      next.x = saved.x + saved.width - ORB_WINDOW_PADDING - PEEK_TAB_LENGTH;
-      next.y = workArea.y + workArea.height - PEEK_TAB_WIDTH;
-      break;
-    case 'top':
-      next.width = PEEK_TAB_LENGTH;
-      next.height = PEEK_TAB_WIDTH;
-      next.x = saved.x + saved.width - ORB_WINDOW_PADDING - PEEK_TAB_LENGTH;
-      next.y = workArea.y;
-      break;
-  }
+  const saved = dockState.savedBounds ?? bounds;
+  const next = getDockedWindowBounds(nearest, saved, workArea);
 
   win.setBounds({
     x: Math.round(next.x),
@@ -137,39 +129,13 @@ export function tryDockWindow(win: BrowserWindow, enabled: boolean): DockEdge | 
 export function undockWindow(win: BrowserWindow): void {
   if (!dockState.docked || win.isDestroyed()) return;
 
-  const bounds = win.getBounds();
-  const workArea = getWorkArea(win);
-  const edge = dockState.edge;
   const saved = dockState.savedBounds;
-
   if (saved) {
     win.setBounds({
       x: Math.round(saved.x),
       y: Math.round(saved.y),
-      width: saved.width,
-      height: saved.height,
-    });
-  } else if (edge) {
-    const next = { ...bounds };
-    switch (edge) {
-      case 'right':
-        next.x = workArea.x + workArea.width - bounds.width;
-        break;
-      case 'left':
-        next.x = workArea.x;
-        break;
-      case 'bottom':
-        next.y = workArea.y + workArea.height - bounds.height;
-        break;
-      case 'top':
-        next.y = workArea.y;
-        break;
-    }
-    win.setBounds({
-      x: Math.round(next.x),
-      y: Math.round(next.y),
-      width: bounds.width,
-      height: bounds.height,
+      width: ORB_WINDOW_WIDTH,
+      height: ORB_WINDOW_HEIGHT,
     });
   }
 

@@ -3,14 +3,18 @@ import path from 'path';
 
 let floatingBallWindow: BrowserWindow | null = null;
 
+export const ORB_WINDOW_WIDTH = 300;
+export const ORB_WINDOW_HEIGHT = 448;
+const ORB_SCREEN_MARGIN = 20;
+
 export function createFloatingBallWindow(isDev: boolean): BrowserWindow {
   const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
 
   floatingBallWindow = new BrowserWindow({
-    width: 80,
-    height: 80,
-    x: x + width - 100,
-    y: y + height - 100,
+    width: ORB_WINDOW_WIDTH,
+    height: ORB_WINDOW_HEIGHT,
+    x: x + width - ORB_WINDOW_WIDTH - ORB_SCREEN_MARGIN,
+    y: y + height - ORB_WINDOW_HEIGHT - ORB_SCREEN_MARGIN,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',

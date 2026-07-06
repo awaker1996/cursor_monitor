@@ -189,20 +189,33 @@ export function buildDashboardSummary(snapshot: TokenSnapshot | null): Dashboard
   };
 }
 
-/** Short label for collapsed floating ball: total used percent. */
+export function computeRemainingPercentValue(
+  remaining: number | null,
+  limit: number | null,
+): number | null {
+  if (remaining === null || limit === null || limit === 0) return null;
+  return normalizePercentValue((remaining / limit) * 100);
+}
+
+/** Short label for collapsed floating ball: total remaining percent. */
 export function formatOrbSummary(snapshot: TokenSnapshot | null): {
   label: string;
   value: string;
+  percentValue: number | null;
 } {
   if (!snapshot) {
     return {
-      label: '消耗',
+      label: '余量',
       value: '--',
+      percentValue: null,
     };
   }
 
+  const remaining = totalRemaining(snapshot);
+  const limit = totalLimit(snapshot);
   return {
-    label: '消耗',
-    value: formatUsedPercent(snapshot.metrics.totalUsedPercent),
+    label: '余量',
+    value: formatPercent(remaining, limit),
+    percentValue: computeRemainingPercentValue(remaining, limit),
   };
 }

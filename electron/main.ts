@@ -1,4 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
 import { SettingsStore } from '../src/settings/SettingsStore';
 import { credentialVault } from '../src/security/CredentialVault';
 import { ProviderManager } from '../src/core/providers/ProviderManager';
@@ -34,6 +36,52 @@ let providerManager: ProviderManager;
 let poller: Poller;
 let isPaused = false;
 
+function isDirectoryWritable(dirPath: string): boolean {
+  try {
+    fs.accessSync(dirPath, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function configureChromiumCachePaths(): void {
+  try {
+    // Put Chromium session/cache data into an explicitly writable location.
+    // This avoids cache migration failures when the old cache dir is read-only.
+    const runtimeRoot = path.join(app.getPath('appData'), app.getName(), 'runtime');
+    const sessionDataPath = path.join(runtimeRoot, 'session-data');
+    const diskCachePath = path.join(runtimeRoot, 'Cache');
+    const gpuCachePath = path.join(runtimeRoot, 'GPUCache');
+    const legacyCachePath = path.join(app.getPath('userData'), 'Cache');
+
+    fs.mkdirSync(sessionDataPath, { recursive: true });
+    fs.mkdirSync(diskCachePath, { recursive: true });
+    fs.mkdirSync(gpuCachePath, { recursive: true });
+
+    app.setPath('sessionData', sessionDataPath);
+    app.setPath('cache', diskCachePath);
+    app.commandLine.appendSwitch('disk-cache-dir', diskCachePath);
+    app.commandLine.appendSwitch('gpu-shader-disk-cache-dir', gpuCachePath);
+
+    if (fs.existsSync(legacyCachePath) && !isDirectoryWritable(legacyCachePath)) {
+      log.warn('Legacy cache directory is not writable; using runtime cache only', {
+        legacyCachePath,
+        diskCachePath,
+      });
+    }
+
+    if (isDev) {
+      app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+      app.commandLine.appendSwitch('disable-http-cache');
+    }
+  } catch (error) {
+    log.warn('Failed to configure Chromium cache paths', { error });
+  }
+}
+
+configureChromiumCachePaths();
+
 function validateInterval(sec: number): string | null {
   if (!Number.isInteger(sec)) return '刷新间隔必须是整数';
   if (sec < REFRESH_INTERVAL_MIN || sec > REFRESH_INTERVAL_MAX) {
@@ -61,6 +109,18 @@ function refreshAppIcons(): void {
   updateTrayIcon(loadTrayIcon(settingsStore.get()));
 }
 
+function applyOrbMode(mode: 'collapsed' | 'hover' | 'expanded'): void {
+  const win = getFloatingBallWindow();
+  if (!win || win.isDestroyed()) return;
+  if (getDockState().docked) return;
+  const sizes: Record<'collapsed' | 'hover' | 'expanded', [number, number]> = {
+    collapsed: [80, 80],
+    hover: [280, 200],
+    expanded: [300, 448],
+  };
+  const [width, height] = sizes[mode] ?? sizes.collapsed;
+  resizeFloatingBallWindow(win, width, height);
+}
 function resizeFloatingBallWindow(win: BrowserWindow, width: number, height: number): void {
   const bounds = win.getBounds();
   if (bounds.width === width && bounds.height === height) return;
@@ -166,24 +226,31 @@ function setupIpc(): void {
   });
 
   ipcMain.on('set-orb-mode', (_event, mode: 'collapsed' | 'hover' | 'expanded') => {
-    const win = getFloatingBallWindow();
-    if (!win || win.isDestroyed()) return;
-    if (getDockState().docked) return;
-    const sizes: Record<'collapsed' | 'hover' | 'expanded', [number, number]> = {
-      collapsed: [80, 80],
-      hover: [280, 200],
-      expanded: [300, 448],
-    };
-    const [width, height] = sizes[mode] ?? sizes.collapsed;
-    resizeFloatingBallWindow(win, width, height);
+    applyOrbMode(mode);
   });
 
-  // Backward compatibility for older renderer builds
-  ipcMain.on('set-expanded', (_event, expanded: boolean) => {
-    const win = getFloatingBallWindow();
+  ipcMain.handle('set-orb-mode-async', (_event, mode: 'collapsed' | 'hover' | 'expanded') => {
+    applyOrbMode(mode);
+  });
+
+  // Backward compatibility for older renderer builds — window stays fixed size
+  ipcMain.on('set-expanded', () => {});
+
+  ipcMain.on('set-ignore-mouse-events', (event, ignore: boolean) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return;
-    if (getDockState().docked) return;
-    resizeFloatingBallWindow(win, 300, expanded ? 420 : 80);
+    win.setIgnoreMouseEvents(ignore, { forward: true });
+  });
+
+  ipcMain.handle('get-cursor-in-window', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return null;
+    const point = screen.getCursorScreenPoint();
+    const bounds = win.getContentBounds();
+    return {
+      x: point.x - bounds.x,
+      y: point.y - bounds.y,
+    };
   });
 
   ipcMain.on('move-window', (event, { dx, dy }: { dx: number; dy: number }) => {

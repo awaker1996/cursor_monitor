@@ -25,7 +25,10 @@ export interface ElectronAPI {
   onDockStateChanged: (callback: (edge: DockEdge | null) => void) => () => void;
   openSettings: () => void;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
+  setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;
+  setIgnoreMouseEvents: (ignore: boolean) => void;
+  getCursorInWindow: () => Promise<{ x: number; y: number } | null>;
   moveWindow: (dx: number, dy: number) => void;
   finishWindowMove: () => void;
   undockWindow: () => void;

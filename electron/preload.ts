@@ -24,7 +24,10 @@ export interface ElectronAPI {
   onDockStateChanged: (callback: (edge: DockEdge | null) => void) => () => void;
   openSettings: () => void;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
+  setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;
+  setIgnoreMouseEvents: (ignore: boolean) => void;
+  getCursorInWindow: () => Promise<{ x: number; y: number } | null>;
   moveWindow: (dx: number, dy: number) => void;
   finishWindowMove: () => void;
   undockWindow: () => void;
@@ -67,7 +70,10 @@ const api: ElectronAPI = {
   },
   openSettings: () => ipcRenderer.send('open-settings'),
   setOrbMode: (mode) => ipcRenderer.send('set-orb-mode', mode),
+  setOrbModeAsync: (mode) => ipcRenderer.invoke('set-orb-mode-async', mode),
   setExpanded: (expanded) => ipcRenderer.send('set-expanded', expanded),
+  setIgnoreMouseEvents: (ignore) => ipcRenderer.send('set-ignore-mouse-events', ignore),
+  getCursorInWindow: () => ipcRenderer.invoke('get-cursor-in-window'),
   moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
   finishWindowMove: () => ipcRenderer.send('finish-window-move'),
   undockWindow: () => ipcRenderer.send('undock-window'),

@@ -128,13 +128,29 @@ function todayUsedPercent(
 ): number | null {
   if (cyclePercent === null) return null;
 
-  if (cycleCostCents > 0 && todayCostCents > 0) {
-    return (todayCostCents / cycleCostCents) * cyclePercent;
+  const costBased =
+    cycleCostCents > 0 && todayCostCents > 0
+      ? (todayCostCents / cycleCostCents) * cyclePercent
+      : null;
+  const tokenBased =
+    cycleTokens > 0 && todayTokens > 0 ? (todayTokens / cycleTokens) * cyclePercent : null;
+
+  // Dashboard usage events occasionally miss historical cost fields.
+  // In that case, cost-based derivation collapses to "today == cycle" even
+  // when cycle token volume is clearly larger than today's token volume.
+  if (costBased !== null && tokenBased !== null) {
+    const costShare = todayCostCents / cycleCostCents;
+    const tokenShare = todayTokens / cycleTokens;
+    const suspiciousCostShare =
+      costShare >= 0.999 &&
+      tokenShare < 0.999 &&
+      cycleTokens - todayTokens >= 1000;
+    const picked = suspiciousCostShare ? tokenBased : costBased;
+    return Math.max(0, Math.min(cyclePercent, picked));
   }
 
-  if (cycleTokens > 0 && todayTokens > 0) {
-    return (todayTokens / cycleTokens) * cyclePercent;
-  }
+  if (costBased !== null) return Math.max(0, Math.min(cyclePercent, costBased));
+  if (tokenBased !== null) return Math.max(0, Math.min(cyclePercent, tokenBased));
 
   return null;
 }
