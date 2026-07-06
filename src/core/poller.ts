@@ -20,7 +20,7 @@ export class Poller {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private state: PollerState = {
     status: 'idle',
-    activeProvider: 'official',
+    activeProvider: 'cookie',
     failureCount: 0,
   };
   private listeners: PollerEventHandler[] = [];

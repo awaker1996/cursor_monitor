@@ -1,5 +1,6 @@
 import type { DataSource, ProviderHealth, TokenSnapshot } from '../../shared/types';
 import { normalize } from '../normalizer';
+import { SnapshotCache } from '../SnapshotCache';
 import { OfficialProvider } from './OfficialProvider';
 import { CookieProvider } from './CookieProvider';
 import type { SettingsStore } from '../../settings/SettingsStore';
@@ -10,17 +11,36 @@ const log = createLogger('ProviderManager');
 export class ProviderManager {
   private official: OfficialProvider;
   private cookie: CookieProvider;
+  private snapshotCache: SnapshotCache;
   private activeProvider: DataSource = 'official';
   private health: Record<DataSource, ProviderHealth> = {
     official: { name: 'official', available: true, consecutiveFailures: 0 },
     cookie: { name: 'cookie', available: false, consecutiveFailures: 0 },
   };
   private lastSnapshot: TokenSnapshot | null = null;
-  private probeTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private settingsStore: SettingsStore) {
     this.official = new OfficialProvider(() => this.settingsStore.get());
     this.cookie = new CookieProvider(() => this.settingsStore.get());
+    this.snapshotCache = new SnapshotCache();
+  }
+
+  async initialize(): Promise<void> {
+    const cached = this.snapshotCache.load();
+    if (cached) {
+      this.lastSnapshot = cached;
+      log.info('Loaded snapshot from disk cache', { fetchedAt: cached.fetchedAt });
+    }
+
+    const cookieConfigured = await this.cookie.isConfigured();
+    if (cookieConfigured) {
+      this.activeProvider = 'cookie';
+      this.health.cookie.available = true;
+      log.info('Cookie configured, using cookie provider');
+    } else {
+      this.activeProvider = 'official';
+      log.info('No cookie configured, using official provider');
+    }
   }
 
   getActiveProvider(): DataSource {
@@ -36,81 +56,43 @@ export class ProviderManager {
   }
 
   async fetch(): Promise<TokenSnapshot> {
-    const provider = this.activeProvider === 'official' ? this.official : this.cookie;
+    const cookieConfigured = await this.cookie.isConfigured();
+    const source: DataSource = cookieConfigured ? 'cookie' : 'official';
+    this.activeProvider = source;
+    const provider = source === 'cookie' ? this.cookie : this.official;
 
     try {
       const result = await provider.fetch();
       const snapshot = normalize(result.raw, result.source);
       this.lastSnapshot = snapshot;
-      this.health[this.activeProvider] = {
-        ...this.health[this.activeProvider],
+      this.snapshotCache.save(snapshot);
+      this.health[source] = {
+        ...this.health[source],
         available: true,
         consecutiveFailures: 0,
         lastSuccessAt: new Date().toISOString(),
         lastError: undefined,
       };
-      log.info('Fetch succeeded', { source: this.activeProvider });
+      log.info('Fetch succeeded', { source });
       return snapshot;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const h = this.health[this.activeProvider];
+      const h = this.health[source];
       h.consecutiveFailures += 1;
       h.lastError = message;
       h.available = false;
 
       log.warn('Fetch failed', {
-        source: this.activeProvider,
+        source,
         failures: h.consecutiveFailures,
         error: message,
       });
-
-      if (this.activeProvider === 'official') {
-        const settings = this.settingsStore.get();
-        const cookieConfigured = await this.cookie.isConfigured();
-        if (cookieConfigured && h.consecutiveFailures >= settings.failureThreshold) {
-          log.info('Switching to cookie provider after official failure');
-          this.activeProvider = 'cookie';
-          this.startOfficialProbe();
-          return this.fetch();
-        }
-      }
 
       if (this.lastSnapshot) {
         return { ...this.lastSnapshot, stale: true };
       }
 
       throw err;
-    }
-  }
-
-  private startOfficialProbe(): void {
-    if (this.probeTimer) return;
-    this.probeTimer = setInterval(async () => {
-      if (this.activeProvider !== 'cookie') {
-        this.stopOfficialProbe();
-        return;
-      }
-      try {
-        await this.official.fetch();
-        log.info('Official provider recovered, switching back');
-        this.activeProvider = 'official';
-        this.health.official = {
-          ...this.health.official,
-          consecutiveFailures: 0,
-          available: true,
-          lastError: undefined,
-        };
-        this.stopOfficialProbe();
-      } catch {
-        // keep probing
-      }
-    }, 120_000);
-  }
-
-  private stopOfficialProbe(): void {
-    if (this.probeTimer) {
-      clearInterval(this.probeTimer);
-      this.probeTimer = null;
     }
   }
 
@@ -125,6 +107,6 @@ export class ProviderManager {
   }
 
   destroy(): void {
-    this.stopOfficialProbe();
+    // no-op
   }
 }

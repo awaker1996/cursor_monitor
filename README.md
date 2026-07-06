@@ -43,12 +43,14 @@
 ### 范围
 
 **范围内：**
-- Windows 悬浮球（拖拽、置顶、托盘）
-- Auto / API 余量展示
+- Windows 悬浮球（拖拽、置顶、贴边收起、托盘）
+- Auto / API 余量与 Dashboard 用量指标展示
 - 自动刷新与间隔配置
 - 双 Provider 故障切换
 - Dashboard API 多端点候选与局部降级
 - Cookie 手动配置与连通性测试
+- 快照本地缓存（启动/失败时展示 stale 数据）
+- 自定义应用图标（托盘/设置窗即时生效）
 
 **范围外：**
 - 跨平台（macOS / Linux）
@@ -82,14 +84,14 @@ npm install
 # 开发模式（热更新 + Electron）
 npm run dev
 
-# 生产构建
+# 生产构建（Vite 编译渲染层与 Electron 主/预加载进程）
 npm run build
 npm start
 
-# 类型检查
+# 类型检查（tsc --noEmit，不生成 dist-electron 冗余产物）
 npm run typecheck
 
-# 打包安装程序
+# 打包安装程序（typecheck + build + electron-builder）
 npm run dist
 ```
 
@@ -123,9 +125,10 @@ npm run dist
 
 - `auto.remaining` / `auto.limit`
 - `api.remaining` / `api.limit`
+- Dashboard 总消耗百分比、账单周期、metric 明细行（`UsageMetrics`）
 - 数据来源（official / cookie）
 - 最近成功刷新时间
-- 数据过期或失败时显示提示
+- 数据过期或失败时显示提示（含本地缓存 stale 数据）
 
 ### FR-03 自动刷新与间隔配置
 
@@ -152,6 +155,23 @@ npm run dist
 - 托盘菜单：立即刷新、暂停/恢复、打开设置、退出
 - 关闭悬浮窗后驻留托盘，不强制退出
 
+### FR-07 贴边缘自动收起
+
+- 拖拽悬浮球贴近屏幕边缘松手后自动收起为 peek tab
+- 点击或向外拖出可恢复完整显示
+- 设置项 `edgeAutoDockEnabled`（默认开启）可开关
+
+### FR-08 自定义应用图标
+
+- 设置页可选择本地图片作为应用图标
+- 托盘与设置窗口即时生效
+- 支持恢复默认图标；安装包/任务栏图标需重新打包后更新
+
+### FR-09 快照本地缓存
+
+- 成功刷新后将 `TokenSnapshot` 持久化到 `%APPDATA%/cursor-token-monitor/snapshot-cache.json`
+- 启动时或请求失败时展示缓存数据，标记 `stale = true` 并提示用户
+
 ### 非功能需求
 
 | 类别 | 要求 |
@@ -174,12 +194,17 @@ flowchart TD
     pollerCore --> providerManager[ProviderManager]
     providerManager --> officialProvider[OfficialProvider]
     providerManager --> cookieProvider[CookieProvider]
+    providerManager --> snapshotCache[SnapshotCache]
     officialProvider --> normalizer[Normalizer]
     cookieProvider --> normalizer
     normalizer --> tokenSnapshot[TokenSnapshot]
-    tokenSnapshot --> floatingBall
+    tokenSnapshot --> snapshotCache
+    snapshotCache --> floatingBall
+    mainProcess --> floatingBallDock[FloatingBallDock]
+    floatingBallDock --> floatingBall
     settingsWindow --> settingsStore[SettingsStore]
     settingsWindow --> credentialVault[CredentialVault]
+    settingsWindow --> iconManager[IconManager]
     providerManager --> credentialVault
 ```
 
@@ -188,11 +213,14 @@ flowchart TD
 | 模块 | 文件 | 职责 |
 |---|---|---|
 | 主进程 | `electron/main.ts` | 生命周期、IPC、协调各模块 |
+| 边缘吸附 | `electron/floatingBallDock.ts` | 贴边收起、peek tab、窗口 undock |
+| 图标管理 | `electron/iconManager.ts` | 自定义图标读写与预览 |
 | 悬浮窗 | `electron/windows/floatingBall.ts` | 无边框置顶窗口 |
 | 设置窗 | `electron/windows/settings.ts` | 配置界面 |
 | 托盘 | `electron/tray.ts` | 系统托盘菜单 |
 | 预加载 | `electron/preload.ts` | 安全 IPC 桥接 |
 | 轮询器 | `src/core/poller.ts` | 定时刷新、退避、状态机 |
+| 快照缓存 | `src/core/SnapshotCache.ts` | 本地快照持久化与加载 |
 | Provider 管理 | `src/core/providers/ProviderManager.ts` | 优先级切换、故障转移 |
 | 官方数据源 | `src/core/providers/OfficialProvider.ts` | 无 Cookie 请求 |
 | Cookie 数据源 | `src/core/providers/CookieProvider.ts` | 带 Cookie 请求 |
@@ -202,6 +230,7 @@ flowchart TD
 | 日志 | `src/utils/logger.ts` | 敏感信息脱敏 |
 | 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开展示 |
 | 设置 UI | `src/renderer/pages/SettingsPage.tsx` | 配置表单 |
+| 指标行 | `src/renderer/components/MetricRow.tsx` | Dashboard metric 明细展示 |
 
 ---
 
@@ -213,12 +242,15 @@ cursor_monitor/
 │   ├── main.ts                  # 入口、IPC 注册
 │   ├── preload.ts               # 渲染进程 API 桥接
 │   ├── tray.ts                  # 系统托盘
+│   ├── floatingBallDock.ts      # 边缘吸附与 peek 窗口
+│   ├── iconManager.ts           # 自定义图标管理
 │   └── windows/
 │       ├── floatingBall.ts      # 悬浮球窗口
 │       └── settings.ts          # 设置窗口
 ├── src/
 │   ├── core/
 │   │   ├── poller.ts            # 轮询与状态机
+│   │   ├── SnapshotCache.ts     # 快照本地缓存
 │   │   ├── normalizer.ts        # 字段标准化
 │   │   └── providers/
 │   │       ├── OfficialProvider.ts
@@ -238,7 +270,10 @@ cursor_monitor/
 │       ├── pages/SettingsPage.tsx
 │       └── components/
 │           ├── TokenBadge.tsx
+│           ├── MetricRow.tsx
 │           └── ErrorHint.tsx
+├── docs/
+│   └── changes/                 # 代码变更归档（见 .cursor/rules/change-archive.mdc）
 ├── index.html                   # 悬浮球入口
 ├── settings.html                # 设置页入口
 ├── vite.config.ts
@@ -419,8 +454,9 @@ OfficialProvider 请求
 
 | 状态 | 内容 |
 |---|---|
-| 折叠 | 圆形球体、总余量简写、健康点（绿/黄/蓝/灰） |
-| 展开 | Auto/API 卡片、来源标签、更新时间、错误提示、刷新/设置按钮 |
+| 折叠 | 圆形球体、总消耗简写、健康点（绿/黄/蓝/灰） |
+| 贴边收起 | peek tab + 健康点，点击或拖出恢复 |
+| 展开 | 总消耗进度条、账单周期、metric 明细行、来源标签、更新时间、错误提示、刷新/设置按钮 |
 
 健康点含义：
 - **绿**：数据正常
@@ -430,8 +466,9 @@ OfficialProvider 请求
 
 ### 设置页
 
-- 自动刷新开关
-- 刷新间隔（秒）+ 校验提示
+- 自动刷新开关与刷新间隔（秒）+ 校验提示
+- 贴边缘自动收起开关
+- 自定义应用图标（选择/恢复默认）
 - Cookie 输入 / 保存 / 清除
 - 测试连接
 - 未配置 Cookie 时的引导提示
@@ -457,6 +494,8 @@ OfficialProvider 请求
 | officialEndpoint | `https://www.cursor.com/api/usage` | 官方接口 |
 | cookieEndpoint | `https://cursor.com/api/usage-summary` | 用户自定义 Cookie 汇总接口候选 |
 | failureThreshold | 3 | 切换 Provider 的失败次数阈值 |
+| edgeAutoDockEnabled | true | 贴边缘自动收起 |
+| customIconPath | null | 自定义图标路径（null 为默认） |
 
 修改端点或映射逻辑见 [维护与扩展](#13-维护与扩展)。
 
@@ -482,6 +521,12 @@ powershell -ExecutionPolicy Bypass -File scripts\create-icon.ps1
 npm run dist
 ```
 
+等价于 `npm run typecheck && npm run build && electron-builder`：
+
+1. **typecheck** — `tsc --noEmit` 类型检查，不生成冗余 JS
+2. **build** — Vite 编译 `dist/`（渲染层）与 `dist-electron/main.js`、`preload.js`（主/预加载进程）
+3. **electron-builder** — 打包 NSIS 安装包与 portable 便携版
+
 产物位于 `release/`：
 
 | 文件 | 说明 |
@@ -491,6 +536,17 @@ npm run dist
 | `win-unpacked/` | 免安装目录 |
 
 > 当前环境打包时禁用了代码签名（`signAndEditExecutable: false`）。正式发布建议配置证书签名。
+
+### 体积优化策略
+
+| 优化项 | 配置 | 效果 |
+|---|---|---|
+| 收窄打包输入 | `files` 仅含 `dist-electron/main.js`、`preload.js`，排除 `*.map` | 避免 tsc 重复产物进入 asar |
+| 依赖归类 | `react`/`react-dom` 置于 devDependencies | 避免重复打入 asar |
+| Locale 裁剪 | `electronLanguages: [en-US, zh-CN]` | locales 从 ~36 MB 降至 ~1 MB |
+| 压缩级别 | `compression: maximum` | NSIS 安装包进一步压缩 |
+
+当前典型体积（x64）：便携版 ~67 MB，安装包 ~67 MB（较初始 ~74 MB 减少约 7 MB）。
 
 ### 打包前注意事项
 
@@ -506,12 +562,14 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 
 ## 12. 验收清单
 
-- [ ] 启动后 5 秒内出现悬浮球，可拖拽、置顶
-- [ ] 稳定展示 Auto / API 数值，标注数据来源
+- [ ] 启动后 5 秒内出现悬浮球，可拖拽、置顶、贴边收起
+- [ ] 稳定展示 Auto / API 数值与 Dashboard 指标，标注数据来源
 - [ ] 自动刷新默认开启，间隔可改且立即生效
 - [ ] 非法间隔输入被拦截，轮询不崩溃
 - [ ] 官方接口失败后自动回退 Cookie，界面有提示
 - [ ] 清除凭据后停止敏感请求，UI 给出引导
+- [ ] 快照缓存在启动/失败时可展示 stale 数据并提示
+- [ ] 自定义图标可即时生效于托盘与设置窗
 - [ ] 安装包可在 Windows 环境安装运行
 
 ---
@@ -547,9 +605,19 @@ Cursor 接口字段或路径变化时，通常只需改以下文件，**无需�
 | test-connection | invoke | 测试 Cookie 连接 |
 | manual-refresh | invoke | 手动刷新 |
 | toggle-pause | invoke | 暂停/恢复 |
+| get-icon-preview | invoke | 获取图标预览 Data URL |
+| select-custom-icon | invoke | 选择自定义图标 |
+| clear-custom-icon | invoke | 恢复默认图标 |
 | snapshot-updated | event | 快照更新推送 |
 | poller-state | event | 轮询状态推送 |
 | settings-changed | event | 配置变更推送 |
+| dock-state-changed | event | 贴边状态变更（edge 或 null） |
+| open-settings | send | 打开设置窗口 |
+| set-orb-mode | send | 设置悬浮球窗口模式（collapsed/hover/expanded） |
+| set-expanded | send | 设置展开状态 |
+| move-window | send | 拖拽移动窗口 |
+| finish-window-move | send | 拖拽结束，触发贴边检测 |
+| undock-window | send | 从贴边状态恢复 |
 
 ### 常见问题
 
@@ -583,10 +651,10 @@ Cursor 接口字段或路径变化时，通常只需改以下文件，**无需�
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、实时显示、自动刷新、双 Provider 回退 |
+| **v1（当前）** | 单账号、实时显示、自动刷新、双 Provider 回退、Dashboard 指标、贴边收起、自定义图标、快照缓存 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 
 ---
 
-*文档版本：v1.0 | 最后更新：2026-07-03*
+*文档版本：v1.1 | 最后更新：2026-07-06*

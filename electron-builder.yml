@@ -4,12 +4,19 @@ directories:
   output: release
 files:
   - dist/**/*
-  - dist-electron/**/*
+  - dist-electron/main.js
+  - dist-electron/preload.js
+  - build/icon.ico
+  - '!**/*.map'
 win:
   target:
     - nsis
     - portable
   signAndEditExecutable: false
+electronLanguages:
+  - en-US
+  - zh-CN
+compression: maximum
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

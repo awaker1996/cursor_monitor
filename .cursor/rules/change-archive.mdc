@@ -1,0 +1,30 @@
+---
+description: 代码变更必须归档到 docs/changes
+alwaysApply: true
+---
+
+# 变更归档规则
+
+任何涉及**源码、配置、构建脚本**的改动，必须在同一次工作中完成归档。
+
+## 必须归档
+
+- `electron/`、`src/` 下的代码变更
+- `package.json`、`vite.config.ts`、`tsconfig*.json`、`electron-builder.yml` 等配置
+- 构建脚本（`scripts/`）
+
+## 归档步骤
+
+1. 在 `docs/changes/` 新增 `YYYY-MM-DD-<中文简述>.md`（简述必须使用中文）
+2. 使用模板：日期、类型（feature/fix/refactor/build/docs）、关联文件、变更摘要、影响范围、验证
+3. 更新 `docs/changes/README.md` 索引表
+
+## 可合并归档
+
+- 纯 typo、注释微调可与同主题已有条目合并，不单独建档
+- 仅文档改动（无代码）可单独建 `docs` 类型条目
+
+## 示例文件名
+
+- `2026-07-06-EXE体积优化-第一阶段.md`
+- `2026-07-06-语言包裁剪与文档同步.md`

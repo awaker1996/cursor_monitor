@@ -260,16 +260,18 @@ function setupPollerEvents(): void {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   credentialVault.setFallbackPath(app.getPath('userData'));
   settingsStore = new SettingsStore();
   providerManager = new ProviderManager(settingsStore);
+  await providerManager.initialize();
   poller = new Poller(providerManager, settingsStore);
 
   setupIpc();
   setupPollerEvents();
 
   createFloatingBallWindow(isDev);
+  broadcastSnapshot();
 
   createTray({
     getIcon: () => loadTrayIcon(settingsStore.get()),

@@ -10,20 +10,20 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.electron.json && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "start": "electron .",
-    "dist": "npm run build && electron-builder",
+    "dist": "npm run typecheck && npm run build && electron-builder",
     "typecheck": "tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "keytar": "^7.9.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "keytar": "^7.9.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^28.3.3",
     "electron-builder": "^24.13.3",
@@ -41,8 +41,10 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*",
-      "build/icon.ico"
+      "dist-electron/main.js",
+      "dist-electron/preload.js",
+      "build/icon.ico",
+      "!**/*.map"
     ],
     "extraResources": [
       {
@@ -58,6 +60,11 @@
       "icon": "build/icon.ico",
       "signAndEditExecutable": false
     },
+    "electronLanguages": [
+      "en-US",
+      "zh-CN"
+    ],
+    "compression": "maximum",
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true

@@ -14,7 +14,8 @@
     "rootDir": ".",
     "esModuleInterop": true,
     "declaration": false,
-    "sourceMap": true
+    "sourceMap": false,
+    "noEmit": true
   },
   "include": [
     "electron/**/*",

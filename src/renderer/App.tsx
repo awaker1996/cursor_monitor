@@ -15,7 +15,7 @@ function healthColor(snapshot: TokenSnapshot | null, pollerState: PollerState | 
 
 function healthLabel(snapshot: TokenSnapshot | null, pollerState: PollerState | null): string {
   if (!snapshot) return '无数据';
-  if (snapshot.stale) return '数据过期';
+  if (snapshot.stale) return '缓存数据';
   if (pollerState?.status === 'backoff') return '退避中';
   if (pollerState?.status === 'paused') return '已暂停';
   return '正常';
@@ -210,8 +210,8 @@ export default function App() {
 
               {snapshot.stale && (
                 <ErrorHint
-                  message="数据可能已过期"
-                  action="请检查网络或更新 Cookie"
+                  message="当前展示的是缓存数据，可能不是最新"
+                  action={`上次成功刷新：${new Date(snapshot.fetchedAt).toLocaleString('zh-CN')}。请检查网络或更新 Cookie`}
                 />
               )}
             </>
