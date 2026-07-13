@@ -354,4 +354,88 @@ console.log('normalizeCookie integration');
   assert('display no incomplete hint', display?.showIncompleteHint === false);
 }
 
+console.log('normalizeCookie empty-summary / token backfill');
+
+{
+  const emptyLikeUi = normalizeCookie(
+    {
+      summary: {},
+      aggregatedUsage: {
+        aggregations: [
+          {
+            modelIntent: 'gpt-5.3-codex',
+            inputTokens: '1000000',
+            totalCents: 1000,
+            tier: 1,
+          },
+          {
+            modelIntent: 'composer-2.5-fast',
+            inputTokens: '2000000',
+            totalCents: 500,
+            tier: 2,
+          },
+        ],
+      },
+    },
+    new Date().toISOString(),
+  );
+
+  assert('empty summary is stale', emptyLikeUi.stale === true);
+  assert('empty summary percent null', emptyLikeUi.metrics.totalUsedPercent === null);
+  assert(
+    'empty summary still backfills tokens from included usage',
+    emptyLikeUi.metrics.totalTokens === 3_000_000,
+  );
+}
+
+console.log('normalizeCookie overall allocation');
+
+{
+  const overall = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          overall: {
+            used: 250,
+            limit: 1000,
+            remaining: 750,
+          },
+        },
+      },
+    },
+    new Date().toISOString(),
+  );
+
+  assert('overall not stale', overall.stale === false);
+  assert('overall total percent', approx(overall.metrics.totalUsedPercent, 25));
+  assert('overall remaining', overall.auto.remaining === 750);
+  assert('overall limit', overall.auto.limit === 1000);
+}
+
+console.log('normalizeCookie plan used/limit without percent fields');
+
+{
+  const planOnly = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            used: 40,
+            limit: 100,
+            remaining: 60,
+          },
+        },
+      },
+    },
+    new Date().toISOString(),
+  );
+
+  assert('plan-only not stale', planOnly.stale === false);
+  assert('plan-only derived percent', approx(planOnly.metrics.totalUsedPercent, 40));
+}
+
 console.log('\nAll included-usage checks passed.');

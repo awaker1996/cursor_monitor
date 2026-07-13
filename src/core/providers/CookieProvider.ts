@@ -1,4 +1,10 @@
-import type { AppSettings, ProviderResult, RawCookieResponse, TokenProvider } from '../../shared/types';
+import type {
+  AppSettings,
+  ProviderResult,
+  RawCookieResponse,
+  RawUsageEventsResponse,
+  TokenProvider,
+} from '../../shared/types';
 import { credentialVault } from '../../security/CredentialVault';
 import { createLogger } from '../../utils/logger';
 
@@ -131,6 +137,58 @@ function errorToMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Reject HTML/error/legacy `/api/usage` payloads that would normalize to all `--`.
+ * A usable summary must expose billing cycle dates and/or individual usage buckets.
+ */
+function hasPlanNumericFields(plan: unknown): boolean {
+  if (!plan || typeof plan !== 'object') return false;
+  const record = plan as Record<string, unknown>;
+  const keys = [
+    'used',
+    'limit',
+    'remaining',
+    'apiPercentUsed',
+    'autoPercentUsed',
+    'totalPercentUsed',
+  ];
+  return keys.some((key) => {
+    const value = Number(record[key]);
+    return Number.isFinite(value);
+  });
+}
+
+export function isUsableCookieSummary(payload: unknown): payload is RawCookieResponse {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.rawText === 'string') return false;
+  if (typeof record.error === 'string') return false;
+
+  const individual = record.individualUsage;
+  if (individual && typeof individual === 'object') {
+    const usage = individual as Record<string, unknown>;
+    if (usage.plan && typeof usage.plan === 'object' && hasPlanNumericFields(usage.plan)) {
+      return true;
+    }
+    if (usage.overall && typeof usage.overall === 'object' && hasPlanNumericFields(usage.overall)) {
+      return true;
+    }
+  }
+
+  const nestedUsage = record.usage;
+  if (nestedUsage && typeof nestedUsage === 'object') {
+    const usage = nestedUsage as Record<string, unknown>;
+    if (usage.auto || usage.api) return true;
+  }
+
+  return (
+    record.autoRemaining != null ||
+    record.autoLimit != null ||
+    record.apiRemaining != null ||
+    record.apiLimit != null
+  );
+}
+
 export class CookieProvider implements TokenProvider {
   readonly name = 'cookie' as const;
 
@@ -176,16 +234,32 @@ export class CookieProvider implements TokenProvider {
         }
 
         if (response.ok) {
+          if (!isUsableCookieSummary(summary)) {
+            lastError = new Error(
+              extractErrorMessage(summary) ||
+                'Cookie usage-summary returned no billing/usage fields',
+            );
+            log.warn('Cookie endpoint returned unusable summary payload', {
+              endpoint,
+              status: response.status,
+              error: lastError.message,
+            });
+            continue;
+          }
+
           const todayRange = getTodayRangeMs();
           const cycleRange = getBillingCycleRangeMs(summary);
-          const eventsController = new AbortController();
+          const todayEventsController = new AbortController();
+          const cycleEventsController = new AbortController();
           const aggregatedController = new AbortController();
-          const eventsTimeout = setTimeout(
-            () => eventsController.abort(),
+          const todayEventsTimeout = setTimeout(
+            () => todayEventsController.abort(),
             settings.requestTimeoutSec * 1000,
           );
-          // Aggregated is a single request; give it a dedicated budget so event
-          // pagination aborts do not cancel Included Usage data.
+          const cycleEventsTimeout = setTimeout(
+            () => cycleEventsController.abort(),
+            Math.max(settings.requestTimeoutSec, 15) * 1000,
+          );
           const aggregatedTimeout = setTimeout(
             () => aggregatedController.abort(),
             Math.max(settings.requestTimeoutSec, 15) * 1000,
@@ -196,12 +270,25 @@ export class CookieProvider implements TokenProvider {
           let aggregatedUsage: unknown | null = null;
           try {
             [todayEvents, cycleEvents, aggregatedUsage] = await Promise.all([
-              fetchUsageEvents(cookieHeader, todayRange, eventsController.signal, 5, userId),
-              fetchUsageEvents(cookieHeader, cycleRange, eventsController.signal, 15, userId),
+              fetchUsageEvents(
+                cookieHeader,
+                todayRange,
+                todayEventsController.signal,
+                10,
+                userId,
+              ),
+              fetchUsageEvents(
+                cookieHeader,
+                cycleRange,
+                cycleEventsController.signal,
+                15,
+                userId,
+              ),
               fetchAggregatedUsage(cookieHeader, cycleRange, aggregatedController.signal),
             ]);
           } finally {
-            clearTimeout(eventsTimeout);
+            clearTimeout(todayEventsTimeout);
+            clearTimeout(cycleEventsTimeout);
             clearTimeout(aggregatedTimeout);
           }
 
@@ -243,7 +330,7 @@ async function fetchUsageEvents(
   signal: AbortSignal,
   maxPages: number,
   userId: string | null,
-): Promise<unknown | null> {
+): Promise<RawUsageEventsResponse | null> {
   const events: unknown[] = [];
   let totalUsageEventsCount: number | null = null;
   const pageSize = 100;
@@ -259,7 +346,9 @@ async function fetchUsageEvents(
         pageSize,
         userIdNum,
       );
-      if (!record) return events.length > 0 ? { usageEventsDisplay: events, totalUsageEventsCount } : null;
+      if (!record) {
+        return buildUsageEventsResponse(events, totalUsageEventsCount, false);
+      }
       const pageEvents = Array.isArray(record.usageEventsDisplay) ? record.usageEventsDisplay : [];
       events.push(...pageEvents);
       if (Number.isFinite(Number(record.totalUsageEventsCount))) {
@@ -270,11 +359,31 @@ async function fetchUsageEvents(
       if (totalUsageEventsCount !== null && events.length >= totalUsageEventsCount) break;
     }
 
-    return { usageEventsDisplay: events, totalUsageEventsCount };
+    return buildUsageEventsResponse(events, totalUsageEventsCount, true);
   } catch (err) {
     log.warn('Usage events fetch aborted', { error: errorToMessage(err) });
-    return events.length > 0 ? { usageEventsDisplay: events, totalUsageEventsCount } : null;
+    return buildUsageEventsResponse(events, totalUsageEventsCount, false);
   }
+}
+
+function buildUsageEventsResponse(
+  events: unknown[],
+  totalUsageEventsCount: number | null,
+  fetchCompleted: boolean,
+): RawUsageEventsResponse | null {
+  if (events.length === 0) return null;
+
+  const fetched = events.length;
+  const total = totalUsageEventsCount;
+  const paginationComplete =
+    total === null || !Number.isFinite(total) ? fetchCompleted : fetched >= total;
+  const eventsComplete = fetchCompleted && paginationComplete;
+
+  return {
+    usageEventsDisplay: events as RawUsageEventsResponse['usageEventsDisplay'],
+    totalUsageEventsCount: total ?? undefined,
+    eventsComplete,
+  };
 }
 
 async function fetchUsageEventsPage(

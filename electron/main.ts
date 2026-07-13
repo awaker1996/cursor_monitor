@@ -45,15 +45,78 @@ function isDirectoryWritable(dirPath: string): boolean {
   }
 }
 
+/**
+ * On Windows, Electron derives `userData` as `path.join(cache, appName)`.
+ * Setting `cache` alone therefore relocates settings/snapshot into
+ * `runtime/Cache/<appName>/`, which breaks persistence and can leave the UI
+ * on empty/stale metrics. Always pin `userData` to the canonical appData root.
+ */
+function resolveCanonicalUserDataPath(): string {
+  return path.join(app.getPath('appData'), app.getName());
+}
+
+function hasUsableCachedMetrics(snapshotPath: string): boolean {
+  try {
+    const raw = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8')) as {
+      metrics?: { totalUsedPercent?: number | null };
+      auto?: { remaining?: number | null; limit?: number | null };
+      api?: { remaining?: number | null; limit?: number | null };
+    };
+    const percent = raw.metrics?.totalUsedPercent;
+    if (typeof percent === 'number' && Number.isFinite(percent)) return true;
+    const hasQuota =
+      raw.auto?.remaining != null ||
+      raw.auto?.limit != null ||
+      raw.api?.remaining != null ||
+      raw.api?.limit != null;
+    return hasQuota;
+  } catch {
+    return false;
+  }
+}
+
+function migrateMisplacedUserData(canonicalUserData: string): void {
+  const misplaced = path.join(canonicalUserData, 'runtime', 'Cache', app.getName());
+  if (!fs.existsSync(misplaced)) return;
+  if (path.resolve(misplaced) === path.resolve(canonicalUserData)) return;
+
+  fs.mkdirSync(canonicalUserData, { recursive: true });
+  const filesToMigrate = ['settings.json', 'snapshot-cache.json', 'custom-icon.png', '.credential'];
+
+  for (const fileName of filesToMigrate) {
+    const src = path.join(misplaced, fileName);
+    const dest = path.join(canonicalUserData, fileName);
+    if (!fs.existsSync(src)) continue;
+
+    if (fileName === 'snapshot-cache.json') {
+      const srcUsable = hasUsableCachedMetrics(src);
+      const destUsable = fs.existsSync(dest) && hasUsableCachedMetrics(dest);
+      if (destUsable && !srcUsable) continue;
+      if (!srcUsable && !destUsable && fs.existsSync(dest)) continue;
+    } else if (fs.existsSync(dest)) {
+      const srcMtime = fs.statSync(src).mtimeMs;
+      const destMtime = fs.statSync(dest).mtimeMs;
+      if (destMtime >= srcMtime) continue;
+    }
+
+    fs.copyFileSync(src, dest);
+    log.info('Migrated userData file from misplaced cache path', { fileName, from: src, to: dest });
+  }
+}
+
 function configureChromiumCachePaths(): void {
   try {
     // Put Chromium session/cache data into an explicitly writable location.
     // This avoids cache migration failures when the old cache dir is read-only.
-    const runtimeRoot = path.join(app.getPath('appData'), app.getName(), 'runtime');
+    const canonicalUserData = resolveCanonicalUserDataPath();
+    app.setPath('userData', canonicalUserData);
+    migrateMisplacedUserData(canonicalUserData);
+
+    const runtimeRoot = path.join(canonicalUserData, 'runtime');
     const sessionDataPath = path.join(runtimeRoot, 'session-data');
     const diskCachePath = path.join(runtimeRoot, 'Cache');
     const gpuCachePath = path.join(runtimeRoot, 'GPUCache');
-    const legacyCachePath = path.join(app.getPath('userData'), 'Cache');
+    const legacyCachePath = path.join(canonicalUserData, 'Cache');
 
     fs.mkdirSync(sessionDataPath, { recursive: true });
     fs.mkdirSync(diskCachePath, { recursive: true });
@@ -61,6 +124,8 @@ function configureChromiumCachePaths(): void {
 
     app.setPath('sessionData', sessionDataPath);
     app.setPath('cache', diskCachePath);
+    // Re-pin after cache changes — Windows Electron remaps userData with cache.
+    app.setPath('userData', canonicalUserData);
     app.commandLine.appendSwitch('disk-cache-dir', diskCachePath);
     app.commandLine.appendSwitch('gpu-shader-disk-cache-dir', gpuCachePath);
 

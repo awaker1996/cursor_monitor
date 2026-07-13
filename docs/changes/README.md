@@ -20,3 +20,5 @@
 | 2026-07-13 | Included Usage 周期明细 | feature | [2026-07-13-Included-Usage周期明细.md](./2026-07-13-Included-Usage周期明细.md) |
 | 2026-07-13 | Included Usage 聚合接口对齐 | fix, feature | [2026-07-13-Included-Usage聚合接口对齐.md](./2026-07-13-Included-Usage聚合接口对齐.md) |
 | 2026-07-13 | Included Usage 自费 key 与 auto 命名 | fix | [2026-07-13-Included-Usage自费key与auto命名.md](./2026-07-13-Included-Usage自费key与auto命名.md) |
+| 2026-07-13 | 用量显示异常与 userData 错位修复 | fix | [2026-07-13-用量显示异常与userData错位修复.md](./2026-07-13-用量显示异常与userData错位修复.md) |
+| 2026-07-13 | 悬浮球矩形光晕修复 | fix | [2026-07-13-悬浮球矩形光晕修复.md](./2026-07-13-悬浮球矩形光晕修复.md) |

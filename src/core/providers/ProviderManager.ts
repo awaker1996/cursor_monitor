@@ -1,6 +1,7 @@
 import type { DataSource, ProviderHealth, TokenSnapshot } from '../../shared/types';
 import { normalize } from '../normalizer';
 import { SnapshotCache } from '../SnapshotCache';
+import { isEmptyUsageSnapshot, mergeTodayMetricsFromCache } from '../snapshotMerge';
 import { OfficialProvider } from './OfficialProvider';
 import { CookieProvider } from './CookieProvider';
 import type { SettingsStore } from '../../settings/SettingsStore';
@@ -63,7 +64,15 @@ export class ProviderManager {
 
     try {
       const result = await provider.fetch();
-      const snapshot = normalize(result.raw, result.source);
+      const normalized = normalize(result.raw, result.source);
+      const snapshot = mergeTodayMetricsFromCache(normalized, this.lastSnapshot);
+      if (isEmptyUsageSnapshot(snapshot)) {
+        throw new Error(
+          source === 'cookie'
+            ? 'Cookie API returned empty usage summary. Please update your cookie or retry.'
+            : 'Official API returned empty usage data.',
+        );
+      }
       this.lastSnapshot = snapshot;
       this.snapshotCache.save(snapshot);
       this.health[source] = {

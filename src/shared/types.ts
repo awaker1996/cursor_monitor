@@ -148,6 +148,8 @@ export interface RawUsageEvent {
 export interface RawUsageEventsResponse {
   totalUsageEventsCount?: number;
   usageEventsDisplay?: RawUsageEvent[];
+  /** False when pagination was truncated or the fetch aborted mid-stream. */
+  eventsComplete?: boolean;
 }
 
 /** Per-model row from `get-aggregated-usage-events` (Billing Included Usage source). */
@@ -179,18 +181,27 @@ export interface RawCookieCombinedResponse {
   aggregatedUsage?: RawAggregatedUsageResponse | null;
 }
 
+export interface RawCookiePlanUsage {
+  used?: number | null;
+  limit?: number | null;
+  remaining?: number | null;
+  autoPercentUsed?: number | null;
+  apiPercentUsed?: number | null;
+  totalPercentUsed?: number | null;
+  breakdown?: {
+    included?: number | null;
+    bonus?: number | null;
+    total?: number | null;
+  };
+}
+
 export interface RawCookieResponse {
   billingCycleStart?: string | null;
   billingCycleEnd?: string | null;
   individualUsage?: {
-    plan?: {
-      used?: number | null;
-      limit?: number | null;
-      remaining?: number | null;
-      autoPercentUsed?: number | null;
-      apiPercentUsed?: number | null;
-      totalPercentUsed?: number | null;
-    };
+    plan?: RawCookiePlanUsage;
+    /** Enterprise/team individual allocation when `plan` is absent. */
+    overall?: RawCookiePlanUsage;
   };
   usage?: {
     auto?: { left?: number; cap?: number; reset_time?: string };

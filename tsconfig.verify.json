@@ -7,6 +7,8 @@
   },
   "include": [
     "scripts/verify-included-usage.ts",
+    "scripts/verify-cookie-summary.ts",
+    "scripts/verify-today-percent.ts",
     "src/core/**/*",
     "src/shared/**/*"
   ]

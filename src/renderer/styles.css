@@ -63,6 +63,10 @@ body.page-settings {
 
 .floating-ball__orb-wrap {
   position: relative;
+  /* Reserve transparent room toward the window's right/bottom edges so the
+     orb's circular shadow + glow fade out fully instead of being hard-clipped
+     into a green rectangle by the (transparent) window boundary. */
+  margin: 22px 22px 22px 0;
 }
 
 .floating-ball__orb {
@@ -130,6 +134,7 @@ body.page-settings {
   inset: 0;
   width: 100%;
   height: 100%;
+  overflow: visible;
   transform: rotate(-90deg);
   pointer-events: none;
 }
@@ -632,6 +637,7 @@ body.page-settings {
   width: auto;
   height: auto;
   display: flex;
+  margin: 0;
 }
 
 .floating-ball__peek {
