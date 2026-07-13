@@ -28,19 +28,28 @@ export function getDockState(): { docked: boolean; edge: DockEdge | null } {
   return { docked: dockState.docked, edge: dockState.edge };
 }
 
-function getWorkArea(win: BrowserWindow): Electron.Rectangle {
-  return screen.getDisplayMatching(win.getBounds()).workArea;
+function getOrbAnchorRect(bounds: Electron.Rectangle): Electron.Rectangle {
+  return {
+    x: bounds.x + bounds.width - ORB_WINDOW_PADDING - ORB_ANCHOR_SIZE,
+    y: bounds.y + bounds.height - ORB_WINDOW_PADDING - ORB_ANCHOR_SIZE,
+    width: ORB_ANCHOR_SIZE,
+    height: ORB_ANCHOR_SIZE,
+  };
+}
+
+function getWorkAreaForPoint(point: Electron.Point): Electron.Rectangle {
+  return screen.getDisplayNearestPoint(point).workArea;
 }
 
 function distToEdges(
-  bounds: Electron.Rectangle,
+  rect: Electron.Rectangle,
   workArea: Electron.Rectangle,
 ): Record<DockEdge, number> {
   return {
-    left: bounds.x - workArea.x,
-    right: workArea.x + workArea.width - (bounds.x + bounds.width),
-    top: bounds.y - workArea.y,
-    bottom: workArea.y + workArea.height - (bounds.y + bounds.height),
+    left: Math.max(0, rect.x - workArea.x),
+    right: Math.max(0, workArea.x + workArea.width - (rect.x + rect.width)),
+    top: Math.max(0, rect.y - workArea.y),
+    bottom: Math.max(0, workArea.y + workArea.height - (rect.y + rect.height)),
   };
 }
 
@@ -87,8 +96,18 @@ export function tryDockWindow(win: BrowserWindow, enabled: boolean): DockEdge | 
   }
 
   const bounds = win.getBounds();
-  const workArea = getWorkArea(win);
-  const dists = distToEdges(bounds, workArea);
+  const anchor = getOrbAnchorRect(bounds);
+  const anchorCenter = {
+    x: anchor.x + anchor.width / 2,
+    y: anchor.y + anchor.height / 2,
+  };
+  const cursor = screen.getCursorScreenPoint();
+  const refPoint = {
+    x: (anchorCenter.x + cursor.x) / 2,
+    y: (anchorCenter.y + cursor.y) / 2,
+  };
+  const workArea = getWorkAreaForPoint(refPoint);
+  const dists = distToEdges(anchor, workArea);
 
   const edges: DockEdge[] = ['left', 'right', 'top', 'bottom'];
   let nearest: DockEdge = 'right';

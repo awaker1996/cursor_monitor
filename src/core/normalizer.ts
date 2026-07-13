@@ -1,5 +1,10 @@
 import type {
   DataSource,
+  IncludedUsageBreakdown,
+  IncludedUsageCategory,
+  ModelUsageItem,
+  RawAggregatedUsageItem,
+  RawAggregatedUsageResponse,
   RawCookieCombinedResponse,
   RawCookieResponse,
   RawOfficialResponse,
@@ -9,6 +14,7 @@ import type {
   TokenSnapshot,
   UsageMetrics,
 } from '../shared/types';
+import { FIRST_PARTY_MODELS_LABEL } from '../shared/format';
 
 export { formatTokenCount, formatPercent, totalRemaining } from '../shared/format';
 
@@ -103,8 +109,29 @@ function isAutoModel(model: string | undefined): boolean {
   return (
     normalized.includes('composer') ||
     normalized.includes('auto') ||
+    normalized.includes('grok') ||
     normalized.includes('cursor-small') ||
     normalized.includes('default')
+  );
+}
+
+/**
+ * Prefer Cursor `tier` when present (1 ≈ API, 2 ≈ First-party);
+ * otherwise fall back to model-name heuristics.
+ */
+function isFirstPartyAggregation(item: RawAggregatedUsageItem): boolean {
+  const tier = asNumber(item.tier);
+  if (tier === 2) return true;
+  if (tier === 1) return false;
+  return isAutoModel(item.modelIntent);
+}
+
+function aggregationTokens(item: RawAggregatedUsageItem): number {
+  return (
+    (asNumber(item.inputTokens) ?? 0) +
+    (asNumber(item.outputTokens) ?? 0) +
+    (asNumber(item.cacheReadTokens) ?? 0) +
+    (asNumber(item.cacheWriteTokens) ?? 0)
   );
 }
 
@@ -119,38 +146,100 @@ function eventTokens(event: RawUsageEvent): number {
   );
 }
 
-function todayUsedPercent(
-  todayCostCents: number,
-  cycleCostCents: number,
-  todayTokens: number,
+/** Clamp a 0..1 share; guards bad denominators and partial aggregates. */
+function clampShare(share: number): number {
+  if (!Number.isFinite(share)) return 0;
+  return Math.max(0, Math.min(1, share));
+}
+
+/** Ensure today percent never exceeds the authoritative cycle percent. */
+function clampTodayPercent(value: number, cyclePercent: number): number {
+  return Math.max(0, Math.min(cyclePercent, value));
+}
+
+const SHARE_DIVERGENCE_THRESHOLD = 0.05;
+
+function isCycleEventsPaginatedIncomplete(
+  cycleEvents: RawUsageEventsResponse | null | undefined,
+): boolean {
+  const fetched = cycleEvents?.usageEventsDisplay?.length ?? 0;
+  const total = cycleEvents?.totalUsageEventsCount;
+  if (fetched === 0) return false;
+  if (total === null || total === undefined || !Number.isFinite(Number(total))) return false;
+  return fetched < Number(total);
+}
+
+function pickTodayShare(
+  costShare: number,
+  tokenShare: number,
   cycleTokens: number,
-  cyclePercent: number | null,
-): number | null {
-  if (cyclePercent === null) return null;
+  todayTokens: number,
+): number {
+  const suspiciousCostShare =
+    costShare >= 0.999 &&
+    tokenShare < 0.999 &&
+    cycleTokens - todayTokens >= 1000;
 
-  const costBased =
-    cycleCostCents > 0 && todayCostCents > 0
-      ? (todayCostCents / cycleCostCents) * cyclePercent
-      : null;
-  const tokenBased =
-    cycleTokens > 0 && todayTokens > 0 ? (todayTokens / cycleTokens) * cyclePercent : null;
+  const costExceedsToken =
+    costShare > tokenShare && costShare - tokenShare >= SHARE_DIVERGENCE_THRESHOLD;
 
-  // Dashboard usage events occasionally miss historical cost fields.
-  // In that case, cost-based derivation collapses to "today == cycle" even
-  // when cycle token volume is clearly larger than today's token volume.
-  if (costBased !== null && tokenBased !== null) {
-    const costShare = todayCostCents / cycleCostCents;
-    const tokenShare = todayTokens / cycleTokens;
-    const suspiciousCostShare =
-      costShare >= 0.999 &&
-      tokenShare < 0.999 &&
-      cycleTokens - todayTokens >= 1000;
-    const picked = suspiciousCostShare ? tokenBased : costBased;
-    return Math.max(0, Math.min(cyclePercent, picked));
+  if (suspiciousCostShare || costExceedsToken) {
+    return tokenShare;
   }
 
-  if (costBased !== null) return Math.max(0, Math.min(cyclePercent, costBased));
-  if (tokenBased !== null) return Math.max(0, Math.min(cyclePercent, tokenBased));
+  return costShare;
+}
+
+export interface TodayUsedPercentInput {
+  todayCostCents: number;
+  cycleCostCents: number;
+  todayTokens: number;
+  cycleTokens: number;
+  cyclePercent: number | null;
+  cycleEventsIncomplete?: boolean;
+}
+
+/** Derive today's used percent from cost/token shares; exported for regression checks. */
+export function todayUsedPercent(input: TodayUsedPercentInput): number | null {
+  const {
+    todayCostCents,
+    cycleCostCents,
+    todayTokens,
+    cycleTokens,
+    cyclePercent,
+    cycleEventsIncomplete = false,
+  } = input;
+
+  if (cyclePercent === null) return null;
+
+  const hasCost = cycleCostCents > 0 && todayCostCents > 0;
+  const hasTokens = cycleTokens > 0 && todayTokens > 0;
+
+  const costShare = hasCost ? clampShare(todayCostCents / cycleCostCents) : null;
+  const tokenShare = hasTokens ? clampShare(todayTokens / cycleTokens) : null;
+
+  const tokenSetInvalid = hasTokens && todayTokens > cycleTokens;
+  const tokenDenominatorUnreliable = cycleEventsIncomplete || tokenSetInvalid;
+
+  const costBased =
+    costShare !== null ? clampTodayPercent(costShare * cyclePercent, cyclePercent) : null;
+
+  const tokenBased =
+    tokenShare !== null && !tokenDenominatorUnreliable
+      ? clampTodayPercent(tokenShare * cyclePercent, cyclePercent)
+      : null;
+
+  if (tokenDenominatorUnreliable) {
+    return costBased;
+  }
+
+  if (costShare !== null && tokenShare !== null) {
+    const pickedShare = pickTodayShare(costShare, tokenShare, cycleTokens, todayTokens);
+    return clampTodayPercent(pickedShare * cyclePercent, cyclePercent);
+  }
+
+  if (costBased !== null) return costBased;
+  if (tokenBased !== null) return tokenBased;
 
   return null;
 }
@@ -218,6 +307,11 @@ function aggregateTokenEvents(
     }
   }
 
+  const cycleEventsIncomplete = isCycleEventsPaginatedIncomplete(cycleEvents);
+  const todayPercentInput = {
+    cycleEventsIncomplete,
+  };
+
   return {
     totalTokens:
       result.apiTokens + result.autoTokens > 0 ? result.apiTokens + result.autoTokens : null,
@@ -229,21 +323,211 @@ function aggregateTokenEvents(
       result.apiTodayCostCents > 0 ? result.apiTodayCostCents / 100 : null,
     autoTodayUsed:
       result.autoTodayCostCents > 0 ? result.autoTodayCostCents / 100 : null,
-    apiTodayUsedPercent: todayUsedPercent(
-      result.apiTodayCostCents,
-      result.apiCycleCostCents,
-      result.apiTodayTokens,
-      result.apiTokens,
-      apiUsedPercent,
-    ),
-    autoTodayUsedPercent: todayUsedPercent(
-      result.autoTodayCostCents,
-      result.autoCycleCostCents,
-      result.autoTodayTokens,
-      result.autoTokens,
-      autoUsedPercent,
-    ),
+    apiTodayUsedPercent: todayUsedPercent({
+      todayCostCents: result.apiTodayCostCents,
+      cycleCostCents: result.apiCycleCostCents,
+      todayTokens: result.apiTodayTokens,
+      cycleTokens: result.apiTokens,
+      cyclePercent: apiUsedPercent,
+      ...todayPercentInput,
+    }),
+    autoTodayUsedPercent: todayUsedPercent({
+      todayCostCents: result.autoTodayCostCents,
+      cycleCostCents: result.autoCycleCostCents,
+      todayTokens: result.autoTodayTokens,
+      cycleTokens: result.autoTokens,
+      cyclePercent: autoUsedPercent,
+      ...todayPercentInput,
+    }),
   };
+}
+
+interface ModelAggregate {
+  tokens: number;
+  costCents: number;
+}
+
+/**
+ * Display name for Included Usage Item column.
+ * Cursor Billing maps the first-party routing bucket `default` → `auto`.
+ */
+function normalizeModelName(model: string | undefined): string {
+  const name = model?.trim();
+  if (!name) return 'unknown';
+  if (name.toLowerCase() === 'default') return 'auto';
+  return name;
+}
+
+function clampUsagePercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value * 100) / 100));
+}
+
+/**
+ * Allocate category plan usage% across models.
+ * When the category has cost signal, only cost shares count — zero-cost rows
+ * (BYOK / self-funded API keys, e.g. deepseek) stay at 0% like Cursor Billing.
+ * Token share is only a fallback when no model has cost in the category.
+ */
+function modelUsagePercent(
+  modelCost: number,
+  modelTokens: number,
+  categoryCost: number,
+  categoryTokens: number,
+  categoryUsedPercent: number | null,
+): number | null {
+  if (categoryUsedPercent === null) return null;
+
+  if (categoryCost > 0) {
+    if (modelCost <= 0) return 0;
+    return clampUsagePercent(clampShare(modelCost / categoryCost) * categoryUsedPercent);
+  }
+
+  if (categoryTokens > 0 && modelTokens > 0) {
+    return clampUsagePercent(clampShare(modelTokens / categoryTokens) * categoryUsedPercent);
+  }
+
+  return null;
+}
+
+function buildIncludedUsageCategory(
+  key: 'api' | 'firstParty',
+  label: string,
+  models: Map<string, ModelAggregate>,
+  categoryUsedPercent: number | null,
+): IncludedUsageCategory | null {
+  if (models.size === 0) return null;
+
+  let categoryCost = 0;
+  let categoryTokens = 0;
+  for (const agg of models.values()) {
+    categoryCost += agg.costCents;
+    categoryTokens += agg.tokens;
+  }
+
+  const modelItems: ModelUsageItem[] = [];
+  for (const [model, agg] of models.entries()) {
+    modelItems.push({
+      model,
+      tokens: agg.tokens,
+      usagePercent: modelUsagePercent(
+        agg.costCents,
+        agg.tokens,
+        categoryCost,
+        categoryTokens,
+        categoryUsedPercent,
+      ),
+    });
+  }
+
+  modelItems.sort((a, b) => {
+    const aPct = a.usagePercent ?? -1;
+    const bPct = b.usagePercent ?? -1;
+    if (bPct !== aPct) return bPct - aPct;
+    return b.tokens - a.tokens;
+  });
+
+  return {
+    key,
+    label,
+    totalTokens: categoryTokens > 0 ? categoryTokens : null,
+    usagePercent: categoryUsedPercent,
+    models: modelItems,
+  };
+}
+
+/** Aggregate cycle usage events by model for Included Usage display. */
+export function aggregateIncludedUsageByModel(
+  cycleEvents: RawUsageEventsResponse | null | undefined,
+  apiUsedPercent: number | null,
+  autoUsedPercent: number | null,
+): IncludedUsageBreakdown {
+  const apiModels = new Map<string, ModelAggregate>();
+  const autoModels = new Map<string, ModelAggregate>();
+
+  for (const event of cycleEvents?.usageEventsDisplay ?? []) {
+    const model = normalizeModelName(event.model);
+    const tokens = eventTokens(event);
+    const costCents = eventCostCents(event) ?? 0;
+    const bucket = isAutoModel(event.model) ? autoModels : apiModels;
+    const existing = bucket.get(model) ?? { tokens: 0, costCents: 0 };
+    if (tokens > 0) existing.tokens += tokens;
+    if (costCents > 0) existing.costCents += costCents;
+    bucket.set(model, existing);
+  }
+
+  const hasEvents = (cycleEvents?.usageEventsDisplay?.length ?? 0) > 0;
+  if (!hasEvents) {
+    return { available: false, categories: [] };
+  }
+
+  const categories = [
+    buildIncludedUsageCategory('api', 'API', apiModels, apiUsedPercent),
+    buildIncludedUsageCategory('firstParty', FIRST_PARTY_MODELS_LABEL, autoModels, autoUsedPercent),
+  ].filter((category): category is IncludedUsageCategory => category !== null);
+
+  return {
+    available: categories.length > 0,
+    incomplete: isCycleEventsPaginatedIncomplete(cycleEvents) || undefined,
+    categories,
+  };
+}
+
+/**
+ * Build Included Usage from `get-aggregated-usage-events`.
+ * This matches Billing & Invoices (complete cycle, no event pagination).
+ */
+export function aggregateIncludedUsageFromAggregations(
+  aggregated: RawAggregatedUsageResponse | null | undefined,
+  apiUsedPercent: number | null,
+  autoUsedPercent: number | null,
+): IncludedUsageBreakdown {
+  const rows = aggregated?.aggregations;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { available: false, categories: [] };
+  }
+
+  const apiModels = new Map<string, ModelAggregate>();
+  const autoModels = new Map<string, ModelAggregate>();
+
+  for (const item of rows) {
+    const model = normalizeModelName(item.modelIntent);
+    const tokens = aggregationTokens(item);
+    const costCents = asNumber(item.totalCents) ?? 0;
+    if (tokens <= 0 && costCents <= 0) continue;
+
+    const bucket = isFirstPartyAggregation(item) ? autoModels : apiModels;
+    const existing = bucket.get(model) ?? { tokens: 0, costCents: 0 };
+    if (tokens > 0) existing.tokens += tokens;
+    if (costCents > 0) existing.costCents += costCents;
+    bucket.set(model, existing);
+  }
+
+  const categories = [
+    buildIncludedUsageCategory('api', 'API', apiModels, apiUsedPercent),
+    buildIncludedUsageCategory('firstParty', FIRST_PARTY_MODELS_LABEL, autoModels, autoUsedPercent),
+  ].filter((category): category is IncludedUsageCategory => category !== null);
+
+  return {
+    available: categories.length > 0,
+    categories,
+  };
+}
+
+/** Prefer aggregated API; fall back to paginated cycle events. */
+export function resolveIncludedUsage(
+  aggregated: RawAggregatedUsageResponse | null | undefined,
+  cycleEvents: RawUsageEventsResponse | null | undefined,
+  apiUsedPercent: number | null,
+  autoUsedPercent: number | null,
+): IncludedUsageBreakdown {
+  const fromAggregated = aggregateIncludedUsageFromAggregations(
+    aggregated,
+    apiUsedPercent,
+    autoUsedPercent,
+  );
+  if (fromAggregated.available) return fromAggregated;
+  return aggregateIncludedUsageByModel(cycleEvents, apiUsedPercent, autoUsedPercent);
 }
 
 function buildMetricsFromPlan(
@@ -327,6 +611,7 @@ function unwrapCookieRaw(raw: unknown): {
   summary: RawCookieResponse;
   todayEvents?: RawUsageEventsResponse | null;
   cycleEvents?: RawUsageEventsResponse | null;
+  aggregatedUsage?: RawAggregatedUsageResponse | null;
 } {
   const combined = raw as RawCookieCombinedResponse & RawCookieResponse;
   if (combined.summary && typeof combined.summary === 'object') {
@@ -334,6 +619,7 @@ function unwrapCookieRaw(raw: unknown): {
       summary: combined.summary,
       todayEvents: combined.todayEvents,
       cycleEvents: combined.cycleEvents,
+      aggregatedUsage: combined.aggregatedUsage,
     };
   }
   return { summary: combined };
@@ -370,6 +656,7 @@ export function normalizeOfficial(raw: unknown, fetchedAt: string): TokenSnapsho
     auto,
     api,
     metrics: stale ? emptyMetrics() : buildMetricsFromQuotas(auto, api),
+    includedUsage: { available: false, categories: [] },
     billingCycleStart: null,
     billingCycleEnd,
     fetchedAt,
@@ -379,7 +666,7 @@ export function normalizeOfficial(raw: unknown, fetchedAt: string): TokenSnapsho
 }
 
 export function normalizeCookie(raw: unknown, fetchedAt: string): TokenSnapshot {
-  const { summary: data, todayEvents, cycleEvents } = unwrapCookieRaw(raw);
+  const { summary: data, todayEvents, cycleEvents, aggregatedUsage } = unwrapCookieRaw(raw);
 
   let auto = toQuota(data.autoRemaining, data.autoLimit, data.autoResetAt);
   let api = toQuota(data.apiRemaining, data.apiLimit, data.apiResetAt);
@@ -412,12 +699,19 @@ export function normalizeCookie(raw: unknown, fetchedAt: string): TokenSnapshot 
   }
 
   const stale = isEmptyQuota(auto) && isEmptyQuota(api) && metrics.totalUsedPercent === null;
+  const includedUsage = resolveIncludedUsage(
+    aggregatedUsage,
+    cycleEvents,
+    metrics.apiUsedPercent,
+    metrics.autoUsedPercent,
+  );
 
   return {
     source: 'cookie',
     auto,
     api,
     metrics,
+    includedUsage,
     billingCycleStart: data.billingCycleStart ?? null,
     billingCycleEnd: data.billingCycleEnd ?? resetAt,
     fetchedAt,

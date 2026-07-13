@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MetricRow from './components/MetricRow';
+import IncludedUsageTable from './components/IncludedUsageTable';
 import ErrorHint from './components/ErrorHint';
-import { buildDashboardSummary, buildMetricItems, formatOrbSummary } from '../shared/format';
+import {
+  buildDashboardSummary,
+  buildIncludedUsageDisplay,
+  buildMetricItems,
+  formatOrbSummary,
+} from '../shared/format';
 import type { PollerState, TokenSnapshot, DockEdge } from '../shared/types';
 
 const DRAG_THRESHOLD = 4;
@@ -182,6 +188,7 @@ export default function App() {
 
   const orbSummary = formatOrbSummary(snapshot);
   const dashboardSummary = buildDashboardSummary(snapshot);
+  const includedUsageDisplay = buildIncludedUsageDisplay(snapshot);
   const metricItems = buildMetricItems(snapshot?.metrics);
   const health = healthColor(snapshot, pollerState);
   const statusLabel = healthLabel(snapshot, pollerState);
@@ -436,29 +443,6 @@ export default function App() {
                   </div>
                 )}
                 <div className="dashboard-summary__detail">{dashboardSummary.totalTokens}</div>
-                {dashboardSummary.billingPeriod && (
-                  <div className="dashboard-summary__billing">
-                    <span className="dashboard-summary__billing-label">账单周期</span>
-                    <div className="dashboard-summary__billing-rows">
-                      {dashboardSummary.billingPeriod.start && (
-                        <div className="dashboard-summary__billing-row">
-                          <span className="dashboard-summary__billing-tag">起</span>
-                          <span className="dashboard-summary__billing-date">
-                            {dashboardSummary.billingPeriod.start}
-                          </span>
-                        </div>
-                      )}
-                      {dashboardSummary.billingPeriod.end && (
-                        <div className="dashboard-summary__billing-row">
-                          <span className="dashboard-summary__billing-tag">止</span>
-                          <span className="dashboard-summary__billing-date">
-                            {dashboardSummary.billingPeriod.end}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
                 <div className="dashboard-summary__meta">
                   <span className={`health-pill health-pill--${health}`}>{statusLabel}</span>
                   <span className={`source-tag source-tag--${snapshot.source}`}>
@@ -499,6 +483,10 @@ export default function App() {
 
           {pollerState?.status === 'paused' && (
             <div className="status-banner status-banner--paused">自动刷新已暂停</div>
+          )}
+
+          {includedUsageDisplay && (
+            <IncludedUsageTable display={includedUsageDisplay} />
           )}
 
           <div className="floating-ball__actions">

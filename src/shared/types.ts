@@ -10,6 +10,26 @@ export type OrbWindowMode = 'collapsed' | 'hover' | 'expanded';
 
 export type DockEdge = 'left' | 'right' | 'top' | 'bottom';
 
+export interface ModelUsageItem {
+  model: string;
+  tokens: number;
+  usagePercent: number | null;
+}
+
+export interface IncludedUsageCategory {
+  key: 'api' | 'firstParty';
+  label: string;
+  totalTokens: number | null;
+  usagePercent: number | null;
+  models: ModelUsageItem[];
+}
+
+export interface IncludedUsageBreakdown {
+  available: boolean;
+  incomplete?: boolean;
+  categories: IncludedUsageCategory[];
+}
+
 export interface UsageMetrics {
   totalUsedPercent: number | null;
   apiUsedPercent: number | null;
@@ -34,6 +54,7 @@ export interface TokenSnapshot {
   auto: TokenQuota;
   api: TokenQuota;
   metrics: UsageMetrics;
+  includedUsage?: IncludedUsageBreakdown | null;
   billingCycleStart?: string | null;
   billingCycleEnd?: string | null;
   fetchedAt: string;
@@ -129,10 +150,33 @@ export interface RawUsageEventsResponse {
   usageEventsDisplay?: RawUsageEvent[];
 }
 
+/** Per-model row from `get-aggregated-usage-events` (Billing Included Usage source). */
+export interface RawAggregatedUsageItem {
+  modelIntent?: string;
+  inputTokens?: string | number;
+  outputTokens?: string | number;
+  cacheWriteTokens?: string | number;
+  cacheReadTokens?: string | number;
+  totalCents?: number | null;
+  /** Cursor pricing pool: 1 ≈ API / named models, 2 ≈ First-party. */
+  tier?: number | null;
+}
+
+export interface RawAggregatedUsageResponse {
+  aggregations?: RawAggregatedUsageItem[];
+  totalInputTokens?: string | number;
+  totalOutputTokens?: string | number;
+  totalCacheWriteTokens?: string | number;
+  totalCacheReadTokens?: string | number;
+  totalCostCents?: number | null;
+}
+
 export interface RawCookieCombinedResponse {
   summary: RawCookieResponse;
   todayEvents?: RawUsageEventsResponse | null;
   cycleEvents?: RawUsageEventsResponse | null;
+  /** Prefer this for Included Usage; cycleEvents remain a fallback. */
+  aggregatedUsage?: RawAggregatedUsageResponse | null;
 }
 
 export interface RawCookieResponse {

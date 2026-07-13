@@ -1,5 +1,12 @@
 import type { TokenSnapshot, UsageMetrics } from './types';
 
+export function formatIncludedUsageTokens(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) return '--';
+  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(1)}亿`;
+  if (value >= 10_000) return `${(value / 10_000).toFixed(1)}万`;
+  return String(Math.round(value));
+}
+
 export function formatTokenCount(value: number | null): string {
   if (value === null || value === undefined) return '--';
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -38,8 +45,8 @@ export function totalLimit(snapshot: TokenSnapshot | null): number | null {
 export type MetricStatusLevel = 'ok' | 'warn' | 'danger' | 'unknown';
 export type MetricAccent = 'total' | 'api' | 'auto' | 'neutral';
 
-/** Official Cursor dashboard label for auto/composer usage. */
-export const AUTO_COMPOSER_LABEL = 'Auto + Composer';
+/** Official Cursor dashboard label for the first-party models usage pool (formerly Auto + Composer). */
+export const FIRST_PARTY_MODELS_LABEL = 'First-party models';
 
 export interface MetricDisplayItem {
   key: string;
@@ -55,7 +62,6 @@ export interface DashboardSummary {
   totalPercent: string;
   totalPercentValue: number | null;
   totalTokens: string;
-  billingPeriod: BillingPeriodDisplay | null;
   statusLevel: MetricStatusLevel;
   sourceLabel: string;
   updatedAt: string;
@@ -64,6 +70,69 @@ export interface DashboardSummary {
 export interface BillingPeriodDisplay {
   start: string | null;
   end: string | null;
+}
+
+export interface IncludedUsageModelRow {
+  model: string;
+  tokens: string;
+  usage: string;
+}
+
+export interface IncludedUsageCategoryRow {
+  key: string;
+  label: string;
+  tokens: string;
+  usage: string;
+  models: IncludedUsageModelRow[];
+}
+
+export interface IncludedUsageDisplay {
+  title: string;
+  dateRange: string | null;
+  columns: [string, string, string];
+  categories: IncludedUsageCategoryRow[];
+  showIncompleteHint: boolean;
+}
+
+function formatIncludedUsageDateRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): string | null {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+  const formatOne = (iso: string | null | undefined): string | null => {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString('en-US', opts);
+  };
+  const startLabel = formatOne(start);
+  const endLabel = formatOne(end);
+  if (startLabel && endLabel) return `${startLabel} - ${endLabel}`;
+  return startLabel ?? endLabel;
+}
+
+export function buildIncludedUsageDisplay(snapshot: TokenSnapshot | null): IncludedUsageDisplay | null {
+  if (!snapshot) return null;
+  const breakdown = snapshot.includedUsage;
+  if (!breakdown?.available || breakdown.categories.length === 0) return null;
+
+  return {
+    title: 'Included Usage',
+    dateRange: formatIncludedUsageDateRange(snapshot.billingCycleStart, snapshot.billingCycleEnd),
+    columns: ['Item', 'Tokens', 'Usage'],
+    categories: breakdown.categories.map((category) => ({
+      key: category.key,
+      label: category.label,
+      tokens: formatIncludedUsageTokens(category.totalTokens),
+      usage: formatUsedPercent(category.usagePercent),
+      models: category.models.map((model) => ({
+        model: model.model,
+        tokens: formatIncludedUsageTokens(model.tokens),
+        usage: formatUsedPercent(model.usagePercent),
+      })),
+    })),
+    showIncompleteHint: breakdown.incomplete === true,
+  };
 }
 
 function hasTimeComponent(iso: string): boolean {
@@ -154,7 +223,7 @@ export function buildMetricItems(metrics: UsageMetrics | undefined): MetricDispl
     buildMetricItem('apiToday', '今日 API', m.apiTodayUsedPercent, m.apiTodayTokens, 'api'),
     buildMetricItem(
       'autoToday',
-      `今日 ${AUTO_COMPOSER_LABEL}`,
+      `今日 ${FIRST_PARTY_MODELS_LABEL}`,
       m.autoTodayUsedPercent,
       m.autoTodayTokens,
       'auto',
@@ -162,7 +231,7 @@ export function buildMetricItems(metrics: UsageMetrics | undefined): MetricDispl
     buildMetricItem('api', '周期 API', m.apiUsedPercent, m.apiTokens, 'api'),
     buildMetricItem(
       'auto',
-      `周期 ${AUTO_COMPOSER_LABEL}`,
+      `周期 ${FIRST_PARTY_MODELS_LABEL}`,
       m.autoUsedPercent,
       m.autoTokens,
       'auto',
@@ -178,7 +247,6 @@ export function buildDashboardSummary(snapshot: TokenSnapshot | null): Dashboard
     totalPercent: formatUsedPercent(snapshot.metrics.totalUsedPercent),
     totalPercentValue: percentValue,
     totalTokens: formatTokenDetail(snapshot.metrics.totalTokens) ?? 'token 明细不可用',
-    billingPeriod: buildBillingPeriodDisplay(snapshot.billingCycleStart, snapshot.billingCycleEnd),
     statusLevel: getPercentStatusLevel(snapshot.metrics.totalUsedPercent),
     sourceLabel: snapshot.source === 'official' ? '官方' : 'Cookie',
     updatedAt: new Date(snapshot.fetchedAt).toLocaleTimeString('zh-CN', {
@@ -197,6 +265,16 @@ export function computeRemainingPercentValue(
   return normalizePercentValue((remaining / limit) * 100);
 }
 
+function computeRemainingPercentFromUsed(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  return normalizePercentValue(100 - value);
+}
+
+function formatRemainingPercentValue(value: number | null): string {
+  if (value === null) return '--';
+  return `${Math.round(value)}%`;
+}
+
 /** Short label for collapsed floating ball: total remaining percent. */
 export function formatOrbSummary(snapshot: TokenSnapshot | null): {
   label: string;
@@ -208,6 +286,15 @@ export function formatOrbSummary(snapshot: TokenSnapshot | null): {
       label: '余量',
       value: '--',
       percentValue: null,
+    };
+  }
+
+  const dashboardRemaining = computeRemainingPercentFromUsed(snapshot.metrics.totalUsedPercent);
+  if (dashboardRemaining !== null) {
+    return {
+      label: '余量',
+      value: formatRemainingPercentValue(dashboardRemaining),
+      percentValue: dashboardRemaining,
     };
   }
 

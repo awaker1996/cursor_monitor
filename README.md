@@ -1,6 +1,6 @@
 # Cursor Token Monitor — 项目参考文档
 
-> Windows 桌面悬浮球，实时显示 Cursor 账号 **Auto / API** token 余量。  
+> Windows 桌面悬浮球，实时显示 Cursor 账号 **First-party models / API** token 余量。  
 > 本文档整合需求说明、架构设计、实现细节、使用与维护指南，便于后续查阅。
 
 ---
@@ -37,14 +37,14 @@
 ### 背景与目标
 
 - **背景**：需要在桌面实时查看 Cursor 账号 token 余量，避免频繁打开网页或控制台。
-- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 `auto` 与 `api` 两类余量。
-- **数据策略**：官方接口优先（`OfficialProvider`），连续失败后自动回退到 Dashboard Cookie 接口（`CookieProvider`）。Cookie 方案优先读取 `usage-summary` 汇总数据，`get-filtered-usage-events` 仅作为 token 明细补充，避免明细接口不稳定时影响主数据展示。
+- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 First-party models 与 API 两类余量。
+- **数据策略**：官方接口优先（`OfficialProvider`），连续失败后自动回退到 Dashboard Cookie 接口（`CookieProvider`）。Cookie 方案优先读取 `usage-summary` 汇总数据；`get-aggregated-usage-events` 用于 Included Usage 周期模型明细；`get-filtered-usage-events` 作为今日/周期 token 与回退补充，避免明细接口不稳定时影响主数据展示。
 
 ### 范围
 
 **范围内：**
 - Windows 悬浮球（拖拽、置顶、贴边收起、托盘）
-- Auto / API 余量与 Dashboard 用量指标展示
+- First-party models / API 余量与 Dashboard 用量指标展示
 - 自动刷新与间隔配置
 - 双 Provider 故障切换
 - Dashboard API 多端点候选与局部降级
@@ -61,7 +61,7 @@
 
 | 术语 | 含义 |
 |---|---|
-| auto | Cursor 自动额度 / 自动计费相关 token |
+| auto | Cursor First-party models 池（原 Auto + Composer，含 Auto、Composer、Grok 等自有模型） |
 | api | Cursor API 调用相关 token |
 | Provider | 数据获取单元（Official / Cookie） |
 | TokenSnapshot | 统一后的展示数据结构 |
@@ -101,7 +101,7 @@ npm run dist
 2. 右键系统托盘 → **打开设置**
 3. 在浏览器 DevTools 中复制 `WorkosCursorSessionToken` 的值，或复制包含该字段的完整 `cursor.com` Cookie，粘贴并保存
 4. 点击 **测试连接** 验证
-5. 悬浮球按设定间隔自动刷新，展示 Auto / API 余量及数据来源
+5. 悬浮球按设定间隔自动刷新，展示 First-party models / API 余量及数据来源
 
 ### 获取 Cookie 方法
 
@@ -119,13 +119,13 @@ npm run dist
 
 - 启动后显示悬浮球，支持拖拽与置顶
 - 折叠态：总余量 + 健康状态点
-- 展开态：Auto / API 明细、来源、更新时间
+- 展开态：First-party models / API 明细、来源、更新时间
 
 ### FR-02 明细展示
 
 - `auto.remaining` / `auto.limit`
 - `api.remaining` / `api.limit`
-- Dashboard 总消耗百分比、账单周期、metric 明细行（`UsageMetrics`）
+- Dashboard 总消耗百分比、metric 明细行（`UsageMetrics`）、底部 Included Usage（账单周期日期在该区块展示）
 - 数据来源（official / cookie）
 - 最近成功刷新时间
 - 数据过期或失败时显示提示（含本地缓存 stale 数据）
@@ -376,10 +376,14 @@ cursor_monitor/
 
 补充端点：
 
-1. `https://cursor.com/api/dashboard/get-filtered-usage-events`
-2. `https://www.cursor.com/api/dashboard/get-filtered-usage-events`
+1. `https://cursor.com/api/dashboard/get-aggregated-usage-events`（Billing Included Usage 同源聚合，优先）
+2. `https://www.cursor.com/api/dashboard/get-aggregated-usage-events`
+3. `https://cursor.com/api/dashboard/get-filtered-usage-events`（今日/周期 token 与 Included Usage 回退）
+4. `https://www.cursor.com/api/dashboard/get-filtered-usage-events`
 
-`get-filtered-usage-events` 用于补充周期内 token 总量和今日 token/消耗。该端点依赖 `WorkosCursorSessionToken` 中的 `userId`，应用会从 `userId::jwt`、URL 编码格式或 JWT `sub` 中提取。若事件接口失败、超时或无法提取 `userId`，应用仍会展示 `usage-summary` 的汇总百分比，并将 token 明细保持为 `null`。
+`get-aggregated-usage-events` 返回周期内按模型汇总的 tokens / cost，用于展开面板底部 **Included Usage**，与控制台 Billing 口径对齐，无需事件分页。
+
+`get-filtered-usage-events` 用于补充周期内 token 总量和今日 token/消耗，并在聚合接口不可用时回退构建 Included Usage。该端点依赖 `WorkosCursorSessionToken` 中的 `userId`，应用会从 `userId::jwt`、URL 编码格式或 JWT `sub` 中提取。若事件接口失败、超时或无法提取 `userId`，应用仍会展示 `usage-summary` 的汇总百分比，并将 token 明细保持为 `null`。
 
 ### 异常处理规则
 
@@ -456,7 +460,7 @@ OfficialProvider 请求
 |---|---|
 | 折叠 | 圆形球体、总消耗简写、健康点（绿/黄/蓝/灰） |
 | 贴边收起 | peek tab + 健康点，点击或拖出恢复 |
-| 展开 | 总消耗进度条、账单周期、metric 明细行、来源标签、更新时间、错误提示、刷新/设置按钮 |
+| 展开 | 总消耗进度条、metric 明细行、Included Usage、来源标签、更新时间、错误提示、刷新/设置按钮 |
 
 健康点含义：
 - **绿**：数据正常
@@ -563,7 +567,7 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 ## 12. 验收清单
 
 - [ ] 启动后 5 秒内出现悬浮球，可拖拽、置顶、贴边收起
-- [ ] 稳定展示 Auto / API 数值与 Dashboard 指标，标注数据来源
+- [ ] 稳定展示 First-party models / API 数值与 Dashboard 指标，标注数据来源
 - [ ] 自动刷新默认开启，间隔可改且立即生效
 - [ ] 非法间隔输入被拦截，轮询不崩溃
 - [ ] 官方接口失败后自动回退 Cookie，界面有提示

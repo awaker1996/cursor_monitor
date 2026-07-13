@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.electron.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp-verify",
+    "rootDir": "."
+  },
+  "include": [
+    "scripts/verify-included-usage.ts",
+    "src/core/**/*",
+    "src/shared/**/*"
+  ]
+}

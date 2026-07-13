@@ -616,8 +616,8 @@ body.page-settings {
 }
 
 .floating-ball--docked-left {
-  align-items: flex-end;
-  justify-content: flex-start;
+  align-items: flex-start;
+  justify-content: flex-end;
 }
 
 .floating-ball--docked-top {
@@ -870,12 +870,138 @@ body.page-settings {
   line-height: 1;
 }
 
+/* ── Included Usage ── */
+
+.included-usage {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.included-usage__header {
+  margin-bottom: 8px;
+}
+
+.included-usage__title {
+  margin: 0;
+  color: #f3f4f6;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.included-usage__date-range {
+  margin: 2px 0 0;
+  color: #6b7280;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.included-usage__table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.included-usage__head,
+.included-usage__group,
+.included-usage__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.included-usage__head {
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.included-usage__category + .included-usage__category {
+  margin-top: 2px;
+}
+
+.included-usage__group {
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.included-usage__category:first-child .included-usage__group {
+  border-top: none;
+  padding-top: 2px;
+}
+
+.included-usage__row {
+  padding: 2px 0;
+}
+
+.included-usage__cell {
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.included-usage__cell--item {
+  color: #d1d5db;
+}
+
+.included-usage__cell--model {
+  padding-left: 12px;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.included-usage__head .included-usage__cell {
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.included-usage__group .included-usage__cell--item {
+  color: #f3f4f6;
+  font-weight: 600;
+}
+
+.included-usage__cell--tokens,
+.included-usage__cell--usage {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.included-usage__cell--tokens {
+  color: #9ca3af;
+}
+
+.included-usage__cell--usage {
+  color: #d1d5db;
+  min-width: 44px;
+}
+
+.included-usage__group .included-usage__cell--tokens,
+.included-usage__group .included-usage__cell--usage {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.included-usage__hint {
+  margin: 6px 0 0;
+  color: #9ca3af;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
 /* ── Metric Cards ── */
 
 .metric-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 10px;
 }
 
 .metric-card {

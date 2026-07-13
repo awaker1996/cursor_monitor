@@ -18,9 +18,9 @@
 ## 3. 范围定义
 ### 3.1 范围内
 - Windows 桌面常驻悬浮球（可拖拽、置顶、贴边收起、托盘管理）。
-- 显示 `auto` 与 `api` 两类 token 余量及 Dashboard 用量指标（百分比、账单周期、token 明细）。
+- 显示 `auto` 与 `api` 两类 token 余量及 Dashboard 用量指标（百分比、token 明细、Included Usage）。
 - 自动刷新与可配置刷新间隔。
-- 数据来源优先级：官方接口优先，失败后回退 Cookie 接口（`usage-summary` 为主，`get-filtered-usage-events` 为 token 明细补充）。
+- 数据来源优先级：官方接口优先，失败后回退 Cookie 接口（`usage-summary` 为主，`get-aggregated-usage-events` 为 Included Usage，`get-filtered-usage-events` 为今日/周期 token 与回退补充）。
 - 设置页支持手动录入 Cookie、刷新配置、连通性测试、贴边开关、自定义图标。
 - 快照本地缓存：启动或请求失败时展示 stale 缓存数据。
 
@@ -30,7 +30,7 @@
 - 不实现服务端中转（本地直连接口）。
 
 ## 4. 术语说明
-- auto：Cursor 自动额度或自动计费相关 token 指标。
+- auto：Cursor First-party models 池（原 Auto + Composer，对应 Dashboard 自有模型用量）。
 - api：Cursor API 调用相关 token 指标。
 - Provider：数据获取实现单元，如 `OfficialProvider`、`CookieProvider`。
 - TokenSnapshot：统一后的展示数据结构。
@@ -49,7 +49,7 @@
   - `auto.remaining`、`auto.limit`（若接口提供）
   - `api.remaining`、`api.limit`（若接口提供）
   - `metrics`（总消耗百分比、auto/api 百分比、周期与今日 token 明细）
-  - `billingCycleStart` / `billingCycleEnd`（账单周期）
+  - `billingCycleStart` / `billingCycleEnd`（账单周期，展示于 Included Usage 日期范围）
   - 数据来源（official/cookie）
   - 最近成功刷新时间
 - 当数据过期、拉取失败或使用缓存时，显示状态提示。
@@ -66,7 +66,7 @@
 ### FR-04 数据源策略与容错
 - 优先使用 `OfficialProvider` 获取数据。
 - 当首选 Provider 连续失败达到阈值（默认 3 次）后，自动切换到 `CookieProvider`。
-- Cookie 方案优先读取 `usage-summary` 汇总数据；`get-filtered-usage-events` 仅作 token 明细补充。
+- Cookie 方案优先读取 `usage-summary` 汇总数据；`get-aggregated-usage-events` 提供 Included Usage；`get-filtered-usage-events` 作今日/周期 token 与回退补充。
 - 回退后每 120 秒探测首选 Provider 恢复情况，并可自动切回。
 - 切换过程应在 UI 上有可见来源标识与状态说明。
 
@@ -127,7 +127,7 @@
 ## 8. 交互与界面需求
 - 悬浮球折叠态：总览 + 健康点。
 - 贴边收起态：peek tab + 健康点。
-- 展开态：总消耗进度条、账单周期、metric 明细行、来源、最后更新时间、错误提示。
+- 展开态：总消耗进度条、metric 明细行、底部 Included Usage（含账单周期日期）、来源、最后更新时间、错误提示。
 - 设置页：自动刷新、刷新间隔、贴边开关、自定义图标、Cookie 输入、连接测试、清除凭据。
 - 错误态提示应简洁明确，优先可操作建议（如“检查 Cookie 是否过期”）。
 
@@ -223,9 +223,10 @@
   - `source = "cookie"`
   - `rawVersion` 按接口版本记录，如 `cookie:usage-summary:v1`
 
-### 12.4 Usage Events 明细补充
-- 补充端点：`get-filtered-usage-events`（周期内 token 总量、今日 token/消耗）。
-- 依赖 Cookie 中的 `userId`（从 `userId::jwt`、URL 编码或 JWT `sub` 提取）。
+### 12.4 Usage Events / Aggregated 明细补充
+- 优先端点：`get-aggregated-usage-events`（Billing Included Usage 同源按模型聚合）。
+- 补充端点：`get-filtered-usage-events`（周期内 token 总量、今日 token/消耗；聚合不可用时回退构建 Included Usage）。
+- 事件接口依赖 Cookie 中的 `userId`（从 `userId::jwt`、URL 编码或 JWT `sub` 提取）。
 - 事件接口失败时保留 `usage-summary` 汇总数据，token 明细为 `null`。
 
 ### 12.5 缺失字段与异常处理规则

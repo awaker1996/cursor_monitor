@@ -16,6 +16,12 @@ const DASHBOARD_EVENTS_ENDPOINTS = [
   'https://www.cursor.com/api/dashboard/get-filtered-usage-events',
 ];
 
+/** Billing Included Usage uses this server-side aggregation (no event pagination). */
+const DASHBOARD_AGGREGATED_ENDPOINTS = [
+  'https://cursor.com/api/dashboard/get-aggregated-usage-events',
+  'https://www.cursor.com/api/dashboard/get-aggregated-usage-events',
+];
+
 function getTodayRangeMs(): { startDate: string; endDate: string } {
   const now = new Date();
   const start = new Date(now);
@@ -173,26 +179,36 @@ export class CookieProvider implements TokenProvider {
           const todayRange = getTodayRangeMs();
           const cycleRange = getBillingCycleRangeMs(summary);
           const eventsController = new AbortController();
+          const aggregatedController = new AbortController();
           const eventsTimeout = setTimeout(
             () => eventsController.abort(),
             settings.requestTimeoutSec * 1000,
           );
+          // Aggregated is a single request; give it a dedicated budget so event
+          // pagination aborts do not cancel Included Usage data.
+          const aggregatedTimeout = setTimeout(
+            () => aggregatedController.abort(),
+            Math.max(settings.requestTimeoutSec, 15) * 1000,
+          );
 
           let todayEvents: unknown | null = null;
           let cycleEvents: unknown | null = null;
+          let aggregatedUsage: unknown | null = null;
           try {
-            [todayEvents, cycleEvents] = await Promise.all([
+            [todayEvents, cycleEvents, aggregatedUsage] = await Promise.all([
               fetchUsageEvents(cookieHeader, todayRange, eventsController.signal, 5, userId),
               fetchUsageEvents(cookieHeader, cycleRange, eventsController.signal, 15, userId),
+              fetchAggregatedUsage(cookieHeader, cycleRange, aggregatedController.signal),
             ]);
           } finally {
             clearTimeout(eventsTimeout);
+            clearTimeout(aggregatedTimeout);
           }
 
           return {
-            raw: { summary, todayEvents, cycleEvents },
+            raw: { summary, todayEvents, cycleEvents, aggregatedUsage },
             source: 'cookie',
-            rawVersion: 'cookie:usage-summary',
+            rawVersion: 'cookie:usage-summary+aggregated',
           };
         }
 
@@ -299,6 +315,65 @@ async function fetchUsageEventsPage(
         endpoint,
         error: errorToMessage(err),
       });
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Fetch server-side per-model aggregation used by Billing → Included Usage.
+ * One request covers the full billing window (no event pagination).
+ */
+async function fetchAggregatedUsage(
+  cookieHeader: string,
+  range: { startDate: string; endDate: string },
+  signal: AbortSignal,
+): Promise<unknown | null> {
+  const startDate = Number(range.startDate);
+  const endDate = Number(range.endDate);
+  if (!Number.isFinite(startDate) || !Number.isFinite(endDate)) return null;
+
+  // teamId -1 = individual (matches Cursor dashboard / Billing page)
+  const bodyVariants: Array<Record<string, unknown>> = [
+    { teamId: -1, startDate, endDate },
+    { teamId: 0, startDate, endDate },
+  ];
+
+  for (const endpoint of DASHBOARD_AGGREGATED_ENDPOINTS) {
+    for (const body of bodyVariants) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: buildDashboardHeaders(cookieHeader),
+          body: JSON.stringify(body),
+          signal,
+        });
+        const payload = await readJsonResponse(response);
+        if (response.ok && payload && typeof payload === 'object') {
+          const record = payload as { aggregations?: unknown };
+          if (Array.isArray(record.aggregations)) {
+            log.info('Aggregated usage fetched', {
+              endpoint,
+              teamId: body.teamId,
+              models: record.aggregations.length,
+            });
+            return payload;
+          }
+        }
+        log.warn('Aggregated usage endpoint returned unusable response', {
+          endpoint,
+          teamId: body.teamId,
+          status: response.status,
+          error: extractErrorMessage(payload),
+        });
+      } catch (err) {
+        log.warn('Aggregated usage endpoint failed, trying next candidate', {
+          endpoint,
+          teamId: body.teamId,
+          error: errorToMessage(err),
+        });
+      }
     }
   }
 
