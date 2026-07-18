@@ -10,11 +10,12 @@ export default function MetricRow({ item }: MetricRowProps) {
 
   return (
     <div className={`metric-card metric-card--${item.accent}`}>
-      <div className="metric-card__header">
-        <span className="metric-card__label">{item.label}</span>
+      <span className="metric-card__label">{item.label}</span>
+      <div className="metric-card__stats">
         <span className={`metric-card__value metric-card__value--${item.statusLevel}`}>
           {item.percent}
         </span>
+        {item.detail && <span className="metric-card__detail">{item.detail}</span>}
       </div>
       {hasBar && (
         <div className="metric-card__track" aria-hidden>
@@ -24,7 +25,6 @@ export default function MetricRow({ item }: MetricRowProps) {
           />
         </div>
       )}
-      {item.detail && <span className="metric-card__detail">{item.detail}</span>}
     </div>
   );
 }

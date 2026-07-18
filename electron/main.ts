@@ -5,9 +5,15 @@ import { SettingsStore } from '../src/settings/SettingsStore';
 import { credentialVault } from '../src/security/CredentialVault';
 import { ProviderManager } from '../src/core/providers/ProviderManager';
 import { Poller } from '../src/core/poller';
-import { createFloatingBallWindow, getFloatingBallWindow, sendToFloatingBall } from './windows/floatingBall';
+import {
+  createFloatingBallWindow,
+  getFloatingBallWindow,
+  sendToFloatingBall,
+  ORB_EXPANDED_HEIGHT,
+  ORB_EXPANDED_WIDTH,
+} from './windows/floatingBall';
 import { createSettingsWindow } from './windows/settings';
-import { createTray, destroyTray, updateTrayIcon } from './tray';
+import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip } from './tray';
 import {
   getDockState,
   handleMoveWhileDocked,
@@ -27,6 +33,7 @@ import {
   type TestConnectionResult,
 } from '../src/shared/types';
 import { createLogger } from '../src/utils/logger';
+import { formatTrayTooltip } from '../src/shared/format';
 
 const log = createLogger('Main');
 const isDev = !app.isPackaged;
@@ -155,11 +162,16 @@ function validateInterval(sec: number): string | null {
   return null;
 }
 
+function refreshTrayTooltip(): void {
+  updateTrayToolTip(formatTrayTooltip(providerManager.getLastSnapshot()));
+}
+
 function broadcastSnapshot(): void {
   const snapshot = providerManager.getLastSnapshot();
   if (snapshot) {
     sendToFloatingBall('snapshot-updated', snapshot);
   }
+  refreshTrayTooltip();
 }
 
 function broadcastPollerState(): void {
@@ -178,13 +190,22 @@ function applyOrbMode(mode: 'collapsed' | 'hover' | 'expanded'): void {
   const win = getFloatingBallWindow();
   if (!win || win.isDestroyed()) return;
   if (getDockState().docked) return;
-  const sizes: Record<'collapsed' | 'hover' | 'expanded', [number, number]> = {
-    collapsed: [80, 80],
-    hover: [280, 200],
-    expanded: [300, 448],
-  };
-  const [width, height] = sizes[mode] ?? sizes.collapsed;
-  resizeFloatingBallWindow(win, width, height);
+  // Undocked window stays at expanded capacity; renderer handles panel visibility.
+  if (mode === 'collapsed' || mode === 'expanded') {
+    resizeFloatingBallWindow(win, ORB_EXPANDED_WIDTH, ORB_EXPANDED_HEIGHT);
+    return;
+  }
+  resizeFloatingBallWindow(win, 280, 200);
+}
+
+export type ExpandedPanelLayout = 'overview' | 'included';
+
+function applyExpandedPanelLayout(_layout: ExpandedPanelLayout): void {
+  const win = getFloatingBallWindow();
+  if (!win || win.isDestroyed()) return;
+  if (getDockState().docked) return;
+  // Overview and included share the same undocked capacity.
+  resizeFloatingBallWindow(win, ORB_EXPANDED_WIDTH, ORB_EXPANDED_HEIGHT);
 }
 function resizeFloatingBallWindow(win: BrowserWindow, width: number, height: number): void {
   const bounds = win.getBounds();
@@ -252,17 +273,23 @@ function setupIpc(): void {
   ipcMain.handle('has-cookie', () => credentialVault.hasCookie());
 
   ipcMain.handle('test-connection', async (): Promise<TestConnectionResult> => {
+    const startedAt = Date.now();
     try {
       const hasCookie = await credentialVault.hasCookie();
       if (!hasCookie) {
-        return { success: false, message: '请先配置 Cookie' };
+        return { success: false, message: '请先配置 Cookie', durationMs: Date.now() - startedAt };
       }
       const snapshot = await providerManager.testCookieConnection();
       broadcastSnapshot();
-      return { success: true, message: '连接成功', snapshot };
+      return {
+        success: true,
+        message: 'Cookie 接口调用成功，已解析用量数据',
+        durationMs: Date.now() - startedAt,
+        snapshot,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return { success: false, message };
+      return { success: false, message, durationMs: Date.now() - startedAt };
     }
   });
 
@@ -300,6 +327,10 @@ function setupIpc(): void {
 
   // Backward compatibility for older renderer builds — window stays fixed size
   ipcMain.on('set-expanded', () => {});
+
+  ipcMain.on('set-expanded-panel-layout', (_event, layout: ExpandedPanelLayout) => {
+    applyExpandedPanelLayout(layout);
+  });
 
   ipcMain.on('set-ignore-mouse-events', (event, ignore: boolean) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -382,6 +413,7 @@ function setupPollerEvents(): void {
   poller.onEvent((event) => {
     if (event.type === 'snapshot' && event.snapshot) {
       sendToFloatingBall('snapshot-updated', event.snapshot);
+      refreshTrayTooltip();
     }
     if (event.type === 'state' && event.state) {
       sendToFloatingBall('poller-state', event.state);
@@ -424,6 +456,8 @@ app.whenReady().then(async () => {
     onOpenSettings: () => createSettingsWindow(isDev, settingsStore.get()),
     onQuit: () => app.quit(),
   });
+
+  refreshTrayTooltip();
 
   refreshAppIcons();
 

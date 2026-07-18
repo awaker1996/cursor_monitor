@@ -306,3 +306,25 @@ export function formatOrbSummary(snapshot: TokenSnapshot | null): {
     percentValue: computeRemainingPercentValue(remaining, limit),
   };
 }
+
+/** Multi-line tray tooltip aligned with overview panel (no remaining quota). */
+export function formatTrayTooltip(snapshot: TokenSnapshot | null): string {
+  if (!snapshot) {
+    return 'Cursor Token Monitor · 暂无数据';
+  }
+
+  const m = snapshot.metrics;
+  const sourceLabel = snapshot.source === 'official' ? '官方' : 'Cookie';
+  const updatedAt = new Date(snapshot.fetchedAt).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  return [
+    `总消耗 ${formatUsedPercent(m.totalUsedPercent ?? null)}`,
+    `今日 API ${formatUsedPercent(m.apiTodayUsedPercent ?? null)} · 今日 FP ${formatUsedPercent(m.autoTodayUsedPercent ?? null)}`,
+    `周期 API ${formatUsedPercent(m.apiUsedPercent ?? null)} · 周期 FP ${formatUsedPercent(m.autoUsedPercent ?? null)}`,
+    `${sourceLabel} · ${updatedAt}`,
+  ].join('\n');
+}

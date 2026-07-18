@@ -1,4 +1,5 @@
 import type { IncludedUsageDisplay } from '../../shared/format';
+import IncludedUsageModelName from './IncludedUsageModelName';
 
 interface IncludedUsageTableProps {
   display: IncludedUsageDisplay;
@@ -16,52 +17,56 @@ export default function IncludedUsageTable({ display }: IncludedUsageTableProps)
         )}
       </div>
 
-      <div className="included-usage__table" role="table">
-        <div className="included-usage__head" role="row">
-          <span className="included-usage__cell included-usage__cell--item" role="columnheader">
-            {itemCol}
-          </span>
-          <span className="included-usage__cell included-usage__cell--tokens" role="columnheader">
-            {tokensCol}
-          </span>
-          <span className="included-usage__cell included-usage__cell--usage" role="columnheader">
-            {usageCol}
-          </span>
-        </div>
+      <div className="included-usage__table-wrap">
+        <div className="included-usage__table" role="table">
+          <div className="included-usage__head" role="row">
+            <span className="included-usage__cell included-usage__cell--item" role="columnheader">
+              {itemCol}
+            </span>
+            <span className="included-usage__cell included-usage__cell--tokens" role="columnheader">
+              {tokensCol}
+            </span>
+            <span className="included-usage__cell included-usage__cell--usage" role="columnheader">
+              {usageCol}
+            </span>
+          </div>
 
-        {display.categories.map((category) => (
-          <div key={category.key} className="included-usage__category">
-            <div className="included-usage__group" role="row">
-              <span className="included-usage__cell included-usage__cell--item" role="cell">
-                {category.label}
-              </span>
-              <span className="included-usage__cell included-usage__cell--tokens" role="cell">
-                {category.tokens}
-              </span>
-              <span className="included-usage__cell included-usage__cell--usage" role="cell">
-                {category.usage}
-              </span>
-            </div>
-
-            {category.models.map((model) => (
-              <div key={`${category.key}-${model.model}`} className="included-usage__row" role="row">
-                <span
-                  className="included-usage__cell included-usage__cell--item included-usage__cell--model"
-                  role="cell"
-                  title={model.model}
-                >
-                  {model.model}
+          {display.categories.map((category) => (
+            <div key={category.key} className="included-usage__category">
+              <div className="included-usage__group" role="row">
+                <span className="included-usage__cell included-usage__cell--item" role="cell">
+                  {category.label}
                 </span>
                 <span className="included-usage__cell included-usage__cell--tokens" role="cell">
-                  {model.tokens}
+                  {category.tokens}
                 </span>
                 <span className="included-usage__cell included-usage__cell--usage" role="cell">
-                  {model.usage}
+                  {category.usage}
                 </span>
               </div>
-            ))}
-          </div>
-        ))}
+
+              {category.models.length > 0 && (
+                <div className="included-usage__model-list">
+                  {category.models.map((model) => (
+                    <div
+                      key={`${category.key}-${model.model}`}
+                      className="included-usage__row"
+                      role="row"
+                    >
+                      <IncludedUsageModelName name={model.model} />
+                      <span className="included-usage__cell included-usage__cell--tokens" role="cell">
+                        {model.tokens}
+                      </span>
+                      <span className="included-usage__cell included-usage__cell--usage" role="cell">
+                        {model.usage}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {display.showIncompleteHint && (

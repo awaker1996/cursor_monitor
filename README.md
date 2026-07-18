@@ -1,6 +1,6 @@
 # Cursor Token Monitor — 项目参考文档
 
-> Windows 桌面悬浮球，实时显示 Cursor 账号 **First-party models / API** token 余量。  
+> Windows 桌面悬浮球，定期显示 Cursor 账号 **First-party models / API** 用量与余量。  
 > 本文档整合需求说明、架构设计、实现细节、使用与维护指南，便于后续查阅。
 
 ---
@@ -37,14 +37,15 @@
 ### 背景与目标
 
 - **背景**：需要在桌面实时查看 Cursor 账号 token 余量，避免频繁打开网页或控制台。
-- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 First-party models 与 API 两类余量。
+- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 First-party models 与 API 用量概览、周期明细及余量。
 - **数据策略**：官方接口优先（`OfficialProvider`），连续失败后自动回退到 Dashboard Cookie 接口（`CookieProvider`）。Cookie 方案优先读取 `usage-summary` 汇总数据；`get-aggregated-usage-events` 用于 Included Usage 周期模型明细；`get-filtered-usage-events` 作为今日/周期 token 与回退补充，避免明细接口不稳定时影响主数据展示。
 
 ### 范围
 
 **范围内：**
 - Windows 悬浮球（拖拽、置顶、贴边收起、托盘）
-- First-party models / API 余量与 Dashboard 用量指标展示
+- First-party models / API 余量与 Dashboard 用量指标展示（概览 / Included 明细切换）
+- 系统托盘悬停展示概览用量摘要
 - 自动刷新与间隔配置
 - 双 Provider 故障切换
 - Dashboard API 多端点候选与局部降级
@@ -118,24 +119,36 @@ npm run dist
 ### FR-01 悬浮球显示
 
 - 启动后显示悬浮球，支持拖拽与置顶
-- 折叠态：总余量 + 健康状态点
-- 展开态：First-party models / API 明细、来源、更新时间
+- 折叠态：总余量百分比（「余量」）+ 健康状态点 + 圆环进度
+- 展开态：默认「概览」视图；有 Included Usage 数据时可切换至「明细」视图
+- 贴边收起：peek tab + 迷你圆环 + 健康点
 
 ### FR-02 明细展示
 
-- `auto.remaining` / `auto.limit`
-- `api.remaining` / `api.limit`
-- Dashboard 总消耗百分比、metric 明细行（`UsageMetrics`）、底部 Included Usage（账单周期日期在该区块展示）
+**概览视图：**
+
+- 顶部 dashboard：总消耗百分比、进度条、周期 token 汇总、状态 pill、来源、上次刷新时间
+- 四张 metric 卡片：今日 API、今日 First-party models、周期 API、周期 First-party models（百分比 + token 明细）
+- 退避 / 暂停 / 无数据等状态提示
+
+**明细视图（有 Included Usage 数据时可用）：**
+
+- 按模型聚合的 Included Usage 表格（账单周期日期、tokens、费用等）
+- 表格区域独立滚动，概览视图无纵向滚动条
+
+**通用：**
+
+- `auto.remaining` / `auto.limit`、`api.remaining` / `api.limit`（接口提供时用于余量计算）
 - 数据来源（official / cookie）
-- 最近成功刷新时间
-- 数据过期或失败时显示提示（含本地缓存 stale 数据）
+- stale 时状态 pill 显示「缓存数据」（不另设整页缓存提示条）
 
 ### FR-03 自动刷新与间隔配置
 
 - 默认开启，默认间隔 **30 秒**
-- 可配置范围：**10 – 3600 秒**
-- 非法输入拦截并提示，修改后立即生效并持久化
+- 可配置范围：**30 – 3600 秒**
+- 非法输入拦截并提示，修改后立即生效并持久化；历史配置若低于 30 秒，启动时自动钳制
 - 支持暂停 / 恢复；暂停期间可手动刷新
+- 刷新中：悬浮球与概览面板有加载反馈（旋转刷新按钮、双电流边框等）
 
 ### FR-04 数据源策略与容错
 
@@ -147,12 +160,13 @@ npm run dist
 ### FR-05 Cookie 配置与测试
 
 - 手动粘贴 Cookie
-- 测试连接（成功 / 失败 + 原因）
+- 测试连接：成功 / 失败 + 原因；成功时展示结构化详情（耗时、数据源、总消耗、账单周期、Token 配额、用量分项、Included Usage 状态等）
 - 一键清除凭据
 
 ### FR-06 托盘与生命周期
 
 - 托盘菜单：立即刷新、暂停/恢复、打开设置、退出
+- 悬停托盘图标：多行概览用量摘要（总消耗、今日/周期 API 与 FP 分项、来源与更新时间；随快照刷新更新，无快照时显示「暂无数据」）
 - 关闭悬浮窗后驻留托盘，不强制退出
 
 ### FR-07 贴边缘自动收起
@@ -217,7 +231,7 @@ flowchart TD
 | 图标管理 | `electron/iconManager.ts` | 自定义图标读写与预览 |
 | 悬浮窗 | `electron/windows/floatingBall.ts` | 无边框置顶窗口 |
 | 设置窗 | `electron/windows/settings.ts` | 配置界面 |
-| 托盘 | `electron/tray.ts` | 系统托盘菜单 |
+| 托盘 | `electron/tray.ts` | 系统托盘菜单与悬停 tooltip |
 | 预加载 | `electron/preload.ts` | 安全 IPC 桥接 |
 | 轮询器 | `src/core/poller.ts` | 定时刷新、退避、状态机 |
 | 快照缓存 | `src/core/SnapshotCache.ts` | 本地快照持久化与加载 |
@@ -228,9 +242,12 @@ flowchart TD
 | 设置存储 | `src/settings/SettingsStore.ts` | JSON 持久化 |
 | 凭据库 | `src/security/CredentialVault.ts` | keytar / safeStorage |
 | 日志 | `src/utils/logger.ts` | 敏感信息脱敏 |
-| 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开展示 |
+| 格式化 | `src/shared/format.ts` | 展示格式化、托盘 tooltip、概览/明细构建 |
+| 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开、概览/明细切换 |
 | 设置 UI | `src/renderer/pages/SettingsPage.tsx` | 配置表单 |
+| 连接测试面板 | `src/renderer/components/TestConnectionResultPanel.tsx` | 测试连接结构化结果 |
 | 指标行 | `src/renderer/components/MetricRow.tsx` | Dashboard metric 明细展示 |
+| Included 表格 | `src/renderer/components/IncludedUsageTable.tsx` | Included Usage 明细 |
 
 ---
 
@@ -271,6 +288,9 @@ cursor_monitor/
 │       └── components/
 │           ├── TokenBadge.tsx
 │           ├── MetricRow.tsx
+│           ├── IncludedUsageTable.tsx
+│           ├── IncludedUsageModelName.tsx
+│           ├── TestConnectionResultPanel.tsx
 │           └── ErrorHint.tsx
 ├── docs/
 │   └── changes/                 # 代码变更归档（见 .cursor/rules/change-archive.mdc）
@@ -458,26 +478,40 @@ OfficialProvider 请求
 
 | 状态 | 内容 |
 |---|---|
-| 折叠 | 圆形球体、总消耗简写、健康点（绿/黄/蓝/灰） |
-| 贴边收起 | peek tab + 健康点，点击或拖出恢复 |
-| 展开 | 总消耗进度条、metric 明细行、Included Usage、来源标签、更新时间、错误提示、刷新/设置按钮 |
+| 折叠 | 圆形球体、余量百分比、圆环进度、健康点（绿/黄/蓝/灰） |
+| 贴边收起 | peek tab + 迷你圆环 + 健康点，点击或拖出恢复 |
+| 展开 · 概览 | 总消耗 dashboard、4 张 metric 卡片、状态/来源/时间、刷新/设置/收起；面板进出场动画 |
+| 展开 · 明细 | Included Usage 表格（有数据时底部分段切换），长模型名溢出时慢速滚动 |
 
 健康点含义：
 - **绿**：数据正常
-- **黄**：数据过期或退避中
-- **蓝**：自动刷新已暂停
+- **黄**：数据过期或退避中（stale 时 pill 显示「缓存数据」）
+- **蓝**：自动刷新已暂停，或正在刷新
 - **灰**：暂无数据
+
+未贴边时窗口固定 **360×520**，展开/收起与概览/明细切换不再改变窗体尺寸；贴边 peek 为 **300×448**。
 
 ### 设置页
 
-- 自动刷新开关与刷新间隔（秒）+ 校验提示
+- 自动刷新开关与刷新间隔（秒，30–3600）+ 校验提示
 - 贴边缘自动收起开关
 - 自定义应用图标（选择/恢复默认）
 - Cookie 输入 / 保存 / 清除
-- 测试连接
+- 测试连接（结构化成功/失败详情面板）
 - 未配置 Cookie 时的引导提示
 
-### 托盘右键菜单
+### 托盘
+
+**悬停提示**（多行，随快照更新）：
+
+```text
+总消耗 12.34%
+今日 API 1.20% · 今日 FP 2.30%
+周期 API 10.00% · 周期 FP 5.00%
+官方 · 14:32:05
+```
+
+**右键菜单**
 
 - 立即刷新
 - 暂停 / 恢复自动刷新
@@ -493,7 +527,7 @@ OfficialProvider 请求
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
 | autoRefreshEnabled | true | 是否自动刷新 |
-| refreshIntervalSec | 30 | 刷新间隔（10–3600） |
+| refreshIntervalSec | 30 | 刷新间隔（**30**–3600） |
 | requestTimeoutSec | 10 | 单次请求超时 |
 | officialEndpoint | `https://www.cursor.com/api/usage` | 官方接口 |
 | cookieEndpoint | `https://cursor.com/api/usage-summary` | 用户自定义 Cookie 汇总接口候选 |
@@ -567,12 +601,16 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 ## 12. 验收清单
 
 - [ ] 启动后 5 秒内出现悬浮球，可拖拽、置顶、贴边收起
+- [ ] 折叠态显示余量百分比；展开概览可见总消耗与 4 张 metric 卡片
+- [ ] 有 Included Usage 时可在概览/明细间切换，概览无纵向滚动
 - [ ] 稳定展示 First-party models / API 数值与 Dashboard 指标，标注数据来源
-- [ ] 自动刷新默认开启，间隔可改且立即生效
+- [ ] 自动刷新默认开启，间隔可改（30–3600 秒）且立即生效
 - [ ] 非法间隔输入被拦截，轮询不崩溃
 - [ ] 官方接口失败后自动回退 Cookie，界面有提示
 - [ ] 清除凭据后停止敏感请求，UI 给出引导
-- [ ] 快照缓存在启动/失败时可展示 stale 数据并提示
+- [ ] 快照缓存在启动/失败时可展示 stale 数据（状态 pill 标识）
+- [ ] 托盘悬停显示多行概览用量，随刷新更新
+- [ ] 设置页连接测试展示结构化详情
 - [ ] 自定义图标可即时生效于托盘与设置窗
 - [ ] 安装包可在 Windows 环境安装运行
 
@@ -655,10 +693,10 @@ Cursor 接口字段或路径变化时，通常只需改以下文件，**无需�
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、实时显示、自动刷新、双 Provider 回退、Dashboard 指标、贴边收起、自定义图标、快照缓存 |
+| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/明细、贴边收起、托盘悬停用量、自定义图标、快照缓存、连接测试详情 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 
 ---
 
-*文档版本：v1.1 | 最后更新：2026-07-06*
+*文档版本：v1.2 | 最后更新：2026-07-18*

@@ -72,6 +72,7 @@ export interface ProviderHealth {
 
 export interface PollerState {
   status: 'idle' | 'running' | 'backoff' | 'paused';
+  fetching: boolean;
   activeProvider: DataSource;
   failureCount: number;
   nextRefreshAt?: string;
@@ -101,7 +102,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customIconPath: null,
 };
 
-export const REFRESH_INTERVAL_MIN = 10;
+export const REFRESH_INTERVAL_MIN = 30;
 export const REFRESH_INTERVAL_MAX = 3600;
 
 export const BACKOFF_SEQUENCE_MS = [30_000, 60_000, 120_000, 300_000];
@@ -230,5 +231,6 @@ export interface TokenProvider {
 export interface TestConnectionResult {
   success: boolean;
   message: string;
+  durationMs?: number;
   snapshot?: TokenSnapshot;
 }

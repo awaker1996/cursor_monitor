@@ -20,6 +20,7 @@ export class Poller {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private state: PollerState = {
     status: 'idle',
+    fetching: false,
     activeProvider: 'cookie',
     failureCount: 0,
   };
@@ -109,7 +110,10 @@ export class Poller {
 
   private async doRefresh(scheduleNext: boolean): Promise<void> {
     const settings = this.settingsStore.get();
-    this.updateState({ activeProvider: this.providerManager.getActiveProvider() });
+    this.updateState({
+      activeProvider: this.providerManager.getActiveProvider(),
+      fetching: true,
+    });
 
     try {
       const snapshot = await this.providerManager.fetch();
@@ -150,6 +154,8 @@ export class Poller {
       if (scheduleNext && settings.autoRefreshEnabled && this.state.status !== 'paused') {
         this.scheduleNext(backoffMs);
       }
+    } finally {
+      this.updateState({ fetching: false });
     }
   }
 

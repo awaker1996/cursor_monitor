@@ -3,18 +3,24 @@ import path from 'path';
 
 let floatingBallWindow: BrowserWindow | null = null;
 
+/** Docked peek container (smaller window while edge-docked). */
 export const ORB_WINDOW_WIDTH = 300;
 export const ORB_WINDOW_HEIGHT = 448;
+
+/** Undocked capacity — fixed so expand/collapse never calls setBounds. */
+export const ORB_EXPANDED_WIDTH = 360;
+export const ORB_EXPANDED_HEIGHT = 520;
+
 const ORB_SCREEN_MARGIN = 20;
 
 export function createFloatingBallWindow(isDev: boolean): BrowserWindow {
   const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
 
   floatingBallWindow = new BrowserWindow({
-    width: ORB_WINDOW_WIDTH,
-    height: ORB_WINDOW_HEIGHT,
-    x: x + width - ORB_WINDOW_WIDTH - ORB_SCREEN_MARGIN,
-    y: y + height - ORB_WINDOW_HEIGHT - ORB_SCREEN_MARGIN,
+    width: ORB_EXPANDED_WIDTH,
+    height: ORB_EXPANDED_HEIGHT,
+    x: x + width - ORB_EXPANDED_WIDTH - ORB_SCREEN_MARGIN,
+    y: y + height - ORB_EXPANDED_HEIGHT - ORB_SCREEN_MARGIN,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',

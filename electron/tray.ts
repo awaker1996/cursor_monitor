@@ -59,6 +59,11 @@ export function updateTrayIcon(icon: Electron.NativeImage): void {
   tray.setImage(icon.isEmpty() ? nativeImage.createEmpty() : icon);
 }
 
+export function updateTrayToolTip(text: string): void {
+  if (!tray) return;
+  tray.setToolTip(text);
+}
+
 export function destroyTray(): void {
   if (tray) {
     tray.destroy();

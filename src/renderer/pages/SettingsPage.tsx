@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import ErrorHint from '../components/ErrorHint';
+import TestConnectionResultPanel from '../components/TestConnectionResultPanel';
 import {
   REFRESH_INTERVAL_MAX,
   REFRESH_INTERVAL_MIN,
   type AppSettings,
+  type TestConnectionResult,
 } from '../../shared/types';
 
 export default function SettingsPage() {
@@ -13,9 +15,7 @@ export default function SettingsPage() {
   const [intervalInput, setIntervalInput] = useState('30');
   const [intervalError, setIntervalError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(
-    null,
-  );
+  const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
   const [testing, setTesting] = useState(false);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
   const [iconMessage, setIconMessage] = useState<string | null>(null);
@@ -254,11 +254,7 @@ export default function SettingsPage() {
         <button className="btn-primary" onClick={handleTestConnection} disabled={testing}>
           {testing ? '测试中...' : '测试连接'}
         </button>
-        {testResult && (
-          <div className={`test-result test-result--${testResult.success ? 'ok' : 'fail'}`}>
-            {testResult.message}
-          </div>
-        )}
+        {testResult && <TestConnectionResultPanel result={testResult} />}
       </section>
 
       {saveMessage && <p className="save-message">{saveMessage}</p>}

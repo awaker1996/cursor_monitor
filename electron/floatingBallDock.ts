@@ -1,6 +1,11 @@
 import { BrowserWindow, screen } from 'electron';
 import type { DockEdge } from '../src/shared/types';
-import { ORB_WINDOW_HEIGHT, ORB_WINDOW_WIDTH } from './windows/floatingBall';
+import {
+  ORB_EXPANDED_HEIGHT,
+  ORB_EXPANDED_WIDTH,
+  ORB_WINDOW_HEIGHT,
+  ORB_WINDOW_WIDTH,
+} from './windows/floatingBall';
 
 export const DOCK_THRESHOLD = 24;
 export const PEEK_TAB_WIDTH = 32;
@@ -153,8 +158,8 @@ export function undockWindow(win: BrowserWindow): void {
     win.setBounds({
       x: Math.round(saved.x),
       y: Math.round(saved.y),
-      width: ORB_WINDOW_WIDTH,
-      height: ORB_WINDOW_HEIGHT,
+      width: ORB_EXPANDED_WIDTH,
+      height: ORB_EXPANDED_HEIGHT,
     });
   }
 

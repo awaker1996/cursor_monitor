@@ -239,6 +239,38 @@ console.log('mergeTodayMetricsFromCache');
   const merged = mergeTodayMetricsFromCache(unreliable, previous);
   assert('merge restores today percent', merged.metrics.apiTodayUsedPercent !== null);
   assert('merge marks stale', merged.stale === true);
+
+  const cachedBothBuckets = {
+    ...previous,
+    metrics: {
+      ...previous.metrics,
+      apiTodayUsedPercent: 7.5,
+      autoTodayUsedPercent: 3.25,
+      autoTodayTokens: 800,
+    },
+  };
+  const partialRefresh = {
+    ...unreliable,
+    metrics: {
+      ...unreliable.metrics,
+      apiTodayUsedPercent: 8,
+      autoTodayUsedPercent: null,
+      autoTodayTokens: null,
+    },
+  };
+  const partiallyMerged = mergeTodayMetricsFromCache(partialRefresh, cachedBothBuckets);
+  assert(
+    'partial merge keeps fresh API percent',
+    partiallyMerged.metrics.apiTodayUsedPercent === 8,
+  );
+  assert(
+    'partial merge restores First-party percent',
+    partiallyMerged.metrics.autoTodayUsedPercent === 3.25,
+  );
+  assert(
+    'partial merge restores First-party tokens',
+    partiallyMerged.metrics.autoTodayTokens === 800,
+  );
 }
 
 console.log('orb summary');

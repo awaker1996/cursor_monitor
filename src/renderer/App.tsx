@@ -17,16 +17,64 @@ const PEEK_RING_RADIUS = 10;
 const PEEK_RING_CIRCUMFERENCE = 2 * Math.PI * PEEK_RING_RADIUS;
 const PEEK_RING_CENTER = 12;
 const INTERACTIVE_SELECTOR =
-  '.floating-ball__orb-wrap, .floating-ball__orb, .floating-ball__panel, .floating-ball__peek';
+  '.floating-ball__orb-wrap, .floating-ball__orb, .floating-ball__panel-frame, .floating-ball__panel, .floating-ball__peek';
 
-function healthColor(snapshot: TokenSnapshot | null, pollerState: PollerState | null): string {
+function IconRefresh() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" />
+      <path d="M13.5 2.5v3h-3" />
+    </svg>
+  );
+}
+
+function IconSettings() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="8" cy="8" r="2" />
+      <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06" />
+    </svg>
+  );
+}
+
+function healthColor(
+  snapshot: TokenSnapshot | null,
+  pollerState: PollerState | null,
+  isRefreshing: boolean,
+): string {
+  if (isRefreshing) return 'blue';
   if (!snapshot) return 'gray';
   if (snapshot.stale || pollerState?.status === 'backoff') return 'yellow';
   if (pollerState?.status === 'paused') return 'blue';
   return 'green';
 }
 
-function healthLabel(snapshot: TokenSnapshot | null, pollerState: PollerState | null): string {
+function healthLabel(
+  snapshot: TokenSnapshot | null,
+  pollerState: PollerState | null,
+  isRefreshing: boolean,
+): string {
+  if (isRefreshing) return '刷新中';
   if (!snapshot) return '无数据';
   if (snapshot.stale) return '缓存数据';
   if (pollerState?.status === 'backoff') return '退避中';
@@ -34,11 +82,18 @@ function healthLabel(snapshot: TokenSnapshot | null, pollerState: PollerState | 
   return '正常';
 }
 
+type PanelView = 'overview' | 'included';
+type PanelPhase = 'hidden' | 'entering' | 'shown' | 'leaving';
+
 export default function App() {
   const [expanded, setExpanded] = useState(false);
+  const [panelPhase, setPanelPhase] = useState<PanelPhase>('hidden');
+  const [panelAnimOpen, setPanelAnimOpen] = useState(false);
   const [dockedEdge, setDockedEdge] = useState<DockEdge | null>(null);
   const [snapshot, setSnapshot] = useState<TokenSnapshot | null>(null);
   const [pollerState, setPollerState] = useState<PollerState | null>(null);
+  const [pendingRefresh, setPendingRefresh] = useState(false);
+  const [panelView, setPanelView] = useState<PanelView>('overview');
   const draggingRef = useRef(false);
   const dragMovedRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -56,12 +111,35 @@ export default function App() {
   }, [expanded]);
 
   const collapsePanel = useCallback(() => {
-    setExpanded(false);
+    setPanelPhase((phase) => (phase === 'hidden' || phase === 'leaving' ? phase : 'leaving'));
   }, []);
 
   const expandPanel = useCallback(() => {
     setExpanded(true);
+    setPanelPhase('entering');
   }, []);
+
+  const handlePanelTransitionEnd = useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.propertyName !== 'opacity' && event.propertyName !== 'transform') return;
+
+    setPanelPhase((phase) => {
+      if (phase === 'entering') return 'shown';
+      if (phase === 'leaving') {
+        setExpanded(false);
+        return 'hidden';
+      }
+      return phase;
+    });
+  }, []);
+
+  const isRefreshing = pendingRefresh || (pollerState?.fetching ?? false);
+
+  const handleManualRefresh = useCallback(() => {
+    if (pendingRefresh || pollerState?.fetching) return;
+    setPendingRefresh(true);
+    void window.electronAPI.manualRefresh().finally(() => setPendingRefresh(false));
+  }, [pendingRefresh, pollerState?.fetching]);
 
   const setMousePassthrough = useCallback((ignore: boolean) => {
     if (draggingRef.current || expandedRef.current) {
@@ -84,7 +162,11 @@ export default function App() {
     const unsub2 = window.electronAPI.onPollerState(setPollerState);
     const unsub3 = window.electronAPI.onDockStateChanged((edge) => {
       setDockedEdge(edge);
-      if (edge) setExpanded(false);
+      if (edge) {
+        setExpanded(false);
+        setPanelAnimOpen(false);
+        setPanelPhase('hidden');
+      }
     });
     return () => {
       unsub1();
@@ -190,8 +272,34 @@ export default function App() {
   const dashboardSummary = buildDashboardSummary(snapshot);
   const includedUsageDisplay = buildIncludedUsageDisplay(snapshot);
   const metricItems = buildMetricItems(snapshot?.metrics);
-  const health = healthColor(snapshot, pollerState);
-  const statusLabel = healthLabel(snapshot, pollerState);
+  const showIncludedTab = includedUsageDisplay !== null;
+
+  useEffect(() => {
+    if (!showIncludedTab && panelView === 'included') {
+      setPanelView('overview');
+    }
+  }, [showIncludedTab, panelView]);
+
+  useEffect(() => {
+    if (panelPhase === 'entering') {
+      setPanelAnimOpen(false);
+      const frameId = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setPanelAnimOpen(true));
+      });
+      return () => cancelAnimationFrame(frameId);
+    }
+    if (panelPhase === 'shown') {
+      setPanelAnimOpen(true);
+      return;
+    }
+    if (panelPhase === 'leaving') {
+      setPanelAnimOpen(false);
+      return;
+    }
+    setPanelAnimOpen(false);
+  }, [panelPhase]);
+  const health = healthColor(snapshot, pollerState, isRefreshing);
+  const statusLabel = healthLabel(snapshot, pollerState, isRefreshing);
   const orbRingOffset =
     orbSummary.percentValue !== null
       ? ORB_RING_CIRCUMFERENCE * (1 - orbSummary.percentValue / 100)
@@ -415,93 +523,142 @@ export default function App() {
     <div className={`floating-ball ${expanded ? 'floating-ball--expanded' : ''} ${dockClass}`}>
       {peekTab}
 
-      {expanded && (
-        <div className="floating-ball__panel no-drag">
+      {panelPhase !== 'hidden' && (
+        <div
+          className={`floating-ball__panel-frame${panelAnimOpen ? ' floating-ball__panel-frame--open' : ''}${isRefreshing ? ' floating-ball__panel-frame--refreshing' : ''}`}
+          onTransitionEnd={handlePanelTransitionEnd}
+        >
           <div
-            className="floating-ball__panel-header floating-ball__drag-handle"
-            onMouseDown={(e) => startDrag(e, false)}
+            className={`floating-ball__panel no-drag${panelView === 'included' ? ' floating-ball__panel--included' : ''}`}
           >
-            <span>Cursor 用量</span>
-            <button className="btn-icon no-drag" onClick={collapsePanel}>
-              ×
-            </button>
-          </div>
+            {isRefreshing && (
+              <div className="floating-ball__refresh-track" aria-hidden>
+                <div className="floating-ball__refresh-bar" />
+              </div>
+            )}
+            <div
+              className="floating-ball__panel-header floating-ball__drag-handle"
+              onMouseDown={(e) => startDrag(e, false)}
+            >
+              <span>Cursor 用量监控</span>
+              <div className="floating-ball__header-actions no-drag">
+                <button
+                  type="button"
+                  className={`btn-icon btn-icon--toolbar${isRefreshing ? ' btn-icon--spinning' : ''}`}
+                  aria-label="刷新"
+                  title={isRefreshing ? '刷新中…' : '刷新'}
+                  aria-busy={isRefreshing}
+                  disabled={isRefreshing}
+                  onClick={handleManualRefresh}
+                >
+                  <IconRefresh />
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon btn-icon--toolbar"
+                  aria-label="设置"
+                  title="设置"
+                  onClick={() => window.electronAPI.openSettings()}
+                >
+                  <IconSettings />
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon btn-icon--toolbar btn-icon--close"
+                  aria-label="收起"
+                  title="收起"
+                  onClick={collapsePanel}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
 
-          {snapshot && dashboardSummary ? (
-            <>
-              <div className={`dashboard-summary dashboard-summary--${dashboardSummary.statusLevel}`}>
-                <div className="dashboard-summary__main">
-                  <span className="dashboard-summary__label">总消耗</span>
-                  <span className="dashboard-summary__value">{dashboardSummary.totalPercent}</span>
-                </div>
-                {dashboardSummary.totalPercentValue !== null && (
-                  <div className="dashboard-summary__track" aria-hidden>
-                    <div
-                      className={`dashboard-summary__fill dashboard-summary__fill--${dashboardSummary.statusLevel}`}
-                      style={{ width: `${dashboardSummary.totalPercentValue}%` }}
+            <div className="floating-ball__panel-body">
+              {panelView === 'overview' ? (
+                <>
+                  {snapshot && dashboardSummary ? (
+                    <>
+                      <div
+                        className={`dashboard-summary dashboard-summary--${dashboardSummary.statusLevel}${isRefreshing ? ' dashboard-summary--refreshing' : ''}`}
+                      >
+                        <div className="dashboard-summary__main">
+                          <span className="dashboard-summary__label">总消耗</span>
+                          <span className="dashboard-summary__value">{dashboardSummary.totalPercent}</span>
+                        </div>
+                        {dashboardSummary.totalPercentValue !== null && (
+                          <div className="dashboard-summary__track" aria-hidden>
+                            <div
+                              className={`dashboard-summary__fill dashboard-summary__fill--${dashboardSummary.statusLevel}`}
+                              style={{ width: `${dashboardSummary.totalPercentValue}%` }}
+                            />
+                          </div>
+                        )}
+                        <div className="dashboard-summary__detail">{dashboardSummary.totalTokens}</div>
+                        <div className="dashboard-summary__meta">
+                          <span className={`health-pill health-pill--${health}`}>{statusLabel}</span>
+                          <span className={`source-tag source-tag--${snapshot.source}`}>
+                            {dashboardSummary.sourceLabel}
+                          </span>
+                          <span className="meta-time">
+                            <span className="meta-time__label">{isRefreshing ? '状态' : '上次刷新'}</span>
+                            <span className="meta-time__value">
+                              {isRefreshing ? '刷新中…' : dashboardSummary.updatedAt}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="metric-list">
+                        {metricItems.map((item) => (
+                          <MetricRow key={item.key} item={item} />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <ErrorHint
+                      message="暂无数据"
+                      action="请在设置中配置 Cookie 后刷新"
                     />
-                  </div>
-                )}
-                <div className="dashboard-summary__detail">{dashboardSummary.totalTokens}</div>
-                <div className="dashboard-summary__meta">
-                  <span className={`health-pill health-pill--${health}`}>{statusLabel}</span>
-                  <span className={`source-tag source-tag--${snapshot.source}`}>
-                    {dashboardSummary.sourceLabel}
-                  </span>
-                  <span className="meta-time">
-                    <span className="meta-time__label">上次刷新</span>
-                    <span className="meta-time__value">{dashboardSummary.updatedAt}</span>
-                  </span>
-                </div>
-              </div>
+                  )}
 
-              <div className="metric-list">
-                {metricItems.map((item) => (
-                  <MetricRow key={item.key} item={item} />
-                ))}
-              </div>
+                  {pollerState?.status === 'backoff' && (
+                    <ErrorHint
+                      message={`退避等待中 (${Math.round((pollerState.backoffMs ?? 0) / 1000)}s)`}
+                    />
+                  )}
 
-              {snapshot.stale && (
-                <ErrorHint
-                  message="当前展示的是缓存数据，可能不是最新"
-                  action={`上次成功刷新：${new Date(snapshot.fetchedAt).toLocaleString('zh-CN')}。请检查网络或更新 Cookie`}
-                />
+                  {pollerState?.status === 'paused' && (
+                    <div className="status-banner status-banner--paused">自动刷新已暂停</div>
+                  )}
+                </>
+              ) : (
+                includedUsageDisplay && <IncludedUsageTable display={includedUsageDisplay} />
               )}
-            </>
-          ) : (
-            <ErrorHint
-              message="暂无数据"
-              action="请在设置中配置 Cookie 后刷新"
-            />
-          )}
+            </div>
 
-          {pollerState?.status === 'backoff' && (
-            <ErrorHint
-              message={`退避等待中 (${Math.round((pollerState.backoffMs ?? 0) / 1000)}s)`}
-            />
-          )}
-
-          {pollerState?.status === 'paused' && (
-            <div className="status-banner status-banner--paused">自动刷新已暂停</div>
-          )}
-
-          {includedUsageDisplay && (
-            <IncludedUsageTable display={includedUsageDisplay} />
-          )}
-
-          <div className="floating-ball__actions">
-            <button
-              className="btn-sm"
-              onClick={() => window.electronAPI.manualRefresh()}
-            >
-              刷新
-            </button>
-            <button
-              className="btn-sm btn-sm--secondary"
-              onClick={() => window.electronAPI.openSettings()}
-            >
-              设置
-            </button>
+            {showIncludedTab && (
+              <div className="panel-view-switch" role="tablist" aria-label="面板视图">
+                <button
+                  type="button"
+                  role="tab"
+                  className={`panel-view-switch__tab${panelView === 'overview' ? ' panel-view-switch__tab--active' : ''}`}
+                  aria-selected={panelView === 'overview'}
+                  onClick={() => setPanelView('overview')}
+                >
+                  概览
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  className={`panel-view-switch__tab${panelView === 'included' ? ' panel-view-switch__tab--active' : ''}`}
+                  aria-selected={panelView === 'included'}
+                  onClick={() => setPanelView('included')}
+                >
+                  明细
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

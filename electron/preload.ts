@@ -26,6 +26,7 @@ export interface ElectronAPI {
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;
+  setExpandedPanelLayout: (layout: 'overview' | 'included') => void;
   setIgnoreMouseEvents: (ignore: boolean) => void;
   getCursorInWindow: () => Promise<{ x: number; y: number } | null>;
   moveWindow: (dx: number, dy: number) => void;
@@ -72,6 +73,7 @@ const api: ElectronAPI = {
   setOrbMode: (mode) => ipcRenderer.send('set-orb-mode', mode),
   setOrbModeAsync: (mode) => ipcRenderer.invoke('set-orb-mode-async', mode),
   setExpanded: (expanded) => ipcRenderer.send('set-expanded', expanded),
+  setExpandedPanelLayout: (layout) => ipcRenderer.send('set-expanded-panel-layout', layout),
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('set-ignore-mouse-events', ignore),
   getCursorInWindow: () => ipcRenderer.invoke('get-cursor-in-window'),
   moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),

@@ -27,6 +27,7 @@ export interface ElectronAPI {
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;
+  setExpandedPanelLayout: (layout: 'overview' | 'included') => void;
   setIgnoreMouseEvents: (ignore: boolean) => void;
   getCursorInWindow: () => Promise<{ x: number; y: number } | null>;
   moveWindow: (dx: number, dy: number) => void;

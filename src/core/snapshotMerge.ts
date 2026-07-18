@@ -53,9 +53,16 @@ export function mergeTodayMetricsFromCache(
   if (!isSameBillingCycle(next, previous)) return next;
   if (!isSameLocalDay(next.fetchedAt, previous.fetchedAt)) return next;
 
-  const nextHasToday =
-    next.metrics.apiTodayUsedPercent !== null || next.metrics.autoTodayUsedPercent !== null;
-  if (nextHasToday) return next;
+  const usesCachedValue =
+    (next.metrics.apiTodayUsedPercent == null &&
+      previous.metrics.apiTodayUsedPercent != null) ||
+    (next.metrics.autoTodayUsedPercent == null &&
+      previous.metrics.autoTodayUsedPercent != null) ||
+    (next.metrics.apiTodayTokens == null && previous.metrics.apiTodayTokens != null) ||
+    (next.metrics.autoTodayTokens == null && previous.metrics.autoTodayTokens != null) ||
+    (next.metrics.apiTodayUsed == null && previous.metrics.apiTodayUsed != null) ||
+    (next.metrics.autoTodayUsed == null && previous.metrics.autoTodayUsed != null);
+  if (!usesCachedValue) return next;
 
   const metrics: UsageMetrics = {
     ...next.metrics,
@@ -76,6 +83,6 @@ export function mergeTodayMetricsFromCache(
   return {
     ...next,
     metrics,
-    stale: true,
+    stale: next.stale || usesCachedValue,
   };
 }
