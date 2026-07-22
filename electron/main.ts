@@ -12,6 +12,7 @@ import {
   sendToFloatingBall,
 } from './windows/floatingBall';
 import { createSettingsWindow } from './windows/settings';
+import { createFlowWindow } from './windows/flow';
 import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip } from './tray';
 import {
   getDockState,
@@ -30,6 +31,8 @@ import {
   REFRESH_INTERVAL_MIN,
   type AppSettings,
   type TestConnectionResult,
+  type UsageFlowFetchResult,
+  type UsageFlowQuery,
 } from '../src/shared/types';
 import { createLogger } from '../src/utils/logger';
 import { formatTrayTooltip } from '../src/shared/format';
@@ -289,6 +292,33 @@ function setupIpc(): void {
     createSettingsWindow(isDev, settingsStore.get());
   });
 
+  ipcMain.on('open-flow', () => {
+    createFlowWindow(isDev, settingsStore.get());
+  });
+
+  ipcMain.handle(
+    'fetch-usage-flow',
+    async (_event, query: UsageFlowQuery, dateRangeLabel?: string): Promise<UsageFlowFetchResult> => {
+      if (!query || !Number.isFinite(query.startDateMs) || !Number.isFinite(query.endDateMs)) {
+        return { success: false, hasCookie: false, message: '无效的日期范围' };
+      }
+      const page = Number.isFinite(query.page) && query.page >= 1 ? Math.floor(query.page) : 1;
+      const pageSize =
+        Number.isFinite(query.pageSize) && query.pageSize! >= 1
+          ? Math.min(Math.floor(query.pageSize!), 100)
+          : 100;
+      return providerManager.fetchUsageFlow(
+        {
+          startDateMs: query.startDateMs,
+          endDateMs: query.endDateMs,
+          page,
+          pageSize,
+        },
+        dateRangeLabel,
+      );
+    },
+  );
+
   ipcMain.on('set-orb-mode', (_event, mode: 'collapsed' | 'hover' | 'expanded') => {
     applyOrbMode(mode);
   });
@@ -419,20 +449,7 @@ app.whenReady().then(async () => {
 
   createTray({
     getIcon: () => loadTrayIcon(settingsStore.get()),
-    onRefresh: () => void poller.manualRefresh(),
-    onTogglePause: () => {
-      if (isPaused) {
-        isPaused = false;
-        settingsStore.update({ autoRefreshEnabled: true });
-        poller.resume();
-      } else {
-        isPaused = true;
-        settingsStore.update({ autoRefreshEnabled: false });
-        poller.pause();
-      }
-      broadcastPollerState();
-    },
-    isPaused: () => isPaused || !settingsStore.get().autoRefreshEnabled,
+    onOpenFlow: () => createFlowWindow(isDev, settingsStore.get()),
     onOpenSettings: () => createSettingsWindow(isDev, settingsStore.get()),
     onQuit: () => app.quit(),
   });

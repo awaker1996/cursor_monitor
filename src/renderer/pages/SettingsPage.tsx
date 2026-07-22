@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ErrorHint from '../components/ErrorHint';
 import TestConnectionResultPanel from '../components/TestConnectionResultPanel';
 import {
@@ -14,11 +14,16 @@ export default function SettingsPage() {
   const [hasCookie, setHasCookie] = useState(false);
   const [intervalInput, setIntervalInput] = useState('30');
   const [intervalError, setIntervalError] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
   const [testing, setTesting] = useState(false);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
-  const [iconMessage, setIconMessage] = useState<string | null>(null);
+  const intervalSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   useEffect(() => {
     window.electronAPI.getSettings().then((s) => {
@@ -35,6 +40,12 @@ export default function SettingsPage() {
     return unsub;
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (intervalSaveTimer.current) clearTimeout(intervalSaveTimer.current);
+    };
+  }, []);
+
   const validateInterval = useCallback((value: string): string | null => {
     const num = Number(value);
     if (!Number.isInteger(num)) return '刷新间隔必须是整数';
@@ -44,28 +55,46 @@ export default function SettingsPage() {
     return null;
   }, []);
 
+  const saveInterval = useCallback(
+    async (value: string) => {
+      const err = validateInterval(value);
+      if (err) {
+        setIntervalError(err);
+        return;
+      }
+      setIntervalError(null);
+      try {
+        const updated = await window.electronAPI.updateSettings({
+          refreshIntervalSec: Number(value),
+        });
+        setSettings(updated);
+        showToast('刷新间隔已保存');
+      } catch (e) {
+        setIntervalError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [showToast, validateInterval],
+  );
+
   const handleIntervalChange = (value: string) => {
     setIntervalInput(value);
-    setIntervalError(validateInterval(value));
+    const err = validateInterval(value);
+    setIntervalError(err);
+    if (intervalSaveTimer.current) clearTimeout(intervalSaveTimer.current);
+    if (!err) {
+      intervalSaveTimer.current = setTimeout(() => {
+        void saveInterval(value);
+      }, 600);
+    }
   };
 
-  const handleSaveSettings = async () => {
-    const err = validateInterval(intervalInput);
-    if (err) {
-      setIntervalError(err);
-      return;
+  const handleIntervalBlur = () => {
+    if (intervalSaveTimer.current) {
+      clearTimeout(intervalSaveTimer.current);
+      intervalSaveTimer.current = null;
     }
-
-    try {
-      const updated = await window.electronAPI.updateSettings({
-        refreshIntervalSec: Number(intervalInput),
-        autoRefreshEnabled: settings?.autoRefreshEnabled ?? true,
-      });
-      setSettings(updated);
-      setSaveMessage('设置已保存并立即生效');
-      setTimeout(() => setSaveMessage(null), 3000);
-    } catch (e) {
-      setIntervalError(e instanceof Error ? e.message : String(e));
+    if (!intervalError) {
+      void saveInterval(intervalInput);
     }
   };
 
@@ -75,29 +104,28 @@ export default function SettingsPage() {
       autoRefreshEnabled: !settings.autoRefreshEnabled,
     });
     setSettings(updated);
+    showToast(updated.autoRefreshEnabled ? '已启用自动刷新' : '已暂停自动刷新');
   };
 
   const handleSaveCookie = async () => {
     if (!cookie.trim()) {
-      setSaveMessage('Cookie 不能为空');
+      showToast('Cookie 不能为空');
       return;
     }
     try {
       await window.electronAPI.saveCookie(cookie.trim());
       setHasCookie(true);
       setCookie('');
-      setSaveMessage('Cookie 已安全保存');
-      setTimeout(() => setSaveMessage(null), 3000);
+      showToast('Cookie 已安全保存');
     } catch (e) {
-      setSaveMessage(e instanceof Error ? e.message : String(e));
+      showToast(e instanceof Error ? e.message : String(e));
     }
   };
 
   const handleClearCookie = async () => {
     await window.electronAPI.clearCookie();
     setHasCookie(false);
-    setSaveMessage('凭据已清除');
-    setTimeout(() => setSaveMessage(null), 3000);
+    showToast('凭据已清除');
   };
 
   const handleToggleEdgeDock = async () => {
@@ -106,22 +134,19 @@ export default function SettingsPage() {
       edgeAutoDockEnabled: !settings.edgeAutoDockEnabled,
     });
     setSettings(updated);
+    showToast(updated.edgeAutoDockEnabled ? '已启用贴边收起' : '已关闭贴边收起');
   };
 
   const handleSelectIcon = async () => {
     const result = await window.electronAPI.selectCustomIcon();
     if (result.preview) setIconPreview(result.preview);
-    if (result.message) {
-      setIconMessage(result.message);
-      setTimeout(() => setIconMessage(null), 3000);
-    }
+    if (result.message) showToast(result.message);
   };
 
   const handleClearIcon = async () => {
     const result = await window.electronAPI.clearCustomIcon();
     setIconPreview(result.preview ?? null);
-    setIconMessage('已恢复默认图标');
-    setTimeout(() => setIconMessage(null), 3000);
+    showToast('已恢复默认图标');
   };
 
   const handleTestConnection = async () => {
@@ -133,16 +158,62 @@ export default function SettingsPage() {
   };
 
   if (!settings) {
-    return <div className="settings-page"><p>加载中...</p></div>;
+    return (
+      <div className="settings-page">
+        <p>加载中...</p>
+      </div>
+    );
   }
 
   return (
     <div className="settings-page">
-      <h1>Cursor Token Monitor</h1>
-      <p className="settings-subtitle">设置</p>
+      <h1>设置</h1>
+      <p className="settings-subtitle">配置凭据、刷新与悬浮球行为</p>
+
+      {!hasCookie && (
+        <ErrorHint
+          message="尚未配置 Cookie"
+          action="配置 Cookie 后可使用 Cookie 回退方案获取 token 余量与用量流水"
+        />
+      )}
+
+      <section className="settings-section settings-section--primary">
+        <h2>凭据与连接</h2>
+        <div
+          className={`settings-section__status ${hasCookie ? 'settings-section__status--ok' : 'settings-section__status--warn'}`}
+        >
+          {hasCookie ? '✓ 已配置 Cookie' : '未配置 Cookie'}
+        </div>
+        <p className="field-hint">
+          打开 cursor.com/dashboard/usage 后，从浏览器开发者工具复制 WorkosCursorSessionToken
+          的值。也可以粘贴包含该字段的完整 Cookie 字符串。
+        </p>
+        <div className="form-group">
+          <label htmlFor="cookie">WorkosCursorSessionToken</label>
+          <textarea
+            id="cookie"
+            rows={4}
+            placeholder="粘贴 WorkosCursorSessionToken 值或完整 Cookie..."
+            value={cookie}
+            onChange={(e) => setCookie(e.target.value)}
+          />
+        </div>
+        <div className="btn-row">
+          <button className="btn-primary" onClick={handleSaveCookie}>
+            保存 Cookie
+          </button>
+          <button className="btn-secondary" onClick={handleClearCookie} disabled={!hasCookie}>
+            清除凭据
+          </button>
+          <button className="btn-secondary" onClick={handleTestConnection} disabled={testing}>
+            {testing ? '测试中...' : '测试连接'}
+          </button>
+        </div>
+        {testResult && <TestConnectionResultPanel result={testResult} />}
+      </section>
 
       <section className="settings-section">
-        <h2>自动刷新</h2>
+        <h2>数据刷新</h2>
         <label className="toggle-row">
           <input
             type="checkbox"
@@ -161,20 +232,13 @@ export default function SettingsPage() {
             max={REFRESH_INTERVAL_MAX}
             value={intervalInput}
             onChange={(e) => handleIntervalChange(e.target.value)}
+            onBlur={handleIntervalBlur}
           />
           {intervalError && <p className="field-error">{intervalError}</p>}
           <p className="field-hint">
-            允许范围: {REFRESH_INTERVAL_MIN}-{REFRESH_INTERVAL_MAX} 秒，当前默认 30 秒
+            允许范围: {REFRESH_INTERVAL_MIN}-{REFRESH_INTERVAL_MAX} 秒；修改后自动保存
           </p>
         </div>
-
-        <button
-          className="btn-primary"
-          onClick={handleSaveSettings}
-          disabled={!!intervalError}
-        >
-          保存刷新设置
-        </button>
       </section>
 
       <section className="settings-section">
@@ -193,7 +257,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="settings-section">
-        <h2>应用图标</h2>
+        <h2>外观</h2>
         <div className="icon-picker">
           <div className="icon-picker__preview">
             {iconPreview ? (
@@ -219,52 +283,9 @@ export default function SettingsPage() {
         <p className="field-hint">
           自定义图标即时生效于托盘与设置窗口。安装包/任务栏固定图标需重新打包安装后更新。
         </p>
-        {iconMessage && <p className="field-success">{iconMessage}</p>}
       </section>
 
-      <section className="settings-section">
-        <h2>Cookie 配置</h2>
-        <p className="field-hint">
-          打开 cursor.com/dashboard/usage 后，从浏览器开发者工具复制 WorkosCursorSessionToken
-          的值。也可以粘贴包含该字段的完整 Cookie 字符串。
-        </p>
-        <div className="form-group">
-          <label htmlFor="cookie">WorkosCursorSessionToken</label>
-          <textarea
-            id="cookie"
-            rows={4}
-            placeholder="粘贴 WorkosCursorSessionToken 值或完整 Cookie..."
-            value={cookie}
-            onChange={(e) => setCookie(e.target.value)}
-          />
-        </div>
-        <div className="btn-row">
-          <button className="btn-primary" onClick={handleSaveCookie}>
-            保存 Cookie
-          </button>
-          <button className="btn-secondary" onClick={handleClearCookie} disabled={!hasCookie}>
-            清除凭据
-          </button>
-        </div>
-        {hasCookie && <p className="field-success">✓ 已配置 Cookie</p>}
-      </section>
-
-      <section className="settings-section">
-        <h2>连接测试</h2>
-        <button className="btn-primary" onClick={handleTestConnection} disabled={testing}>
-          {testing ? '测试中...' : '测试连接'}
-        </button>
-        {testResult && <TestConnectionResultPanel result={testResult} />}
-      </section>
-
-      {saveMessage && <p className="save-message">{saveMessage}</p>}
-
-      {!hasCookie && (
-        <ErrorHint
-          message="尚未配置 Cookie"
-          action="配置 Cookie 后可使用 Cookie 回退方案获取 token 余量"
-        />
-      )}
+      {toast && <p className="settings-toast">{toast}</p>}
     </div>
   );
 }

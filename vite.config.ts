@@ -39,6 +39,7 @@ export default defineConfig({
       input: {
         index: path.resolve(__dirname, 'index.html'),
         settings: path.resolve(__dirname, 'settings.html'),
+        flow: path.resolve(__dirname, 'flow.html'),
       },
     },
   },

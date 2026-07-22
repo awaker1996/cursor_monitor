@@ -1,0 +1,155 @@
+/**
+ * Verify usage flow field mapping against Cursor dashboard shapes.
+ * Run: npx tsx scripts/verify-usage-flow-format.ts
+ */
+import { buildUsageFlowPage } from '../src/core/normalizer';
+import {
+  extractUsageEventTimestamp,
+  formatUsageEventKind,
+  formatUsageEventModelName,
+  formatUsageFlowTokens,
+  isMaxModeEvent,
+  mapUsageFlowEntry,
+  parseUsageEventTimestamp,
+  resolveUsageFlowCost,
+  resolveUsageFlowType,
+} from '../src/shared/usageFlowFormat';
+import { formatUsageFlowDate } from '../src/shared/format';
+
+function assert(name: string, condition: boolean, detail?: string): void {
+  if (!condition) {
+    throw new Error(`FAIL: ${name}${detail ? ` (${detail})` : ''}`);
+  }
+  console.log(`OK: ${name}`);
+}
+
+console.log('parseUsageEventTimestamp');
+
+{
+  const iso = parseUsageEventTimestamp('1750979225854');
+  assert('epoch ms string parses', iso !== null);
+  assert('epoch ms is valid date', iso !== null && !Number.isNaN(new Date(iso).getTime()));
+}
+
+console.log('\nresolveUsageFlowType');
+
+assert(
+  'included pro plus',
+  resolveUsageFlowType({ kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS' }, 1000) === 'Included',
+);
+assert(
+  'usage based',
+  resolveUsageFlowType({ kind: 'USAGE_EVENT_KIND_USAGE_BASED' }, 1000) === 'Usage-based',
+);
+assert('explicit free', resolveUsageFlowType({ kind: 'USAGE_EVENT_KIND_FREE' }, 0) === 'Free');
+assert(
+  'zero tokens defaults free',
+  resolveUsageFlowType({ kind: 'USAGE_EVENT_KIND_SOMETHING_ELSE' }, 0) === 'Free',
+);
+assert(
+  'included kind with tokens stays included',
+  resolveUsageFlowType({ kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS' }, 372_000) === 'Included',
+);
+
+console.log('\nformatUsageEventModelName / maxMode');
+
+assert('default to auto', formatUsageEventModelName('default') === 'auto');
+assert('maxMode detected', isMaxModeEvent({ maxMode: true }) === true);
+
+console.log('\nformatUsageFlowTokens');
+
+assert('zero tokens dash', formatUsageFlowTokens(0) === '-');
+
+console.log('\nresolveUsageFlowCost');
+
+assert(
+  'free type',
+  resolveUsageFlowCost({ kind: 'USAGE_EVENT_KIND_FREE' }, 'Free', 0) === 'Free',
+);
+assert(
+  'included type',
+  resolveUsageFlowCost({ kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS' }, 'Included', 202) ===
+    'Included',
+);
+
+console.log('\nmapUsageFlowEntry max badge');
+
+{
+  const entry = mapUsageFlowEntry(
+    {
+      timestamp: '1750979225854',
+      model: 'composer-2.5-fast',
+      kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS',
+      maxMode: true,
+      tokenUsage: { inputTokens: 372_000 },
+    },
+    372_000,
+    202,
+    formatUsageFlowDate,
+  );
+  assert('max mode flag', entry.modelMax === true);
+  assert('included type', entry.type === 'Included');
+  assert('model name', entry.model === 'composer-2.5-fast');
+}
+
+console.log('\nbuildUsageFlowPage integration');
+
+{
+  const display = buildUsageFlowPage(
+    {
+      totalUsageEventsCount: 1,
+      eventsComplete: true,
+      usageEventsDisplay: [
+        {
+          timestamp: '1750979225854',
+          model: 'default',
+          kind: 'USAGE_EVENT_KIND_FREE',
+        },
+      ],
+    },
+    { page: 1, pageSize: 100 },
+  );
+
+  assert('free row model auto', display.entries[0]?.model === 'auto');
+  assert('free row type', display.entries[0]?.type === 'Free');
+  assert('free row cost', display.entries[0]?.cost === 'Free');
+}
+
+{
+  const display = buildUsageFlowPage(
+    {
+      totalUsageEventsCount: 1,
+      eventsComplete: true,
+      usageEventsDisplay: [
+        {
+          timestamp: '1750979225854',
+          model: 'composer-2.5-fast',
+          kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS',
+          maxMode: true,
+          tokenUsage: { inputTokens: 372_000, outputTokens: 1000 },
+        },
+      ],
+    },
+    { page: 1, pageSize: 100 },
+  );
+
+  assert('included max row type', display.entries[0]?.type === 'Included');
+  assert('included max row badge', display.entries[0]?.modelMax === true);
+  assert('included max row tokens', display.entries[0]?.tokens === '37.3万');
+}
+
+console.log('\nextractUsageEventTimestamp');
+
+assert(
+  'extracts from event',
+  extractUsageEventTimestamp({ timestamp: '1750979225854' }) !== null,
+);
+
+console.log('\nformatUsageEventKind legacy');
+
+assert(
+  'legacy kind helper',
+  formatUsageEventKind('USAGE_EVENT_KIND_INCLUDED_IN_BUSINESS') === 'Included',
+);
+
+console.log('\nAll usage flow format checks passed.');

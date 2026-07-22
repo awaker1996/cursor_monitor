@@ -618,7 +618,7 @@ export default function App() {
                   aria-selected={panelView === 'included'}
                   onClick={() => setPanelView('included')}
                 >
-                  明细
+                  用量
                 </button>
               </div>
             )}

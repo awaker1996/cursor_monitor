@@ -43,9 +43,10 @@
 ### 范围
 
 **范围内：**
-- Windows 悬浮球（拖拽、置顶、贴边收起、托盘）
-- First-party models / API 余量与 Dashboard 用量指标展示（概览 / Included 明细切换）
-- 系统托盘悬停展示概览用量摘要
+- Windows 悬浮球（拖拽、置顶、贴边半隐收起、托盘）
+- First-party models / API 余量与 Dashboard 用量指标展示（概览 / 用量切换）
+- 用量流水独立窗口（日期筛选、分页、手动刷新；字段对齐 cursor.com 控制台）
+- 系统托盘悬停展示概览用量摘要；右键打开流水 / 设置 / 退出
 - 自动刷新与间隔配置
 - 双 Provider 故障切换
 - Dashboard API 多端点候选与局部降级
@@ -99,7 +100,7 @@ npm run dist
 ### 首次使用
 
 1. 启动应用，屏幕右下角出现悬浮球
-2. 右键系统托盘 → **打开设置**
+2. 右键系统托盘 → **设置** 或 **流水**
 3. 在浏览器 DevTools 中复制 `WorkosCursorSessionToken` 的值，或复制包含该字段的完整 `cursor.com` Cookie，粘贴并保存
 4. 点击 **测试连接** 验证
 5. 悬浮球按设定间隔自动刷新，展示 First-party models / API 余量及数据来源
@@ -120,21 +121,21 @@ npm run dist
 
 - 启动后显示悬浮球，支持拖拽与置顶
 - 折叠态：总余量百分比（「余量」）+ 健康状态点 + 圆环进度
-- 展开态：默认「概览」视图；有 Included Usage 数据时可切换至「明细」视图
-- 贴边收起：peek tab + 迷你圆环 + 健康点
+- 展开态：默认「概览」视图；有 Included Usage 数据时可切换至「用量」视图
+- 贴边收起：AssistiveTouch 风格半隐圆球（闲置约半隐 + 半透明；悬停滑入变实）
 
 ### FR-02 明细展示
 
 **概览视图：**
 
 - 顶部 dashboard：总消耗百分比、进度条、周期 token 汇总、状态 pill、来源、上次刷新时间
-- 四张 metric 卡片：今日 API、今日 First-party models、周期 API、周期 First-party models（百分比 + token 明细）
+- 四张 metric 卡片纵向排列：今日 API、今日 First-party models、周期 API、周期 First-party models（百分比 + token 明细）
 - 退避 / 暂停 / 无数据等状态提示
 
-**明细视图（有 Included Usage 数据时可用）：**
+**用量视图（有 Included Usage 数据时可用）：**
 
-- 按模型聚合的 Included Usage 表格（账单周期日期、tokens、费用等）
-- 表格区域独立滚动，概览视图无纵向滚动条
+- 按模型聚合的 Included Usage 列表（API / First-party 分区，账单周期、tokens、占比）
+- 列表区域独立滚动，概览视图无纵向滚动条
 
 **通用：**
 
@@ -165,14 +166,14 @@ npm run dist
 
 ### FR-06 托盘与生命周期
 
-- 托盘菜单：立即刷新、暂停/恢复、打开设置、退出
+- 托盘菜单：流水、设置、退出（不再提供立即刷新 / 暂停恢复；刷新与暂停仍可通过悬浮球与设置页操作）
 - 悬停托盘图标：多行概览用量摘要（总消耗、今日/周期 API 与 FP 分项、来源与更新时间；随快照刷新更新，无快照时显示「暂无数据」）
 - 关闭悬浮窗后驻留托盘，不强制退出
 
 ### FR-07 贴边缘自动收起
 
-- 拖拽悬浮球贴近屏幕边缘松手后自动收起为 peek tab
-- 点击或向外拖出可恢复完整显示
+- 拖拽悬浮球贴近屏幕边缘松手后自动收起为半隐圆球（四边对称）
+- 悬停滑入变实；点击展开或向外拖出可恢复完整显示
 - 设置项 `edgeAutoDockEnabled`（默认开启）可开关
 
 ### FR-08 自定义应用图标
@@ -185,6 +186,16 @@ npm run dist
 
 - 成功刷新后将 `TokenSnapshot` 持久化到 `%APPDATA%/cursor-token-monitor/snapshot-cache.json`
 - 启动时或请求失败时展示缓存数据，标记 `stale = true` 并提示用户
+
+### FR-10 用量流水窗口
+
+- 托盘「流水」或相关入口打开独立窗口，**不依赖** poller 快照自动刷新
+- 通过 `fetch-usage-flow` IPC 手动拉取（打开窗口 / 刷新 / 切换筛选或分页时请求）
+- 日期快捷筛选：1d / 7d / 30d / MTD / Last month，以及自定义日期范围（按东八区日历日）
+- 服务端分页：默认每页 100 条，上一页 / 下一页
+- 列表五列对齐控制台：Date (UTC+8)、Type、Model、Tokens、Cost
+- 字段映射：`default`→`auto`；`maxMode` 显示蓝色 MAX 徽标；Included / Free / Usage-based 等 Type/Cost 与控制台一致；无 token 显示 `-`
+- 无 Cookie 时提示需配置凭据；数据来自 `get-filtered-usage-events`（与控制台同源）
 
 ### 非功能需求
 
@@ -204,6 +215,7 @@ flowchart TD
     trayMenu[TrayMenu] --> mainProcess[MainProcess]
     floatingBall[FloatingBallWindow] --> mainProcess
     settingsWindow[SettingsWindow] --> mainProcess
+    flowWindow[FlowWindow] --> mainProcess
     mainProcess --> pollerCore[PollerCore]
     pollerCore --> providerManager[ProviderManager]
     providerManager --> officialProvider[OfficialProvider]
@@ -214,6 +226,7 @@ flowchart TD
     normalizer --> tokenSnapshot[TokenSnapshot]
     tokenSnapshot --> snapshotCache
     snapshotCache --> floatingBall
+    flowWindow --> providerManager
     mainProcess --> floatingBallDock[FloatingBallDock]
     floatingBallDock --> floatingBall
     settingsWindow --> settingsStore[SettingsStore]
@@ -227,27 +240,32 @@ flowchart TD
 | 模块 | 文件 | 职责 |
 |---|---|---|
 | 主进程 | `electron/main.ts` | 生命周期、IPC、协调各模块 |
-| 边缘吸附 | `electron/floatingBallDock.ts` | 贴边收起、peek tab、窗口 undock |
+| 边缘吸附 | `electron/floatingBallDock.ts` | 贴边半隐、悬停滑入、窗口 undock |
 | 图标管理 | `electron/iconManager.ts` | 自定义图标读写与预览 |
 | 悬浮窗 | `electron/windows/floatingBall.ts` | 无边框置顶窗口 |
 | 设置窗 | `electron/windows/settings.ts` | 配置界面 |
+| 流水窗 | `electron/windows/flow.ts` | 用量流水独立窗口 |
 | 托盘 | `electron/tray.ts` | 系统托盘菜单与悬停 tooltip |
 | 预加载 | `electron/preload.ts` | 安全 IPC 桥接 |
 | 轮询器 | `src/core/poller.ts` | 定时刷新、退避、状态机 |
 | 快照缓存 | `src/core/SnapshotCache.ts` | 本地快照持久化与加载 |
-| Provider 管理 | `src/core/providers/ProviderManager.ts` | 优先级切换、故障转移 |
+| Provider 管理 | `src/core/providers/ProviderManager.ts` | 优先级切换、故障转移、流水拉取 |
 | 官方数据源 | `src/core/providers/OfficialProvider.ts` | 无 Cookie 请求 |
-| Cookie 数据源 | `src/core/providers/CookieProvider.ts` | 带 Cookie 请求 |
-| 标准化 | `src/core/normalizer.ts` | 统一字段映射 |
+| Cookie 数据源 | `src/core/providers/CookieProvider.ts` | 带 Cookie 请求（含流水分页） |
+| 标准化 | `src/core/normalizer.ts` | 统一字段映射、流水页构建 |
 | 设置存储 | `src/settings/SettingsStore.ts` | JSON 持久化 |
 | 凭据库 | `src/security/CredentialVault.ts` | keytar / safeStorage |
 | 日志 | `src/utils/logger.ts` | 敏感信息脱敏 |
-| 格式化 | `src/shared/format.ts` | 展示格式化、托盘 tooltip、概览/明细构建 |
-| 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开、概览/明细切换 |
-| 设置 UI | `src/renderer/pages/SettingsPage.tsx` | 配置表单 |
+| 格式化 | `src/shared/format.ts` | 展示格式化、托盘 tooltip、概览/用量构建 |
+| 流水格式化 | `src/shared/usageFlowFormat.ts` | Type/Model/Tokens/Cost 对齐控制台 |
+| 流水日期 | `src/shared/usageFlowDates.ts` | 东八区日期预设与自定义范围 |
+| 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开、概览/用量切换 |
+| 设置 UI | `src/renderer/pages/SettingsPage.tsx` | 凭据优先、刷新、外观 |
+| 流水 UI | `src/renderer/pages/FlowPage.tsx` | 筛选、分页、手动刷新 |
 | 连接测试面板 | `src/renderer/components/TestConnectionResultPanel.tsx` | 测试连接结构化结果 |
 | 指标行 | `src/renderer/components/MetricRow.tsx` | Dashboard metric 明细展示 |
-| Included 表格 | `src/renderer/components/IncludedUsageTable.tsx` | Included Usage 明细 |
+| Included 列表 | `src/renderer/components/IncludedUsageTable.tsx` | Included Usage 用量明细 |
+| 流水表格 | `src/renderer/components/UsageFlowTable.tsx` | 用量流水五列展示 |
 
 ---
 
@@ -259,16 +277,17 @@ cursor_monitor/
 │   ├── main.ts                  # 入口、IPC 注册
 │   ├── preload.ts               # 渲染进程 API 桥接
 │   ├── tray.ts                  # 系统托盘
-│   ├── floatingBallDock.ts      # 边缘吸附与 peek 窗口
+│   ├── floatingBallDock.ts      # 边缘吸附与半隐
 │   ├── iconManager.ts           # 自定义图标管理
 │   └── windows/
 │       ├── floatingBall.ts      # 悬浮球窗口
-│       └── settings.ts          # 设置窗口
+│       ├── settings.ts          # 设置窗口
+│       └── flow.ts              # 用量流水窗口
 ├── src/
 │   ├── core/
 │   │   ├── poller.ts            # 轮询与状态机
 │   │   ├── SnapshotCache.ts     # 快照本地缓存
-│   │   ├── normalizer.ts        # 字段标准化
+│   │   ├── normalizer.ts        # 字段标准化 / 流水页构建
 │   │   └── providers/
 │   │       ├── OfficialProvider.ts
 │   │       ├── CookieProvider.ts
@@ -279,23 +298,32 @@ cursor_monitor/
 │   │   └── CredentialVault.ts   # 凭据安全存储
 │   ├── shared/
 │   │   ├── types.ts             # 类型定义
-│   │   └── format.ts            # 展示格式化
+│   │   ├── format.ts            # 展示格式化
+│   │   ├── usageFlowDates.ts    # 流水日期范围
+│   │   └── usageFlowFormat.ts   # 流水字段映射
 │   ├── utils/
 │   │   └── logger.ts            # 脱敏日志
 │   └── renderer/                # React 渲染层
 │       ├── App.tsx              # 悬浮球
-│       ├── pages/SettingsPage.tsx
+│       ├── flow-main.tsx        # 流水窗入口
+│       ├── pages/
+│       │   ├── SettingsPage.tsx
+│       │   └── FlowPage.tsx
 │       └── components/
 │           ├── TokenBadge.tsx
 │           ├── MetricRow.tsx
 │           ├── IncludedUsageTable.tsx
 │           ├── IncludedUsageModelName.tsx
+│           ├── UsageFlowTable.tsx
+│           ├── UsageFlowFilters.tsx
+│           ├── UsageFlowPagination.tsx
 │           ├── TestConnectionResultPanel.tsx
 │           └── ErrorHint.tsx
 ├── docs/
 │   └── changes/                 # 代码变更归档（见 .cursor/rules/change-archive.mdc）
 ├── index.html                   # 悬浮球入口
 ├── settings.html                # 设置页入口
+├── flow.html                    # 用量流水入口
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tsconfig.electron.json
@@ -405,6 +433,16 @@ cursor_monitor/
 
 `get-filtered-usage-events` 用于补充周期内 token 总量和今日 token/消耗，并在聚合接口不可用时回退构建 Included Usage。该端点依赖 `WorkosCursorSessionToken` 中的 `userId`，应用会从 `userId::jwt`、URL 编码格式或 JWT `sub` 中提取。若事件接口失败、超时或无法提取 `userId`，应用仍会展示 `usage-summary` 的汇总百分比，并将 token 明细保持为 `null`。
 
+用量流水窗口通过同一 `get-filtered-usage-events` 端点**独立分页拉取**（不写入 `TokenSnapshot`，避免快照缓存膨胀）。展示映射见 `src/shared/usageFlowFormat.ts`：
+
+| 控制台列 | 规则 |
+|---|---|
+| Date | `timestamp` 毫秒字符串先转 number，格式化为东八区 |
+| Type | 显式 `kind` 优先（Included / Free / Usage-based 等）；无 token 且非 Usage-based 时默认 Free |
+| Model | `default` → `auto`；`maxMode: true` 时附加蓝色 MAX 徽标 |
+| Tokens | 有用量用「万」等格式；零/空显示 `-` |
+| Cost | Included / Free 显示文案本身；Usage-based 等显示金额 |
+
 ### 异常处理规则
 
 - 单字段缺失 → 该字段为 `null`，不影响其他字段
@@ -479,9 +517,9 @@ OfficialProvider 请求
 | 状态 | 内容 |
 |---|---|
 | 折叠 | 圆形球体、余量百分比、圆环进度、健康点（绿/黄/蓝/灰） |
-| 贴边收起 | peek tab + 迷你圆环 + 健康点，点击或拖出恢复 |
-| 展开 · 概览 | 总消耗 dashboard、4 张 metric 卡片、状态/来源/时间、刷新/设置/收起；面板进出场动画 |
-| 展开 · 明细 | Included Usage 表格（有数据时底部分段切换），长模型名溢出时慢速滚动 |
+| 贴边收起 | 半隐圆球（闲置约半隐 + opacity 0.4；悬停滑入变实），点击展开或拖出恢复 |
+| 展开 · 概览 | 总消耗 dashboard、4 张纵向 metric 卡片、状态/来源/时间、刷新/设置/收起；面板进出场动画 |
+| 展开 · 用量 | Included Usage 分区列表（有数据时底部分段「概览 / 用量」），长模型名自动换行 |
 
 健康点含义：
 - **绿**：数据正常
@@ -489,16 +527,24 @@ OfficialProvider 请求
 - **蓝**：自动刷新已暂停，或正在刷新
 - **灰**：暂无数据
 
-未贴边时窗口固定 **360×520**，展开/收起与概览/明细切换不再改变窗体尺寸；贴边 peek 为 **300×448**。
+未贴边窗口固定 **300×548**，展开/收起与概览/用量切换不再改变窗体尺寸；贴边 peek 高度为 **448**（宽度同 300）。
 
 ### 设置页
 
-- 自动刷新开关与刷新间隔（秒，30–3600）+ 校验提示
-- 贴边缘自动收起开关
-- 自定义应用图标（选择/恢复默认）
-- Cookie 输入 / 保存 / 清除
-- 测试连接（结构化成功/失败详情面板）
-- 未配置 Cookie 时的引导提示
+分区顺序（上 → 下）：
+
+1. **凭据与连接**：Cookie 输入 / 保存 / 清除、测试连接（结构化详情）
+2. **数据刷新**：自动刷新开关与间隔（秒，30–3600），修改即时保存
+3. **贴边**：`edgeAutoDockEnabled` 开关
+4. **外观**：自定义应用图标（选择 / 恢复默认）
+
+### 用量流水窗
+
+- 日期快捷：1d / 7d / 30d / MTD / Last month + 自定义范围
+- 手动刷新按钮；切换筛选或分页时重新拉取
+- 表格：Date (UTC+8)、Type、Model（含 MAX）、Tokens、Cost
+- 底部分页：每页 100 条，显示总条数与页码
+- 无 Cookie / 拉取失败时给出可操作提示
 
 ### 托盘
 
@@ -513,9 +559,8 @@ OfficialProvider 请求
 
 **右键菜单**
 
-- 立即刷新
-- 暂停 / 恢复自动刷新
-- 打开设置
+- 流水
+- 设置
 - 退出
 
 ---
@@ -600,9 +645,9 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 
 ## 12. 验收清单
 
-- [ ] 启动后 5 秒内出现悬浮球，可拖拽、置顶、贴边收起
-- [ ] 折叠态显示余量百分比；展开概览可见总消耗与 4 张 metric 卡片
-- [ ] 有 Included Usage 时可在概览/明细间切换，概览无纵向滚动
+- [ ] 启动后 5 秒内出现悬浮球，可拖拽、置顶、贴边半隐收起
+- [ ] 折叠态显示余量百分比；展开概览可见总消耗与 4 张纵向 metric 卡片
+- [ ] 有 Included Usage 时可在概览/用量间切换，概览无纵向滚动
 - [ ] 稳定展示 First-party models / API 数值与 Dashboard 指标，标注数据来源
 - [ ] 自动刷新默认开启，间隔可改（30–3600 秒）且立即生效
 - [ ] 非法间隔输入被拦截，轮询不崩溃
@@ -610,7 +655,9 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 - [ ] 清除凭据后停止敏感请求，UI 给出引导
 - [ ] 快照缓存在启动/失败时可展示 stale 数据（状态 pill 标识）
 - [ ] 托盘悬停显示多行概览用量，随刷新更新
-- [ ] 设置页连接测试展示结构化详情
+- [ ] 托盘右键仅含流水、设置、退出
+- [ ] 流水窗可按日期筛选与分页手动刷新，五列与控制台一致
+- [ ] 设置页连接测试展示结构化详情；凭据区位于最上方
 - [ ] 自定义图标可即时生效于托盘与设置窗
 - [ ] 安装包可在 Windows 环境安装运行
 
@@ -623,9 +670,10 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 Cursor 接口字段或路径变化时，通常只需改以下文件，**无需动 UI**：
 
 1. **`src/core/providers/OfficialProvider.ts`** — 官方请求 URL、Header
-2. **`src/core/providers/CookieProvider.ts`** — Cookie 请求 URL、Header
-3. **`src/core/normalizer.ts`** — 字段映射规则
-4. **`src/shared/types.ts`** — 如有新原始响应结构，补充类型
+2. **`src/core/providers/CookieProvider.ts`** — Cookie 请求 URL、Header（含流水分页）
+3. **`src/core/normalizer.ts`** — 字段映射规则、流水页构建
+4. **`src/shared/usageFlowFormat.ts`** — 流水 Type/Model/Tokens/Cost 展示映射
+5. **`src/shared/types.ts`** — 如有新原始响应结构，补充类型
 
 ### 新增 Provider
 
@@ -655,6 +703,8 @@ Cursor 接口字段或路径变化时，通常只需改以下文件，**无需�
 | settings-changed | event | 配置变更推送 |
 | dock-state-changed | event | 贴边状态变更（edge 或 null） |
 | open-settings | send | 打开设置窗口 |
+| open-flow | send | 打开用量流水窗口 |
+| fetch-usage-flow | invoke | 按日期范围与页码拉取用量流水（独立手动刷新） |
 | set-orb-mode | send | 设置悬浮球窗口模式（collapsed/hover/expanded） |
 | set-expanded | send | 设置展开状态 |
 | move-window | send | 拖拽移动窗口 |
@@ -669,6 +719,8 @@ Cursor 接口字段或路径变化时，通常只需改以下文件，**无需�
 | 一直显示 cookie 来源 | 官方接口不可用，属正常回退；确认端点 URL |
 | 数据不完整 | `usage-summary` 字段变化，更新 normalizer 映射 |
 | 有百分比但无 token 明细 | `get-filtered-usage-events` 失败或 Cookie 中无法解析 userId；主汇总数据不受影响 |
+| 流水窗无数据 / Date 为空 | 确认 Cookie；检查 `timestamp` 是否为毫秒数字；对照 `usageFlowFormat.ts` |
+| 流水 Type/Cost 与控制台不一致 | 更新 `resolveUsageFlowType` / `resolveUsageFlowCost`；零 token 默认 Free |
 | keytar 安装失败 | 使用 safeStorage 回退；或安装 Windows Build Tools |
 | 打包时报 `Access is denied` | 已打包的应用正在运行，关闭后重试（托盘 → 退出，或用 `Stop-Process` 强制关闭） |
 | 打包时报 `unable to read icon from file` | `build/icon.ico` 无效或缺失，执行 `scripts/create-icon.ps1` 重新生成 |
@@ -693,10 +745,10 @@ Cursor 接口字段或路径变化时，通常只需改以下文件，**无需�
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/明细、贴边收起、托盘悬停用量、自定义图标、快照缓存、连接测试详情 |
+| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、用量流水窗、贴边半隐、托盘悬停用量、自定义图标、快照缓存、连接测试详情 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 
 ---
 
-*文档版本：v1.2 | 最后更新：2026-07-18*
+*文档版本：v1.3 | 最后更新：2026-07-22*

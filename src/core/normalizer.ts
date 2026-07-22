@@ -12,9 +12,14 @@ import type {
   RawUsageEventsResponse,
   TokenQuota,
   TokenSnapshot,
+  UsageFlowDisplay,
+  UsageFlowEntry,
   UsageMetrics,
 } from '../shared/types';
-import { FIRST_PARTY_MODELS_LABEL } from '../shared/format';
+import { FIRST_PARTY_MODELS_LABEL, formatUsageFlowDate } from '../shared/format';
+import {
+  mapUsageFlowEntry,
+} from '../shared/usageFlowFormat';
 
 export { formatTokenCount, formatPercent, totalRemaining } from '../shared/format';
 
@@ -144,6 +149,51 @@ function eventTokens(event: RawUsageEvent): number {
     (usage.cacheReadTokens ?? 0) +
     (usage.cacheWriteTokens ?? 0)
   );
+}
+
+/** Build per-event usage flow rows from a paginated events response. */
+export function buildUsageFlowPage(
+  eventsResponse: RawUsageEventsResponse | null | undefined,
+  query: { page: number; pageSize: number; dateRangeLabel?: string },
+): UsageFlowDisplay {
+  const events = eventsResponse?.usageEventsDisplay ?? [];
+  const totalCount = eventsResponse?.totalUsageEventsCount ?? events.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
+
+  if (events.length === 0) {
+    return {
+      available: false,
+      incomplete: eventsResponse?.eventsComplete === false,
+      totalCount,
+      page: query.page,
+      pageSize: query.pageSize,
+      totalPages,
+      dateRangeLabel: query.dateRangeLabel,
+      entries: [],
+    };
+  }
+
+  const entries: UsageFlowEntry[] = events.map((event) =>
+    mapUsageFlowEntry(event, eventTokens(event), eventCostCents(event), formatUsageFlowDate),
+  );
+
+  entries.sort((a, b) => {
+    if (!a.timestamp && !b.timestamp) return 0;
+    if (!a.timestamp) return 1;
+    if (!b.timestamp) return -1;
+    return b.timestamp.localeCompare(a.timestamp);
+  });
+
+  return {
+    available: true,
+    incomplete: eventsResponse?.eventsComplete === false,
+    totalCount,
+    page: query.page,
+    pageSize: query.pageSize,
+    totalPages,
+    dateRangeLabel: query.dateRangeLabel,
+    entries,
+  };
 }
 
 /** Clamp a 0..1 share; guards bad denominators and partial aggregates. */
@@ -810,6 +860,9 @@ export function normalizeCookie(raw: unknown, fetchedAt: string): TokenSnapshot 
   );
   metrics = backfillMetricsTokensFromIncludedUsage(metrics, includedUsage);
 
+  const billingCycleStart = data.billingCycleStart ?? null;
+  const billingCycleEnd = data.billingCycleEnd ?? resetAt;
+
   const stale = isEmptyQuota(auto) && isEmptyQuota(api) && metrics.totalUsedPercent === null;
 
   return {
@@ -818,8 +871,8 @@ export function normalizeCookie(raw: unknown, fetchedAt: string): TokenSnapshot 
     api,
     metrics,
     includedUsage,
-    billingCycleStart: data.billingCycleStart ?? null,
-    billingCycleEnd: data.billingCycleEnd ?? resetAt,
+    billingCycleStart,
+    billingCycleEnd,
     fetchedAt,
     stale,
     rawVersion: 'cookie:usage-summary',

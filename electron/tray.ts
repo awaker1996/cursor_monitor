@@ -4,9 +4,7 @@ let tray: Tray | null = null;
 
 export interface TrayCallbacks {
   getIcon: () => Electron.NativeImage;
-  onRefresh: () => void;
-  onTogglePause: () => void;
-  isPaused: () => boolean;
+  onOpenFlow: () => void;
   onOpenSettings: () => void;
   onQuit: () => void;
 }
@@ -18,19 +16,13 @@ export function createTray(callbacks: TrayCallbacks): Tray {
   tray.setToolTip('Cursor Token Monitor');
 
   const buildMenu = (): Menu => {
-    const paused = callbacks.isPaused();
     return Menu.buildFromTemplate([
       {
-        label: '立即刷新',
-        click: callbacks.onRefresh,
+        label: '流水',
+        click: callbacks.onOpenFlow,
       },
       {
-        label: paused ? '恢复自动刷新' : '暂停自动刷新',
-        click: callbacks.onTogglePause,
-      },
-      { type: 'separator' },
-      {
-        label: '打开设置',
+        label: '设置',
         click: callbacks.onOpenSettings,
       },
       { type: 'separator' },

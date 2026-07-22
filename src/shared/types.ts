@@ -30,6 +30,42 @@ export interface IncludedUsageBreakdown {
   categories: IncludedUsageCategory[];
 }
 
+export interface UsageFlowEntry {
+  timestamp: string;
+  date: string;
+  type: string;
+  model: string;
+  modelMax?: boolean;
+  tokens: string;
+  cost: string;
+}
+
+export interface UsageFlowDisplay {
+  available: boolean;
+  incomplete?: boolean;
+  totalCount?: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  dateRangeLabel?: string;
+  billingPeriod?: { start: string | null; end: string | null };
+  entries: UsageFlowEntry[];
+}
+
+export interface UsageFlowQuery {
+  startDateMs: number;
+  endDateMs: number;
+  page: number;
+  pageSize?: number;
+}
+
+export interface UsageFlowFetchResult {
+  success: boolean;
+  message?: string;
+  hasCookie: boolean;
+  data?: UsageFlowDisplay | null;
+}
+
 export interface UsageMetrics {
   totalUsedPercent: number | null;
   apiUsedPercent: number | null;
@@ -136,6 +172,9 @@ export interface RawUsageEvent {
   cursorTokenFee?: number;
   cost?: string | number;
   costDisplay?: string;
+  isChargeable?: boolean;
+  isTokenBasedCall?: boolean;
+  maxMode?: boolean;
   tokenUsage?: {
     inputTokens?: number;
     outputTokens?: number;

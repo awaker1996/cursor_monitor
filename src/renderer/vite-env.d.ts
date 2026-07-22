@@ -5,6 +5,8 @@ import type {
   DockEdge,
   PollerState,
   TestConnectionResult,
+  UsageFlowFetchResult,
+  UsageFlowQuery,
   TokenSnapshot,
 } from '../shared/types';
 
@@ -24,6 +26,8 @@ export interface ElectronAPI {
   onSettingsChanged: (callback: (settings: AppSettings) => void) => () => void;
   onDockStateChanged: (callback: (edge: DockEdge | null) => void) => () => void;
   openSettings: () => void;
+  openFlow: () => void;
+  fetchUsageFlow: (query: UsageFlowQuery, dateRangeLabel?: string) => Promise<UsageFlowFetchResult>;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;

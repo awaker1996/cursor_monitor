@@ -322,6 +322,55 @@ export class CookieProvider implements TokenProvider {
     log.error('Cookie fetch failed', error);
     throw error;
   }
+
+  /** Fetch a single page of usage events for the flow window (independent of poller). */
+  async fetchUsageFlowPage(
+    startDateMs: number,
+    endDateMs: number,
+    page: number,
+    pageSize: number,
+  ): Promise<RawUsageEventsResponse | null> {
+    const cookie = await credentialVault.getCookie();
+    if (!cookie) {
+      throw new Error('Cookie not configured. Please add your session cookie in Settings.');
+    }
+
+    const settings = this.getSettings();
+    const cookieHeader = normalizeWorkosCookie(cookie);
+    const userId = extractUserId(cookie);
+    const userIdNum = userId && /^\d+$/.test(userId) ? Number(userId) : undefined;
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.max(settings.requestTimeoutSec, 15) * 1000,
+    );
+
+    try {
+      const range = {
+        startDate: String(startDateMs),
+        endDate: String(endDateMs),
+      };
+      const record = await fetchUsageEventsPage(
+        cookieHeader,
+        range,
+        controller.signal,
+        page,
+        pageSize,
+        userIdNum,
+      );
+      if (!record) return null;
+
+      const events = Array.isArray(record.usageEventsDisplay) ? record.usageEventsDisplay : [];
+
+      return {
+        usageEventsDisplay: events as RawUsageEventsResponse['usageEventsDisplay'],
+        totalUsageEventsCount: record.totalUsageEventsCount ?? 0,
+        eventsComplete: true,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 async function fetchUsageEvents(

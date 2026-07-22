@@ -7,6 +7,43 @@ export function formatIncludedUsageTokens(value: number | null | undefined): str
   return String(Math.round(value));
 }
 
+const usageFlowDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Shanghai',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
+export function formatUsageFlowDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '--';
+  return usageFlowDateFormatter.format(date);
+}
+
+export function formatBillingPeriodLabel(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): string | null {
+  const opts: Intl.DateTimeFormatOptions = {
+    timeZone: 'Asia/Shanghai',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  };
+  const formatOne = (iso: string | null | undefined): string | null => {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString('en-US', opts);
+  };
+  const startLabel = formatOne(start);
+  const endLabel = formatOne(end);
+  if (startLabel && endLabel) return `${startLabel} - ${endLabel}`;
+  return startLabel ?? endLabel;
+}
+
 export function formatTokenCount(value: number | null): string {
   if (value === null || value === undefined) return '--';
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;

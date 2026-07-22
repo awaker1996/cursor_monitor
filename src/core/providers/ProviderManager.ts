@@ -1,5 +1,11 @@
-import type { DataSource, ProviderHealth, TokenSnapshot } from '../../shared/types';
-import { normalize } from '../normalizer';
+import type {
+  DataSource,
+  ProviderHealth,
+  TokenSnapshot,
+  UsageFlowFetchResult,
+  UsageFlowQuery,
+} from '../../shared/types';
+import { normalize, buildUsageFlowPage } from '../normalizer';
 import { SnapshotCache } from '../SnapshotCache';
 import { isEmptyUsageSnapshot, mergeTodayMetricsFromCache } from '../snapshotMerge';
 import { OfficialProvider } from './OfficialProvider';
@@ -112,6 +118,40 @@ export class ProviderManager {
       return await this.fetch();
     } finally {
       this.activeProvider = prev;
+    }
+  }
+
+  async fetchUsageFlow(
+    query: UsageFlowQuery,
+    dateRangeLabel?: string,
+  ): Promise<UsageFlowFetchResult> {
+    const hasCookie = await this.cookie.isConfigured();
+    if (!hasCookie) {
+      return {
+        success: false,
+        hasCookie: false,
+        message: '需配置 Cookie 后查看用量流水',
+      };
+    }
+
+    const pageSize = query.pageSize ?? 100;
+    try {
+      const raw = await this.cookie.fetchUsageFlowPage(
+        query.startDateMs,
+        query.endDateMs,
+        query.page,
+        pageSize,
+      );
+      const data = buildUsageFlowPage(raw, {
+        page: query.page,
+        pageSize,
+        dateRangeLabel,
+      });
+      return { success: true, hasCookie: true, data };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn('Usage flow fetch failed', { error: message });
+      return { success: false, hasCookie: true, message };
     }
   }
 
