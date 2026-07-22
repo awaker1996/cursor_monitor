@@ -29,7 +29,7 @@ export interface ElectronAPI {
   setExpandedPanelLayout: (layout: 'overview' | 'included') => void;
   setIgnoreMouseEvents: (ignore: boolean) => void;
   getCursorInWindow: () => Promise<{ x: number; y: number } | null>;
-  moveWindow: (dx: number, dy: number) => void;
+  moveWindow: (dx: number, dy: number, grabOffset?: { x: number; y: number }) => void;
   finishWindowMove: () => void;
   undockWindow: () => void;
   getIconPreview: () => Promise<string | null>;
@@ -76,7 +76,7 @@ const api: ElectronAPI = {
   setExpandedPanelLayout: (layout) => ipcRenderer.send('set-expanded-panel-layout', layout),
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('set-ignore-mouse-events', ignore),
   getCursorInWindow: () => ipcRenderer.invoke('get-cursor-in-window'),
-  moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
+  moveWindow: (dx, dy, grabOffset) => ipcRenderer.send('move-window', { dx, dy, grabOffset }),
   finishWindowMove: () => ipcRenderer.send('finish-window-move'),
   undockWindow: () => ipcRenderer.send('undock-window'),
   getIconPreview: () => ipcRenderer.invoke('get-icon-preview'),

@@ -1,15 +1,22 @@
 import type { IncludedUsageDisplay } from '../../shared/format';
-import IncludedUsageModelName from './IncludedUsageModelName';
 
 interface IncludedUsageTableProps {
   display: IncludedUsageDisplay;
 }
 
-export default function IncludedUsageTable({ display }: IncludedUsageTableProps) {
-  const [itemCol, tokensCol, usageCol] = display.columns;
+type CategoryAccent = 'api' | 'auto';
 
+function categoryAccent(key: string): CategoryAccent {
+  return key === 'api' ? 'api' : 'auto';
+}
+
+function categoryBadge(accent: CategoryAccent): string {
+  return accent === 'api' ? 'API' : 'FP';
+}
+
+export default function IncludedUsageTable({ display }: IncludedUsageTableProps) {
   return (
-    <section className="included-usage" aria-label={display.title}>
+    <section className="included-usage included-usage--panel" aria-label={display.title}>
       <div className="included-usage__header">
         <h2 className="included-usage__title">{display.title}</h2>
         {display.dateRange && (
@@ -17,56 +24,41 @@ export default function IncludedUsageTable({ display }: IncludedUsageTableProps)
         )}
       </div>
 
-      <div className="included-usage__table-wrap">
-        <div className="included-usage__table" role="table">
-          <div className="included-usage__head" role="row">
-            <span className="included-usage__cell included-usage__cell--item" role="columnheader">
-              {itemCol}
-            </span>
-            <span className="included-usage__cell included-usage__cell--tokens" role="columnheader">
-              {tokensCol}
-            </span>
-            <span className="included-usage__cell included-usage__cell--usage" role="columnheader">
-              {usageCol}
-            </span>
-          </div>
+      <div className="included-usage__body">
+        {display.categories.map((category) => {
+          const accent = categoryAccent(category.key);
+          return (
+            <section
+              key={category.key}
+              className={`included-usage__block included-usage__block--${accent}`}
+              aria-label={category.label}
+            >
+              <header className="included-usage__section-head">
+                <span className="included-usage__badge">{categoryBadge(accent)}</span>
+                {category.label !== categoryBadge(accent) && (
+                  <span className="included-usage__section-label">{category.label}</span>
+                )}
+                <span className="included-usage__section-stats">
+                  <span className="included-usage__entry-tokens">{category.tokens}</span>
+                  <span className="included-usage__entry-usage">{category.usage}</span>
+                </span>
+              </header>
 
-          {display.categories.map((category) => (
-            <div key={category.key} className="included-usage__category">
-              <div className="included-usage__group" role="row">
-                <span className="included-usage__cell included-usage__cell--item" role="cell">
-                  {category.label}
-                </span>
-                <span className="included-usage__cell included-usage__cell--tokens" role="cell">
-                  {category.tokens}
-                </span>
-                <span className="included-usage__cell included-usage__cell--usage" role="cell">
-                  {category.usage}
-                </span>
+              <div className="included-usage__models">
+                {category.models.map((model) => (
+                  <div
+                    key={`${category.key}-${model.model}`}
+                    className="included-usage__entry"
+                  >
+                    <span className="included-usage__entry-name">{model.model}</span>
+                    <span className="included-usage__entry-tokens">{model.tokens}</span>
+                    <span className="included-usage__entry-usage">{model.usage}</span>
+                  </div>
+                ))}
               </div>
-
-              {category.models.length > 0 && (
-                <div className="included-usage__model-list">
-                  {category.models.map((model) => (
-                    <div
-                      key={`${category.key}-${model.model}`}
-                      className="included-usage__row"
-                      role="row"
-                    >
-                      <IncludedUsageModelName name={model.model} />
-                      <span className="included-usage__cell included-usage__cell--tokens" role="cell">
-                        {model.tokens}
-                      </span>
-                      <span className="included-usage__cell included-usage__cell--usage" role="cell">
-                        {model.usage}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+            </section>
+          );
+        })}
       </div>
 
       {display.showIncompleteHint && (

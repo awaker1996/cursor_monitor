@@ -13,11 +13,8 @@ import type { PollerState, TokenSnapshot, DockEdge } from '../shared/types';
 const DRAG_THRESHOLD = 4;
 const ORB_RING_RADIUS = 24;
 const ORB_RING_CIRCUMFERENCE = 2 * Math.PI * ORB_RING_RADIUS;
-const PEEK_RING_RADIUS = 10;
-const PEEK_RING_CIRCUMFERENCE = 2 * Math.PI * PEEK_RING_RADIUS;
-const PEEK_RING_CENTER = 12;
 const INTERACTIVE_SELECTOR =
-  '.floating-ball__orb-wrap, .floating-ball__orb, .floating-ball__panel-frame, .floating-ball__panel, .floating-ball__peek';
+  '.floating-ball__orb-wrap, .floating-ball__orb, .floating-ball__panel-frame, .floating-ball__panel';
 
 function IconRefresh() {
   return (
@@ -90,6 +87,7 @@ export default function App() {
   const [panelPhase, setPanelPhase] = useState<PanelPhase>('hidden');
   const [panelAnimOpen, setPanelAnimOpen] = useState(false);
   const [dockedEdge, setDockedEdge] = useState<DockEdge | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [snapshot, setSnapshot] = useState<TokenSnapshot | null>(null);
   const [pollerState, setPollerState] = useState<PollerState | null>(null);
   const [pendingRefresh, setPendingRefresh] = useState(false);
@@ -97,6 +95,7 @@ export default function App() {
   const draggingRef = useRef(false);
   const dragMovedRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
+  const grabOffsetRef = useRef({ x: 0, y: 0 });
   const toggleOnReleaseRef = useRef(false);
   const dockedEdgeRef = useRef<DockEdge | null>(null);
   const expandedRef = useRef(false);
@@ -222,9 +221,20 @@ export default function App() {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest('.no-drag')) return;
     draggingRef.current = true;
+    setIsDragging(true);
     dragMovedRef.current = false;
     toggleOnReleaseRef.current = toggleOnRelease;
     dragStartRef.current = { x: e.screenX, y: e.screenY };
+    const orb = (e.currentTarget as HTMLElement).closest('.floating-ball__orb');
+    if (orb) {
+      const rect = orb.getBoundingClientRect();
+      grabOffsetRef.current = {
+        x: e.clientX - (rect.left + rect.width / 2),
+        y: e.clientY - (rect.top + rect.height / 2),
+      };
+    } else {
+      grabOffsetRef.current = { x: 0, y: 0 };
+    }
     window.electronAPI.setIgnoreMouseEvents(false);
     mousePassthroughRef.current = false;
   }, []);
@@ -236,7 +246,7 @@ export default function App() {
       const dy = e.screenY - dragStartRef.current.y;
       if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
         dragMovedRef.current = true;
-        window.electronAPI.moveWindow(dx, dy);
+        window.electronAPI.moveWindow(dx, dy, grabOffsetRef.current);
         dragStartRef.current = { x: e.screenX, y: e.screenY };
       }
     };
@@ -258,6 +268,11 @@ export default function App() {
       draggingRef.current = false;
       dragMovedRef.current = false;
       toggleOnReleaseRef.current = false;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsDragging(false);
+        });
+      });
     };
 
     window.addEventListener('mousemove', handleMove);
@@ -340,23 +355,6 @@ export default function App() {
               Math.sin((orbSummary.percentValue / 100) * 2 * Math.PI - Math.PI / 2),
         }
       : null;
-  const peekRingOffset =
-    orbSummary.percentValue !== null
-      ? PEEK_RING_CIRCUMFERENCE * (1 - orbSummary.percentValue / 100)
-      : PEEK_RING_CIRCUMFERENCE;
-  const peekRingCap =
-    orbSummary.percentValue !== null && orbSummary.percentValue > 0
-      ? {
-          x:
-            PEEK_RING_CENTER +
-            PEEK_RING_RADIUS *
-              Math.cos((orbSummary.percentValue / 100) * 2 * Math.PI - Math.PI / 2),
-          y:
-            PEEK_RING_CENTER +
-            PEEK_RING_RADIUS *
-              Math.sin((orbSummary.percentValue / 100) * 2 * Math.PI - Math.PI / 2),
-        }
-      : null;
   const orbMotionClass =
     snapshot?.stale || pollerState?.status === 'backoff' || pollerState?.status === 'paused'
       ? 'floating-ball__orb--motion-muted'
@@ -364,50 +362,13 @@ export default function App() {
 
   const dockClass = dockedEdge ? `floating-ball--docked-${dockedEdge}` : '';
 
-  const peekTab = dockedEdge ? (
-    <div className="floating-ball__orb-wrap">
-      <div
-        className={`floating-ball__peek floating-ball__peek--${dockedEdge} floating-ball__peek--health-${health}`}
-        onMouseDown={(e) => startDrag(e, true)}
-        aria-label="点击或拖出以恢复"
-      >
-        <div className="floating-ball__peek-shell">
-          <div className="floating-ball__peek-body">
-          <svg className="floating-ball__peek-ring" viewBox="0 0 24 24" aria-hidden>
-            <circle
-              className="floating-ball__peek-ring-track"
-              cx={PEEK_RING_CENTER}
-              cy={PEEK_RING_CENTER}
-              r={PEEK_RING_RADIUS}
-            />
-            <circle
-              className="floating-ball__peek-ring-progress"
-              cx={PEEK_RING_CENTER}
-              cy={PEEK_RING_CENTER}
-              r={PEEK_RING_RADIUS}
-              strokeDasharray={PEEK_RING_CIRCUMFERENCE}
-              strokeDashoffset={peekRingOffset}
-            />
-            {peekRingCap && (
-              <circle
-                className="floating-ball__peek-ring-cap"
-                cx={peekRingCap.x}
-                cy={peekRingCap.y}
-                r={2}
-              />
-            )}
-          </svg>
-          <span className="floating-ball__peek-value">{orbSummary.value}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : (
+  const orbNode = (
     <div className="floating-ball__orb-wrap">
       <div
         className={`floating-ball__orb floating-ball__orb--health-${health} ${orbMotionClass}`}
         style={orbRingStyle}
         onMouseDown={(e) => startDrag(e, true)}
+        aria-label={dockedEdge ? '点击或拖出以恢复' : undefined}
       >
         <svg
           className="floating-ball__orb-ring"
@@ -520,8 +481,10 @@ export default function App() {
   );
 
   return (
-    <div className={`floating-ball ${expanded ? 'floating-ball--expanded' : ''} ${dockClass}`}>
-      {peekTab}
+    <div
+      className={`floating-ball ${expanded ? 'floating-ball--expanded' : ''} ${dockClass}${isDragging ? ' floating-ball--dragging' : ''}`}
+    >
+      {orbNode}
 
       {panelPhase !== 'hidden' && (
         <div

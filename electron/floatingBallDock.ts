@@ -2,9 +2,12 @@ import { BrowserWindow, screen } from 'electron';
 import type { DockEdge } from '../src/shared/types';
 import {
   ORB_EXPANDED_HEIGHT,
-  ORB_EXPANDED_WIDTH,
+  ORB_PANEL_WIDTH,
   ORB_WINDOW_HEIGHT,
-  ORB_WINDOW_WIDTH,
+  ORB_DOCK_HIDE_OFFSET,
+  ORB_WRAP_MARGIN,
+  ORB_VISUAL_SIZE,
+  enforceFloatingBallWidth,
 } from './windows/floatingBall';
 
 export const DOCK_THRESHOLD = 24;
@@ -34,11 +37,79 @@ export function getDockState(): { docked: boolean; edge: DockEdge | null } {
 }
 
 function getOrbAnchorRect(bounds: Electron.Rectangle): Electron.Rectangle {
+  // Anchor tracks the visible orb (bottom-right of window), not the full window box.
+  const size = Math.max(ORB_ANCHOR_SIZE, ORB_VISUAL_SIZE);
+  const orbRight = bounds.x + bounds.width - ORB_WINDOW_PADDING - ORB_WRAP_MARGIN;
+  const orbBottom = bounds.y + bounds.height - ORB_WINDOW_PADDING - ORB_WRAP_MARGIN;
   return {
-    x: bounds.x + bounds.width - ORB_WINDOW_PADDING - ORB_ANCHOR_SIZE,
-    y: bounds.y + bounds.height - ORB_WINDOW_PADDING - ORB_ANCHOR_SIZE,
-    width: ORB_ANCHOR_SIZE,
-    height: ORB_ANCHOR_SIZE,
+    x: orbRight - size,
+    y: orbBottom - size,
+    width: size,
+    height: size,
+  };
+}
+
+function getOrbCenterInWindow(
+  docked: boolean,
+  edge: DockEdge | null,
+  expanded: boolean,
+): { x: number; y: number } {
+  const height = expanded ? ORB_EXPANDED_HEIGHT : ORB_WINDOW_HEIGHT;
+  const pad = ORB_WINDOW_PADDING;
+  const wrap = docked ? 0 : ORB_WRAP_MARGIN;
+  const hide = docked ? ORB_DOCK_HIDE_OFFSET : 0;
+  const half = ORB_VISUAL_SIZE / 2;
+
+  if (docked && edge === 'top') {
+    return {
+      x: ORB_PANEL_WIDTH - pad - half,
+      y: pad - hide + half,
+    };
+  }
+
+  if (docked && edge === 'left') {
+    return {
+      x: pad - hide + half,
+      y: height - pad - half,
+    };
+  }
+
+  if (docked && edge === 'right') {
+    return {
+      x: ORB_PANEL_WIDTH - pad + hide - half,
+      y: height - pad - half,
+    };
+  }
+
+  if (docked && edge === 'bottom') {
+    return {
+      x: ORB_PANEL_WIDTH - pad - half,
+      y: height - pad + hide - half,
+    };
+  }
+
+  // Undocked — orb sits bottom-right with wrap margin.
+  return {
+    x: ORB_PANEL_WIDTH - pad - wrap - half,
+    y: height - pad - wrap - half,
+  };
+}
+
+function computeInPlaceUndockBounds(
+  _bounds: Electron.Rectangle,
+  _edge: DockEdge,
+  delta: UndockDragDelta,
+): Electron.Rectangle {
+  const grabX = delta.grabOffsetX ?? 0;
+  const grabY = delta.grabOffsetY ?? 0;
+  // Full undocked layout immediately — no deferred expand on mouseup.
+  const to = getOrbCenterInWindow(false, null, true);
+
+  return {
+    x: Math.round(delta.cursorX - to.x - grabX),
+    y: Math.round(delta.cursorY - to.y - grabY),
+    width: ORB_PANEL_WIDTH,
+    height: ORB_EXPANDED_HEIGHT,
   };
 }
 
@@ -60,19 +131,24 @@ function distToEdges(
 
 function getDockedWindowBounds(
   edge: DockEdge,
-  saved: Electron.Rectangle,
+  currentBounds: Electron.Rectangle,
   workArea: Electron.Rectangle,
 ): Electron.Rectangle {
+  const from = getOrbCenterInWindow(false, null, true);
+  const to = getOrbCenterInWindow(true, edge, false);
+  const ballScreenX = currentBounds.x + from.x;
+  const ballScreenY = currentBounds.y + from.y;
+
   const next: Electron.Rectangle = {
-    x: saved.x,
-    y: saved.y,
-    width: ORB_WINDOW_WIDTH,
+    x: Math.round(ballScreenX - to.x),
+    y: Math.round(ballScreenY - to.y),
+    width: ORB_PANEL_WIDTH,
     height: ORB_WINDOW_HEIGHT,
   };
 
   switch (edge) {
     case 'right':
-      next.x = workArea.x + workArea.width - ORB_WINDOW_WIDTH;
+      next.x = workArea.x + workArea.width - ORB_PANEL_WIDTH;
       break;
     case 'left':
       next.x = workArea.x;
@@ -135,40 +211,78 @@ export function tryDockWindow(win: BrowserWindow, enabled: boolean): DockEdge | 
     dockState.savedBounds = bounds;
   }
 
-  const saved = dockState.savedBounds ?? bounds;
-  const next = getDockedWindowBounds(nearest, saved, workArea);
+  const next = getDockedWindowBounds(nearest, bounds, workArea);
 
   win.setBounds({
     x: Math.round(next.x),
     y: Math.round(next.y),
-    width: next.width,
-    height: next.height,
+    width: ORB_PANEL_WIDTH,
+    height: ORB_WINDOW_HEIGHT,
   });
+  enforceFloatingBallWidth(win);
 
   dockState.docked = true;
   dockState.edge = nearest;
   return nearest;
 }
 
-export function undockWindow(win: BrowserWindow): void {
+export type UndockMode = 'restore' | 'inPlace';
+
+export interface UndockDragDelta {
+  dx?: number;
+  dy?: number;
+  cursorX: number;
+  cursorY: number;
+  grabOffsetX?: number;
+  grabOffsetY?: number;
+}
+
+export function undockWindow(
+  win: BrowserWindow,
+  mode: UndockMode = 'restore',
+  delta?: UndockDragDelta,
+): void {
   if (!dockState.docked || win.isDestroyed()) return;
 
+  const edge = dockState.edge;
   const saved = dockState.savedBounds;
-  if (saved) {
-    win.setBounds({
+  const bounds = win.getBounds();
+
+  let next: Electron.Rectangle;
+
+  if (mode === 'inPlace' && edge && delta) {
+    next = computeInPlaceUndockBounds(bounds, edge, delta);
+  } else if (saved) {
+    next = {
       x: Math.round(saved.x),
       y: Math.round(saved.y),
-      width: ORB_EXPANDED_WIDTH,
+      width: ORB_PANEL_WIDTH,
       height: ORB_EXPANDED_HEIGHT,
-    });
+    };
+  } else {
+    const heightDelta = ORB_EXPANDED_HEIGHT - bounds.height;
+    next = {
+      x: Math.round(bounds.x),
+      y: Math.round(bounds.y - heightDelta),
+      width: ORB_PANEL_WIDTH,
+      height: ORB_EXPANDED_HEIGHT,
+    };
   }
+
+  win.setBounds(next);
+  enforceFloatingBallWidth(win);
 
   dockState.docked = false;
   dockState.edge = null;
   dockState.savedBounds = null;
 }
 
-export function handleMoveWhileDocked(win: BrowserWindow, dx: number, dy: number): boolean {
+export function handleMoveWhileDocked(
+  win: BrowserWindow,
+  dx: number,
+  dy: number,
+  grabOffset?: { x: number; y: number },
+): boolean {
   if (!dockState.docked || !dockState.edge || win.isDestroyed()) return false;
 
   const edge = dockState.edge;
@@ -190,7 +304,15 @@ export function handleMoveWhileDocked(win: BrowserWindow, dx: number, dy: number
   }
 
   if (shouldUndock) {
-    undockWindow(win);
+    const cursor = screen.getCursorScreenPoint();
+    undockWindow(win, 'inPlace', {
+      cursorX: cursor.x,
+      cursorY: cursor.y,
+      grabOffsetX: grabOffset?.x ?? 0,
+      grabOffsetY: grabOffset?.y ?? 0,
+      dx,
+      dy,
+    });
     return true;
   }
   return false;

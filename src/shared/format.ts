@@ -193,7 +193,8 @@ export function getPercentStatusLevel(percent: number | null): MetricStatusLevel
 }
 
 function formatTokenDetail(tokens: number | null | undefined): string | undefined {
-  if (tokens == null || tokens <= 0) return undefined;
+  if (tokens == null) return undefined;
+  if (tokens <= 0) return '0 tokens';
   return `${formatTokenCount(tokens)} tokens`;
 }
 

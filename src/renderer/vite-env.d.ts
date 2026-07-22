@@ -30,7 +30,7 @@ export interface ElectronAPI {
   setExpandedPanelLayout: (layout: 'overview' | 'included') => void;
   setIgnoreMouseEvents: (ignore: boolean) => void;
   getCursorInWindow: () => Promise<{ x: number; y: number } | null>;
-  moveWindow: (dx: number, dy: number) => void;
+  moveWindow: (dx: number, dy: number, grabOffset?: { x: number; y: number }) => void;
   finishWindowMove: () => void;
   undockWindow: () => void;
   getIconPreview: () => Promise<string | null>;

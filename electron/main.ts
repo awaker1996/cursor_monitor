@@ -7,10 +7,9 @@ import { ProviderManager } from '../src/core/providers/ProviderManager';
 import { Poller } from '../src/core/poller';
 import {
   createFloatingBallWindow,
+  enforceFloatingBallWidth,
   getFloatingBallWindow,
   sendToFloatingBall,
-  ORB_EXPANDED_HEIGHT,
-  ORB_EXPANDED_WIDTH,
 } from './windows/floatingBall';
 import { createSettingsWindow } from './windows/settings';
 import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip } from './tray';
@@ -186,48 +185,21 @@ function refreshAppIcons(): void {
   updateTrayIcon(loadTrayIcon(settingsStore.get()));
 }
 
-function applyOrbMode(mode: 'collapsed' | 'hover' | 'expanded'): void {
+function applyOrbMode(_mode: 'collapsed' | 'hover' | 'expanded'): void {
+  // Renderer owns expanded/collapsed visuals. Never resize here — legacy hover
+  // mode used to call setBounds(280×200) and bounce width after a while.
   const win = getFloatingBallWindow();
-  if (!win || win.isDestroyed()) return;
-  if (getDockState().docked) return;
-  // Undocked window stays at expanded capacity; renderer handles panel visibility.
-  if (mode === 'collapsed' || mode === 'expanded') {
-    resizeFloatingBallWindow(win, ORB_EXPANDED_WIDTH, ORB_EXPANDED_HEIGHT);
-    return;
-  }
-  resizeFloatingBallWindow(win, 280, 200);
+  if (!win || win.isDestroyed() || getDockState().docked) return;
+  enforceFloatingBallWidth(win);
 }
 
 export type ExpandedPanelLayout = 'overview' | 'included';
 
 function applyExpandedPanelLayout(_layout: ExpandedPanelLayout): void {
+  // Overview and included share the same undocked capacity; no resize on tab switch.
   const win = getFloatingBallWindow();
-  if (!win || win.isDestroyed()) return;
-  if (getDockState().docked) return;
-  // Overview and included share the same undocked capacity.
-  resizeFloatingBallWindow(win, ORB_EXPANDED_WIDTH, ORB_EXPANDED_HEIGHT);
-}
-function resizeFloatingBallWindow(win: BrowserWindow, width: number, height: number): void {
-  const bounds = win.getBounds();
-  if (bounds.width === width && bounds.height === height) return;
-
-  const display = screen.getDisplayMatching(bounds);
-  const workArea = display.workArea;
-  const nextX = Math.min(
-    Math.max(bounds.x + bounds.width - width, workArea.x),
-    workArea.x + workArea.width - width,
-  );
-  const nextY = Math.min(
-    Math.max(bounds.y + bounds.height - height, workArea.y),
-    workArea.y + workArea.height - height,
-  );
-
-  win.setBounds({
-    x: Math.round(nextX),
-    y: Math.round(nextY),
-    width,
-    height,
-  });
+  if (!win || win.isDestroyed() || getDockState().docked) return;
+  enforceFloatingBallWidth(win);
 }
 
 function setupIpc(): void {
@@ -349,12 +321,20 @@ function setupIpc(): void {
     };
   });
 
-  ipcMain.on('move-window', (event, { dx, dy }: { dx: number; dy: number }) => {
+  ipcMain.on('move-window', (event, payload: {
+    dx: number;
+    dy: number;
+    grabOffset?: { x: number; y: number };
+  }) => {
+    const { dx, dy, grabOffset } = payload;
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return;
     if (getDockState().docked) {
-      const undocked = handleMoveWhileDocked(win, dx, dy);
-      if (undocked) broadcastDockState(null);
+      const undocked = handleMoveWhileDocked(win, dx, dy, grabOffset);
+      if (undocked) {
+        broadcastDockState(null);
+      }
+      return;
     }
     const [x, y] = win.getPosition();
     win.setPosition(Math.round(x + dx), Math.round(y + dy));
