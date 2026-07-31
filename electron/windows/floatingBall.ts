@@ -36,6 +36,17 @@ export const ORB_PANEL_CONTENT_WIDTH = ORB_PANEL_WIDTH - 24;
 
 const ORB_SCREEN_MARGIN = 20;
 
+/** Default undocked placement on the primary display (bottom-right). */
+export function getDefaultFloatingBallBounds(): Electron.Rectangle {
+  const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
+  return {
+    x: Math.round(x + width - ORB_EXPANDED_WIDTH - ORB_SCREEN_MARGIN),
+    y: Math.round(y + height - ORB_EXPANDED_HEIGHT - ORB_SCREEN_MARGIN),
+    width: ORB_EXPANDED_WIDTH,
+    height: ORB_EXPANDED_HEIGHT,
+  };
+}
+
 function lockFloatingBallWidth(win: BrowserWindow): void {
   // Pin width so DPI / OS / legacy IPC cannot stretch the window over time.
   win.setMinimumSize(ORB_PANEL_WIDTH, ORB_WINDOW_HEIGHT);
@@ -56,13 +67,13 @@ export function enforceFloatingBallWidth(win: BrowserWindow): void {
 }
 
 export function createFloatingBallWindow(isDev: boolean): BrowserWindow {
-  const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
+  const defaultBounds = getDefaultFloatingBallBounds();
 
   floatingBallWindow = new BrowserWindow({
-    width: ORB_EXPANDED_WIDTH,
-    height: ORB_EXPANDED_HEIGHT,
-    x: x + width - ORB_EXPANDED_WIDTH - ORB_SCREEN_MARGIN,
-    y: y + height - ORB_EXPANDED_HEIGHT - ORB_SCREEN_MARGIN,
+    width: defaultBounds.width,
+    height: defaultBounds.height,
+    x: defaultBounds.x,
+    y: defaultBounds.y,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',

@@ -40,6 +40,20 @@ export interface UsageFlowEntry {
   cost: string;
 }
 
+export interface UsageFlowModelStat {
+  model: string;
+  tokens: number;
+  /** Share of total tokens in the selected period (0–100). */
+  sharePercent: number;
+}
+
+export interface UsageFlowModelStats {
+  available: boolean;
+  incomplete?: boolean;
+  totalTokens: number;
+  models: UsageFlowModelStat[];
+}
+
 export interface UsageFlowDisplay {
   available: boolean;
   incomplete?: boolean;
@@ -50,6 +64,7 @@ export interface UsageFlowDisplay {
   dateRangeLabel?: string;
   billingPeriod?: { start: string | null; end: string | null };
   entries: UsageFlowEntry[];
+  modelStats?: UsageFlowModelStats;
 }
 
 export interface UsageFlowQuery {
@@ -200,7 +215,7 @@ export interface RawAggregatedUsageItem {
   cacheWriteTokens?: string | number;
   cacheReadTokens?: string | number;
   totalCents?: number | null;
-  /** Cursor pricing pool: 1 ≈ API / named models, 2 ≈ First-party. */
+  /** Cursor pricing pool: 1 ≈ Other Models (named models), 2 ≈ Cursor Models. */
   tier?: number | null;
 }
 

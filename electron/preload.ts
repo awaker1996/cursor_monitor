@@ -8,6 +8,14 @@ import type {
   UsageFlowQuery,
   TokenSnapshot,
 } from '../src/shared/types';
+import type {
+  SubscriptionCredentialKind,
+  SubscriptionInfoResult,
+  SubscriptionProviderId,
+  SubscriptionProviderMeta,
+  SubscriptionUsageQuery,
+  SubscriptionUsageResult,
+} from '../src/shared/subscriptionTypes';
 
 export interface ElectronAPI {
   getSnapshot: () => Promise<TokenSnapshot | null>;
@@ -26,6 +34,22 @@ export interface ElectronAPI {
   onDockStateChanged: (callback: (edge: DockEdge | null) => void) => () => void;
   openSettings: () => void;
   openFlow: () => void;
+  openSubscriptions: () => void;
+  listSubscriptionProviders: () => Promise<SubscriptionProviderMeta[]>;
+  saveSubscriptionKey: (
+    providerId: SubscriptionProviderId,
+    key: string,
+    kind?: SubscriptionCredentialKind,
+  ) => Promise<boolean>;
+  clearSubscriptionKey: (
+    providerId: SubscriptionProviderId,
+    kind?: SubscriptionCredentialKind,
+  ) => Promise<boolean>;
+  fetchSubscriptionInfo: (providerId: SubscriptionProviderId) => Promise<SubscriptionInfoResult>;
+  fetchSubscriptionUsage: (
+    providerId: SubscriptionProviderId,
+    query: SubscriptionUsageQuery,
+  ) => Promise<SubscriptionUsageResult>;
   fetchUsageFlow: (query: UsageFlowQuery, dateRangeLabel?: string) => Promise<UsageFlowFetchResult>;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
@@ -75,6 +99,16 @@ const api: ElectronAPI = {
   },
   openSettings: () => ipcRenderer.send('open-settings'),
   openFlow: () => ipcRenderer.send('open-flow'),
+  openSubscriptions: () => ipcRenderer.send('open-subscriptions'),
+  listSubscriptionProviders: () => ipcRenderer.invoke('subscription-list-providers'),
+  saveSubscriptionKey: (providerId, key, kind) =>
+    ipcRenderer.invoke('subscription-save-key', providerId, key, kind),
+  clearSubscriptionKey: (providerId, kind) =>
+    ipcRenderer.invoke('subscription-clear-key', providerId, kind),
+  fetchSubscriptionInfo: (providerId) =>
+    ipcRenderer.invoke('subscription-fetch-info', providerId),
+  fetchSubscriptionUsage: (providerId, query) =>
+    ipcRenderer.invoke('subscription-fetch-usage', providerId, query),
   fetchUsageFlow: (query, dateRangeLabel) =>
     ipcRenderer.invoke('fetch-usage-flow', query, dateRangeLabel),
   setOrbMode: (mode) => ipcRenderer.send('set-orb-mode', mode),

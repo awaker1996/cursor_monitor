@@ -5,7 +5,9 @@ let tray: Tray | null = null;
 export interface TrayCallbacks {
   getIcon: () => Electron.NativeImage;
   onOpenFlow: () => void;
+  onOpenSubscriptions: () => void;
   onOpenSettings: () => void;
+  onResetFloatingBall: () => void;
   onQuit: () => void;
 }
 
@@ -18,12 +20,20 @@ export function createTray(callbacks: TrayCallbacks): Tray {
   const buildMenu = (): Menu => {
     return Menu.buildFromTemplate([
       {
-        label: '流水',
+        label: '查看流水',
         click: callbacks.onOpenFlow,
       },
       {
-        label: '设置',
+        label: '其他订阅',
+        click: callbacks.onOpenSubscriptions,
+      },
+      {
+        label: '应用设置',
         click: callbacks.onOpenSettings,
+      },
+      {
+        label: '重置悬浮',
+        click: callbacks.onResetFloatingBall,
       },
       { type: 'separator' },
       {

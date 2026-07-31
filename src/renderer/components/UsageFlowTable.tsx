@@ -7,10 +7,11 @@ interface UsageFlowTableProps {
 export default function UsageFlowTable({ display }: UsageFlowTableProps) {
   return (
     <div className="usage-flow-table-wrap">
-      <table className="usage-flow-table">
+      <div className="usage-flow-table-inner">
+        <table className="usage-flow-table">
         <thead>
           <tr>
-            <th>Date (UTC+8)</th>
+            <th title="UTC+8">Date</th>
             <th>Type</th>
             <th>Model</th>
             <th>Tokens</th>
@@ -36,6 +37,7 @@ export default function UsageFlowTable({ display }: UsageFlowTableProps) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

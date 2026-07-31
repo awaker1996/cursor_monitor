@@ -9,6 +9,14 @@ import type {
   UsageFlowQuery,
   TokenSnapshot,
 } from '../shared/types';
+import type {
+  SubscriptionCredentialKind,
+  SubscriptionInfoResult,
+  SubscriptionProviderId,
+  SubscriptionProviderMeta,
+  SubscriptionUsageQuery,
+  SubscriptionUsageResult,
+} from '../shared/subscriptionTypes';
 
 export interface ElectronAPI {
   getSnapshot: () => Promise<TokenSnapshot | null>;
@@ -27,6 +35,22 @@ export interface ElectronAPI {
   onDockStateChanged: (callback: (edge: DockEdge | null) => void) => () => void;
   openSettings: () => void;
   openFlow: () => void;
+  openSubscriptions: () => void;
+  listSubscriptionProviders: () => Promise<SubscriptionProviderMeta[]>;
+  saveSubscriptionKey: (
+    providerId: SubscriptionProviderId,
+    key: string,
+    kind?: SubscriptionCredentialKind,
+  ) => Promise<boolean>;
+  clearSubscriptionKey: (
+    providerId: SubscriptionProviderId,
+    kind?: SubscriptionCredentialKind,
+  ) => Promise<boolean>;
+  fetchSubscriptionInfo: (providerId: SubscriptionProviderId) => Promise<SubscriptionInfoResult>;
+  fetchSubscriptionUsage: (
+    providerId: SubscriptionProviderId,
+    query: SubscriptionUsageQuery,
+  ) => Promise<SubscriptionUsageResult>;
   fetchUsageFlow: (query: UsageFlowQuery, dateRangeLabel?: string) => Promise<UsageFlowFetchResult>;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;

@@ -186,6 +186,10 @@ export default function App() {
         setMousePassthrough(false);
         return;
       }
+      if (dockedEdgeRef.current) {
+        setMousePassthrough(false);
+        return;
+      }
       const el = document.elementFromPoint(clientX, clientY);
       const interactive = el?.closest(INTERACTIVE_SELECTOR);
       setMousePassthrough(!interactive);

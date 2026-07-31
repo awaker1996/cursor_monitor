@@ -44,39 +44,44 @@ export class CredentialVault {
     this.fallbackPath = userDataPath;
   }
 
-  async saveCookie(cookie: string): Promise<void> {
+  /** Legacy cookie account keeps the historical `.credential` filename. */
+  private fallbackFileName(account: string): string {
+    return account === ACCOUNT_NAME ? '.credential' : `.credential-${account}`;
+  }
+
+  async saveSecret(account: string, value: string): Promise<void> {
     const kt = await getKeytar();
     if (kt) {
-      await kt.setPassword(SERVICE_NAME, ACCOUNT_NAME, cookie);
-      log.info('Cookie saved to system credential store');
+      await kt.setPassword(SERVICE_NAME, account, value);
+      log.info('Secret saved to system credential store', { account });
       return;
     }
 
     if (safeStorage.isEncryptionAvailable()) {
-      const encrypted = safeStorage.encryptString(cookie);
+      const encrypted = safeStorage.encryptString(value);
       const fs = await import('fs');
       const path = await import('path');
       if (!this.fallbackPath) throw new Error('Fallback path not configured');
-      const file = path.join(this.fallbackPath, '.credential');
+      const file = path.join(this.fallbackPath, this.fallbackFileName(account));
       fs.writeFileSync(file, encrypted);
-      log.info('Cookie saved to encrypted local storage');
+      log.info('Secret saved to encrypted local storage', { account });
       return;
     }
 
     throw new Error('No secure storage available');
   }
 
-  async getCookie(): Promise<string | null> {
+  async getSecret(account: string): Promise<string | null> {
     const kt = await getKeytar();
     if (kt) {
-      const value = await kt.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+      const value = await kt.getPassword(SERVICE_NAME, account);
       return value ?? null;
     }
 
     if (safeStorage.isEncryptionAvailable() && this.fallbackPath) {
       const fs = await import('fs');
       const path = await import('path');
-      const file = path.join(this.fallbackPath, '.credential');
+      const file = path.join(this.fallbackPath, this.fallbackFileName(account));
       if (!fs.existsSync(file)) return null;
       const encrypted = fs.readFileSync(file);
       return safeStorage.decryptString(encrypted);
@@ -85,25 +90,41 @@ export class CredentialVault {
     return null;
   }
 
-  async clearCookie(): Promise<void> {
+  async clearSecret(account: string): Promise<void> {
     const kt = await getKeytar();
     if (kt) {
-      await kt.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
+      await kt.deletePassword(SERVICE_NAME, account);
     }
 
     if (this.fallbackPath) {
       const fs = await import('fs');
       const path = await import('path');
-      const file = path.join(this.fallbackPath, '.credential');
+      const file = path.join(this.fallbackPath, this.fallbackFileName(account));
       if (fs.existsSync(file)) fs.unlinkSync(file);
     }
 
-    log.info('Cookie credentials cleared');
+    log.info('Secret cleared', { account });
+  }
+
+  async hasSecret(account: string): Promise<boolean> {
+    const value = await this.getSecret(account);
+    return Boolean(value && value.trim().length > 0);
+  }
+
+  async saveCookie(cookie: string): Promise<void> {
+    await this.saveSecret(ACCOUNT_NAME, cookie);
+  }
+
+  async getCookie(): Promise<string | null> {
+    return this.getSecret(ACCOUNT_NAME);
+  }
+
+  async clearCookie(): Promise<void> {
+    await this.clearSecret(ACCOUNT_NAME);
   }
 
   async hasCookie(): Promise<boolean> {
-    const cookie = await this.getCookie();
-    return Boolean(cookie && cookie.trim().length > 0);
+    return this.hasSecret(ACCOUNT_NAME);
   }
 }
 

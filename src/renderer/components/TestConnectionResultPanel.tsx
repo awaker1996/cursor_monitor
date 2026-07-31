@@ -5,7 +5,8 @@ import {
   formatBillingDate,
   formatPercent,
   formatTokenCount,
-  FIRST_PARTY_MODELS_LABEL,
+  CURSOR_MODELS_LABEL,
+  OTHER_MODELS_LABEL,
 } from '../../shared/format';
 import type { TestConnectionResult, TokenQuota } from '../../shared/types';
 import MetricRow from './MetricRow';
@@ -74,8 +75,8 @@ export default function TestConnectionResultPanel({ result }: TestConnectionResu
 
   const quotaLines = snapshot
     ? [
-        formatQuotaLine('API 配额', snapshot.api),
-        formatQuotaLine(`${FIRST_PARTY_MODELS_LABEL} 配额`, snapshot.auto),
+        formatQuotaLine(`${CURSOR_MODELS_LABEL} 配额`, snapshot.auto),
+        formatQuotaLine(`${OTHER_MODELS_LABEL} 配额`, snapshot.api),
       ].filter((line): line is string => line !== null)
     : [];
 

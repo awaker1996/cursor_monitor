@@ -14,10 +14,12 @@ import type {
   TokenSnapshot,
   UsageFlowDisplay,
   UsageFlowEntry,
+  UsageFlowModelStats,
   UsageMetrics,
 } from '../shared/types';
-import { FIRST_PARTY_MODELS_LABEL, formatUsageFlowDate } from '../shared/format';
+import { CURSOR_MODELS_LABEL, OTHER_MODELS_LABEL, formatUsageFlowDate } from '../shared/format';
 import {
+  extractUsageEventTimestamp,
   mapUsageFlowEntry,
 } from '../shared/usageFlowFormat';
 
@@ -121,7 +123,7 @@ function isAutoModel(model: string | undefined): boolean {
 }
 
 /**
- * Prefer Cursor `tier` when present (1 ≈ API, 2 ≈ First-party);
+ * Prefer Cursor `tier` when present (1 ≈ Other Models, 2 ≈ Cursor Models);
  * otherwise fall back to model-name heuristics.
  */
 function isFirstPartyAggregation(item: RawAggregatedUsageItem): boolean {
@@ -157,15 +159,16 @@ export function buildUsageFlowPage(
   query: { page: number; pageSize: number; dateRangeLabel?: string },
 ): UsageFlowDisplay {
   const events = eventsResponse?.usageEventsDisplay ?? [];
-  const totalCount = eventsResponse?.totalUsageEventsCount ?? events.length;
+  const totalCount = resolveUsageFlowTotalCount(eventsResponse, events.length);
   const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
+  const page = clampUsageFlowPage(query.page, totalPages);
 
   if (events.length === 0) {
     return {
       available: false,
       incomplete: eventsResponse?.eventsComplete === false,
       totalCount,
-      page: query.page,
+      page,
       pageSize: query.pageSize,
       totalPages,
       dateRangeLabel: query.dateRangeLabel,
@@ -173,6 +176,84 @@ export function buildUsageFlowPage(
     };
   }
 
+  const entries = mapAndSortUsageFlowEntries(events);
+
+  return {
+    available: true,
+    incomplete: eventsResponse?.eventsComplete === false,
+    totalCount,
+    page,
+    pageSize: query.pageSize,
+    totalPages,
+    dateRangeLabel: query.dateRangeLabel,
+    entries,
+  };
+}
+
+/** Client-side slice after fetching full event list (avoids server page boundary gaps). */
+export function buildUsageFlowPageFromEvents(
+  allEvents: RawUsageEvent[],
+  query: { page: number; pageSize: number; dateRangeLabel?: string },
+  reportedTotal?: number,
+): UsageFlowDisplay {
+  const deduped = dedupeUsageFlowEvents(allEvents);
+  const totalCount = deduped.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
+  const page = clampUsageFlowPage(query.page, totalPages);
+  const start = (page - 1) * query.pageSize;
+  const allEntries = mapAndSortUsageFlowEntries(deduped);
+  const entries = allEntries.slice(start, start + query.pageSize);
+
+  return {
+    available: totalCount > 0,
+    incomplete:
+      reportedTotal && reportedTotal > 0 && deduped.length < reportedTotal ? true : undefined,
+    totalCount,
+    page,
+    pageSize: query.pageSize,
+    totalPages,
+    dateRangeLabel: query.dateRangeLabel,
+    entries,
+  };
+}
+
+export function resolveUsageFlowTotalCount(
+  eventsResponse: RawUsageEventsResponse | null | undefined,
+  fallbackLength = 0,
+): number {
+  const reported = eventsResponse?.totalUsageEventsCount;
+  if (typeof reported === 'number' && Number.isFinite(reported) && reported > 0) {
+    return Math.floor(reported);
+  }
+  return fallbackLength;
+}
+
+function clampUsageFlowPage(page: number, totalPages: number): number {
+  if (!Number.isFinite(page) || page < 1) return 1;
+  return Math.min(Math.floor(page), totalPages);
+}
+
+function usageFlowEventKey(event: RawUsageEvent): string {
+  const ts = extractUsageEventTimestamp(event) ?? '';
+  const tokens = eventTokens(event);
+  const kind = event.kind ?? '';
+  const model = event.model ?? '';
+  return `${ts}|${model}|${kind}|${tokens}`;
+}
+
+function dedupeUsageFlowEvents(events: RawUsageEvent[]): RawUsageEvent[] {
+  const seen = new Set<string>();
+  const out: RawUsageEvent[] = [];
+  for (const event of events) {
+    const key = usageFlowEventKey(event);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(event);
+  }
+  return out;
+}
+
+function mapAndSortUsageFlowEntries(events: RawUsageEvent[]): UsageFlowEntry[] {
   const entries: UsageFlowEntry[] = events.map((event) =>
     mapUsageFlowEntry(event, eventTokens(event), eventCostCents(event), formatUsageFlowDate),
   );
@@ -184,15 +265,57 @@ export function buildUsageFlowPage(
     return b.timestamp.localeCompare(a.timestamp);
   });
 
+  return entries;
+}
+
+/** Sum tokens by model for the flow window's selected date range. */
+export function buildUsageFlowModelStats(
+  aggregated: RawAggregatedUsageResponse | null | undefined,
+  events: RawUsageEventsResponse | null | undefined,
+): UsageFlowModelStats {
+  const modelMap = new Map<string, number>();
+
+  const rows = aggregated?.aggregations;
+  if (Array.isArray(rows) && rows.length > 0) {
+    for (const item of rows) {
+      const model = normalizeModelName(item.modelIntent);
+      const tokens = aggregationTokens(item);
+      if (tokens <= 0) continue;
+      modelMap.set(model, (modelMap.get(model) ?? 0) + tokens);
+    }
+  } else {
+    for (const event of events?.usageEventsDisplay ?? []) {
+      const model = normalizeModelName(event.model);
+      const tokens = eventTokens(event);
+      if (tokens <= 0) continue;
+      modelMap.set(model, (modelMap.get(model) ?? 0) + tokens);
+    }
+  }
+
+  if (modelMap.size === 0) {
+    return { available: false, totalTokens: 0, models: [] };
+  }
+
+  const totalTokens = [...modelMap.values()].reduce((sum, value) => sum + value, 0);
+  const models = [...modelMap.entries()]
+    .map(([model, tokens]) => ({
+      model,
+      tokens,
+      sharePercent:
+        totalTokens > 0 ? Math.round((tokens / totalTokens) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.tokens - a.tokens);
+
+  const incomplete =
+    !Array.isArray(rows) || rows.length === 0
+      ? events?.eventsComplete === false
+      : undefined;
+
   return {
     available: true,
-    incomplete: eventsResponse?.eventsComplete === false,
-    totalCount,
-    page: query.page,
-    pageSize: query.pageSize,
-    totalPages,
-    dateRangeLabel: query.dateRangeLabel,
-    entries,
+    incomplete: incomplete || undefined,
+    totalTokens,
+    models,
   };
 }
 
@@ -530,8 +653,8 @@ export function aggregateIncludedUsageByModel(
   }
 
   const categories = [
-    buildIncludedUsageCategory('api', 'API', apiModels, apiUsedPercent),
-    buildIncludedUsageCategory('firstParty', FIRST_PARTY_MODELS_LABEL, autoModels, autoUsedPercent),
+    buildIncludedUsageCategory('firstParty', CURSOR_MODELS_LABEL, autoModels, autoUsedPercent),
+    buildIncludedUsageCategory('api', OTHER_MODELS_LABEL, apiModels, apiUsedPercent),
   ].filter((category): category is IncludedUsageCategory => category !== null);
 
   return {
@@ -572,8 +695,8 @@ export function aggregateIncludedUsageFromAggregations(
   }
 
   const categories = [
-    buildIncludedUsageCategory('api', 'API', apiModels, apiUsedPercent),
-    buildIncludedUsageCategory('firstParty', FIRST_PARTY_MODELS_LABEL, autoModels, autoUsedPercent),
+    buildIncludedUsageCategory('firstParty', CURSOR_MODELS_LABEL, autoModels, autoUsedPercent),
+    buildIncludedUsageCategory('api', OTHER_MODELS_LABEL, apiModels, apiUsedPercent),
   ].filter((category): category is IncludedUsageCategory => category !== null);
 
   return {

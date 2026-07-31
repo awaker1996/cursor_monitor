@@ -7,19 +7,30 @@ export function formatIncludedUsageTokens(value: number | null | undefined): str
   return String(Math.round(value));
 }
 
-const usageFlowDateFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Asia/Shanghai',
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: true,
-});
-
 export function formatUsageFlowDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '--';
-  return usageFlowDateFormatter.format(date);
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const pick = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((part) => part.type === type)?.value ?? '';
+
+  const year = pick('year');
+  const month = pick('month');
+  const day = pick('day');
+  const hour = pick('hour');
+  const minute = pick('minute');
+
+  if (!year || !month || !day) return '--';
+  return `${year}/${month}/${day} ${hour}:${minute}`;
 }
 
 export function formatBillingPeriodLabel(
@@ -82,8 +93,11 @@ export function totalLimit(snapshot: TokenSnapshot | null): number | null {
 export type MetricStatusLevel = 'ok' | 'warn' | 'danger' | 'unknown';
 export type MetricAccent = 'total' | 'api' | 'auto' | 'neutral';
 
-/** Official Cursor dashboard label for the first-party models usage pool (formerly Auto + Composer). */
-export const FIRST_PARTY_MODELS_LABEL = 'First-party models';
+/** Official Cursor dashboard label for the Cursor-owned models usage pool (formerly First-party models / Auto + Composer). */
+export const CURSOR_MODELS_LABEL = 'Cursor Models';
+
+/** Official Cursor dashboard label for the non-Cursor models usage pool (formerly API). */
+export const OTHER_MODELS_LABEL = 'Other Models';
 
 export interface MetricDisplayItem {
   key: string;
@@ -258,22 +272,22 @@ export function buildMetricItems(metrics: UsageMetrics | undefined): MetricDispl
   const m = metrics ?? emptyMetrics();
   // 今日消耗优先展示；总消耗已在顶部 dashboard-summary 单独呈现，这里不再重复。
   return [
-    buildMetricItem('apiToday', '今日 API', m.apiTodayUsedPercent, m.apiTodayTokens, 'api'),
     buildMetricItem(
       'autoToday',
-      `今日 ${FIRST_PARTY_MODELS_LABEL}`,
+      `今日 ${CURSOR_MODELS_LABEL}`,
       m.autoTodayUsedPercent,
       m.autoTodayTokens,
       'auto',
     ),
-    buildMetricItem('api', '周期 API', m.apiUsedPercent, m.apiTokens, 'api'),
+    buildMetricItem('apiToday', `今日 ${OTHER_MODELS_LABEL}`, m.apiTodayUsedPercent, m.apiTodayTokens, 'api'),
     buildMetricItem(
       'auto',
-      `周期 ${FIRST_PARTY_MODELS_LABEL}`,
+      `周期 ${CURSOR_MODELS_LABEL}`,
       m.autoUsedPercent,
       m.autoTokens,
       'auto',
     ),
+    buildMetricItem('api', `周期 ${OTHER_MODELS_LABEL}`, m.apiUsedPercent, m.apiTokens, 'api'),
   ];
 }
 
@@ -345,10 +359,10 @@ export function formatOrbSummary(snapshot: TokenSnapshot | null): {
   };
 }
 
-/** Multi-line tray tooltip aligned with overview panel (no remaining quota). */
+/** Multi-line tray tooltip: one metric or label per line. */
 export function formatTrayTooltip(snapshot: TokenSnapshot | null): string {
   if (!snapshot) {
-    return 'Cursor Token Monitor · 暂无数据';
+    return '暂无数据';
   }
 
   const m = snapshot.metrics;
@@ -361,8 +375,11 @@ export function formatTrayTooltip(snapshot: TokenSnapshot | null): string {
 
   return [
     `总消耗 ${formatUsedPercent(m.totalUsedPercent ?? null)}`,
-    `今日 API ${formatUsedPercent(m.apiTodayUsedPercent ?? null)} · 今日 FP ${formatUsedPercent(m.autoTodayUsedPercent ?? null)}`,
-    `周期 API ${formatUsedPercent(m.apiUsedPercent ?? null)} · 周期 FP ${formatUsedPercent(m.autoUsedPercent ?? null)}`,
-    `${sourceLabel} · ${updatedAt}`,
+    `今日 ${CURSOR_MODELS_LABEL} ${formatUsedPercent(m.autoTodayUsedPercent ?? null)}`,
+    `今日 ${OTHER_MODELS_LABEL} ${formatUsedPercent(m.apiTodayUsedPercent ?? null)}`,
+    `周期 ${CURSOR_MODELS_LABEL} ${formatUsedPercent(m.autoUsedPercent ?? null)}`,
+    `周期 ${OTHER_MODELS_LABEL} ${formatUsedPercent(m.apiUsedPercent ?? null)}`,
+    `来源 ${sourceLabel}`,
+    `更新 ${updatedAt}`,
   ].join('\n');
 }

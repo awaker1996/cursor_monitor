@@ -4,7 +4,7 @@
  */
 import { todayUsedPercent, normalizeCookie } from '../src/core/normalizer';
 import { formatOrbSummary } from '../src/shared/format';
-import { mergeTodayMetricsFromCache } from '../src/core/snapshotMerge';
+import { mergeCycleTokensFromCache, mergeTodayMetricsFromCache } from '../src/core/snapshotMerge';
 
 const CYCLE = 42.5;
 
@@ -271,6 +271,64 @@ console.log('mergeTodayMetricsFromCache');
     'partial merge restores First-party tokens',
     partiallyMerged.metrics.autoTodayTokens === 800,
   );
+}
+
+console.log('mergeCycleTokensFromCache');
+
+{
+  const fetchedAt = new Date().toISOString();
+  const withDetail = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: { limit: 100, apiPercentUsed: 30, autoPercentUsed: 12, totalPercentUsed: 42 },
+        },
+      },
+      aggregatedUsage: {
+        aggregations: [
+          { modelIntent: 'gpt-4', inputTokens: '10000', totalCents: 2000, tier: 1 },
+          { modelIntent: 'composer-2.5-fast', inputTokens: '5000', totalCents: 500, tier: 2 },
+        ],
+      },
+    },
+    fetchedAt,
+  );
+  assert('previous has token detail', withDetail.metrics.totalTokens === 15000);
+
+  // Refresh where events + aggregated both failed (network resets).
+  const noDetail = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: { limit: 100, apiPercentUsed: 31, autoPercentUsed: 12, totalPercentUsed: 43 },
+        },
+      },
+    },
+    fetchedAt,
+  );
+  assert('failed refresh drops token detail', noDetail.metrics.totalTokens === null);
+
+  const merged = mergeCycleTokensFromCache(noDetail, withDetail);
+  assert('cycle merge restores totalTokens', merged.metrics.totalTokens === 15000);
+  assert('cycle merge restores apiTokens', merged.metrics.apiTokens === 10000);
+  assert('cycle merge restores autoTokens', merged.metrics.autoTokens === 5000);
+  assert('cycle merge keeps fresh percent', approx(merged.metrics.totalUsedPercent, 43));
+  assert('cycle merge marks stale', merged.stale === true);
+
+  const otherCycle = {
+    ...withDetail,
+    billingCycleStart: '2026-06-01T00:00:00.000Z',
+    billingCycleEnd: '2026-07-01T00:00:00.000Z',
+  };
+  const notMerged = mergeCycleTokensFromCache(noDetail, otherCycle);
+  assert('different cycle not merged', notMerged.metrics.totalTokens === null);
+
+  const fresh = mergeCycleTokensFromCache(withDetail, withDetail);
+  assert('fresh detail untouched', fresh.stale === false && fresh.metrics.totalTokens === 15000);
 }
 
 console.log('orb summary');

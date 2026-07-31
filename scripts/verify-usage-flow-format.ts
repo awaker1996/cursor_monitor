@@ -2,7 +2,7 @@
  * Verify usage flow field mapping against Cursor dashboard shapes.
  * Run: npx tsx scripts/verify-usage-flow-format.ts
  */
-import { buildUsageFlowPage } from '../src/core/normalizer';
+import { buildUsageFlowPage, buildUsageFlowPageFromEvents } from '../src/core/normalizer';
 import {
   extractUsageEventTimestamp,
   formatUsageEventKind,
@@ -90,6 +90,26 @@ console.log('\nmapUsageFlowEntry max badge');
   assert('max mode flag', entry.modelMax === true);
   assert('included type', entry.type === 'Included');
   assert('model name', entry.model === 'composer-2.5-fast');
+}
+
+console.log('\nbuildUsageFlowPageFromEvents pagination');
+
+{
+  const events = Array.from({ length: 34 }, (_, index) => ({
+    timestamp: String(1_750_979_225_854 - index * 60_000),
+    model: 'composer-2.5-fast',
+    kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS',
+    tokenUsage: { inputTokens: 1000 + index },
+  }));
+
+  const page1 = buildUsageFlowPageFromEvents(events, { page: 1, pageSize: 20 }, 34);
+  assert('page1 count', page1.entries.length === 20, String(page1.entries.length));
+  assert('page1 total', page1.totalCount === 34);
+  assert('page1 pages', page1.totalPages === 2);
+
+  const page2 = buildUsageFlowPageFromEvents(events, { page: 2, pageSize: 20 }, 34);
+  assert('page2 count', page2.entries.length === 14, String(page2.entries.length));
+  assert('page2 page index', page2.page === 2);
 }
 
 console.log('\nbuildUsageFlowPage integration');

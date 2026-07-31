@@ -1,6 +1,6 @@
 # Cursor Token Monitor — 项目参考文档
 
-> Windows 桌面悬浮球，定期显示 Cursor 账号 **First-party models / API** 用量与余量。  
+> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量。  
 > 本文档整合需求说明、架构设计、实现细节、使用与维护指南，便于后续查阅。
 
 ---
@@ -37,14 +37,14 @@
 ### 背景与目标
 
 - **背景**：需要在桌面实时查看 Cursor 账号 token 余量，避免频繁打开网页或控制台。
-- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 First-party models 与 API 用量概览、周期明细及余量。
+- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 Cursor Models 与 Other Models 用量概览、周期明细及余量。
 - **数据策略**：官方接口优先（`OfficialProvider`），连续失败后自动回退到 Dashboard Cookie 接口（`CookieProvider`）。Cookie 方案优先读取 `usage-summary` 汇总数据；`get-aggregated-usage-events` 用于 Included Usage 周期模型明细；`get-filtered-usage-events` 作为今日/周期 token 与回退补充，避免明细接口不稳定时影响主数据展示。
 
 ### 范围
 
 **范围内：**
 - Windows 悬浮球（拖拽、置顶、贴边半隐收起、托盘）
-- First-party models / API 余量与 Dashboard 用量指标展示（概览 / 用量切换）
+- Cursor Models / Other Models 余量与 Dashboard 用量指标展示（概览 / 用量切换）
 - 用量流水独立窗口（日期筛选、分页、手动刷新；字段对齐 cursor.com 控制台）
 - 系统托盘悬停展示概览用量摘要；右键打开流水 / 设置 / 退出
 - 自动刷新与间隔配置
@@ -63,8 +63,8 @@
 
 | 术语 | 含义 |
 |---|---|
-| auto | Cursor First-party models 池（原 Auto + Composer，含 Auto、Composer、Grok 等自有模型） |
-| api | Cursor API 调用相关 token |
+| auto | Cursor Models 池（原 First-party models / Auto + Composer，含 Auto、Composer、Grok 等自有模型） |
+| api | Other Models 池（原 API，非 Cursor 自有模型调用相关 token） |
 | Provider | 数据获取单元（Official / Cookie） |
 | TokenSnapshot | 统一后的展示数据结构 |
 
@@ -100,10 +100,10 @@ npm run dist
 ### 首次使用
 
 1. 启动应用，屏幕右下角出现悬浮球
-2. 右键系统托盘 → **设置** 或 **流水**
+2. 右键系统托盘 → **应用设置** 或 **查看流水**
 3. 在浏览器 DevTools 中复制 `WorkosCursorSessionToken` 的值，或复制包含该字段的完整 `cursor.com` Cookie，粘贴并保存
 4. 点击 **测试连接** 验证
-5. 悬浮球按设定间隔自动刷新，展示 First-party models / API 余量及数据来源
+5. 悬浮球按设定间隔自动刷新，展示 Cursor Models / Other Models 余量及数据来源
 
 ### 获取 Cookie 方法
 
@@ -129,12 +129,12 @@ npm run dist
 **概览视图：**
 
 - 顶部 dashboard：总消耗百分比、进度条、周期 token 汇总、状态 pill、来源、上次刷新时间
-- 四张 metric 卡片纵向排列：今日 API、今日 First-party models、周期 API、周期 First-party models（百分比 + token 明细）
+- 四张 metric 卡片纵向排列：今日 Cursor Models、今日 Other Models、周期 Cursor Models、周期 Other Models（百分比 + token 明细）
 - 退避 / 暂停 / 无数据等状态提示
 
 **用量视图（有 Included Usage 数据时可用）：**
 
-- 按模型聚合的 Included Usage 列表（API / First-party 分区，账单周期、tokens、占比）
+- 按模型聚合的 Included Usage 列表（Cursor Models / Other Models 分区，账单周期、tokens、占比）
 - 列表区域独立滚动，概览视图无纵向滚动条
 
 **通用：**
@@ -166,8 +166,8 @@ npm run dist
 
 ### FR-06 托盘与生命周期
 
-- 托盘菜单：流水、设置、退出（不再提供立即刷新 / 暂停恢复；刷新与暂停仍可通过悬浮球与设置页操作）
-- 悬停托盘图标：多行概览用量摘要（总消耗、今日/周期 API 与 FP 分项、来源与更新时间；随快照刷新更新，无快照时显示「暂无数据」）
+- 托盘菜单：查看流水、应用设置、重置悬浮、退出（不再提供立即刷新 / 暂停恢复；刷新与暂停仍可通过悬浮球与设置页操作）
+- 悬停托盘图标：多行概览用量摘要（总消耗、今日/周期 Cursor Models 与 Other Models 分项、来源与更新时间；随快照刷新更新，无快照时显示「暂无数据」）
 - 关闭悬浮窗后驻留托盘，不强制退出
 
 ### FR-07 贴边缘自动收起
@@ -189,7 +189,7 @@ npm run dist
 
 ### FR-10 用量流水窗口
 
-- 托盘「流水」或相关入口打开独立窗口，**不依赖** poller 快照自动刷新
+- 托盘「查看流水」或相关入口打开独立窗口，**不依赖** poller 快照自动刷新
 - 通过 `fetch-usage-flow` IPC 手动拉取（打开窗口 / 刷新 / 切换筛选或分页时请求）
 - 日期快捷筛选：1d / 7d / 30d / MTD / Last month，以及自定义日期范围（按东八区日历日）
 - 服务端分页：默认每页 100 条，上一页 / 下一页
@@ -552,15 +552,16 @@ OfficialProvider 请求
 
 ```text
 总消耗 12.34%
-今日 API 1.20% · 今日 FP 2.30%
-周期 API 10.00% · 周期 FP 5.00%
+今日 Cursor Models 2.30% · 今日 Other Models 1.20%
+周期 Cursor Models 5.00% · 周期 Other Models 10.00%
 官方 · 14:32:05
 ```
 
 **右键菜单**
 
-- 流水
-- 设置
+- 查看流水
+- 应用设置
+- 重置悬浮
 - 退出
 
 ---
@@ -648,14 +649,14 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 - [ ] 启动后 5 秒内出现悬浮球，可拖拽、置顶、贴边半隐收起
 - [ ] 折叠态显示余量百分比；展开概览可见总消耗与 4 张纵向 metric 卡片
 - [ ] 有 Included Usage 时可在概览/用量间切换，概览无纵向滚动
-- [ ] 稳定展示 First-party models / API 数值与 Dashboard 指标，标注数据来源
+- [ ] 稳定展示 Cursor Models / Other Models 数值与 Dashboard 指标，标注数据来源
 - [ ] 自动刷新默认开启，间隔可改（30–3600 秒）且立即生效
 - [ ] 非法间隔输入被拦截，轮询不崩溃
 - [ ] 官方接口失败后自动回退 Cookie，界面有提示
 - [ ] 清除凭据后停止敏感请求，UI 给出引导
 - [ ] 快照缓存在启动/失败时可展示 stale 数据（状态 pill 标识）
 - [ ] 托盘悬停显示多行概览用量，随刷新更新
-- [ ] 托盘右键仅含流水、设置、退出
+- [ ] 托盘右键含查看流水、应用设置、重置悬浮、退出
 - [ ] 流水窗可按日期筛选与分页手动刷新，五列与控制台一致
 - [ ] 设置页连接测试展示结构化详情；凭据区位于最上方
 - [ ] 自定义图标可即时生效于托盘与设置窗

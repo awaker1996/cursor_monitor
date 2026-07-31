@@ -14,10 +14,10 @@ export function createFlowWindow(isDev: boolean, settings?: AppSettings): Browse
   const icon = settings ? loadWindowIcon(settings) : undefined;
 
   flowWindow = new BrowserWindow({
-    width: 900,
-    height: 600,
-    minWidth: 640,
-    minHeight: 400,
+    width: 1120,
+    height: 720,
+    minWidth: 800,
+    minHeight: 480,
     title: 'Cursor Token Monitor - 流水',
     resizable: true,
     ...(icon && !icon.isEmpty() ? { icon } : {}),

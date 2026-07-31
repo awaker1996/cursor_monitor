@@ -11,7 +11,7 @@ function categoryAccent(key: string): CategoryAccent {
 }
 
 function categoryBadge(accent: CategoryAccent): string {
-  return accent === 'api' ? 'API' : 'FP';
+  return accent === 'api' ? 'Other' : 'Cursor';
 }
 
 export default function IncludedUsageTable({ display }: IncludedUsageTableProps) {

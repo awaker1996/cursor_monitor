@@ -40,6 +40,7 @@ export default defineConfig({
         index: path.resolve(__dirname, 'index.html'),
         settings: path.resolve(__dirname, 'settings.html'),
         flow: path.resolve(__dirname, 'flow.html'),
+        subscriptions: path.resolve(__dirname, 'subscriptions.html'),
       },
     },
   },

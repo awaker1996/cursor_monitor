@@ -5,16 +5,20 @@ import { SettingsStore } from '../src/settings/SettingsStore';
 import { credentialVault } from '../src/security/CredentialVault';
 import { ProviderManager } from '../src/core/providers/ProviderManager';
 import { Poller } from '../src/core/poller';
+import { SubscriptionManager } from '../src/core/subscriptions/SubscriptionManager';
 import {
   createFloatingBallWindow,
   enforceFloatingBallWidth,
+  getDefaultFloatingBallBounds,
   getFloatingBallWindow,
   sendToFloatingBall,
 } from './windows/floatingBall';
 import { createSettingsWindow } from './windows/settings';
 import { createFlowWindow } from './windows/flow';
+import { createSubscriptionsWindow } from './windows/subscriptions';
 import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip } from './tray';
 import {
+  clearDockState,
   getDockState,
   handleMoveWhileDocked,
   tryDockWindow,
@@ -34,6 +38,11 @@ import {
   type UsageFlowFetchResult,
   type UsageFlowQuery,
 } from '../src/shared/types';
+import type {
+  SubscriptionCredentialKind,
+  SubscriptionProviderId,
+  SubscriptionUsageQuery,
+} from '../src/shared/subscriptionTypes';
 import { createLogger } from '../src/utils/logger';
 import { formatTrayTooltip } from '../src/shared/format';
 
@@ -42,6 +51,7 @@ const isDev = !app.isPackaged;
 
 let settingsStore: SettingsStore;
 let providerManager: ProviderManager;
+let subscriptionManager: SubscriptionManager;
 let poller: Poller;
 let isPaused = false;
 
@@ -184,6 +194,25 @@ function broadcastDockState(edge: import('../src/shared/types').DockEdge | null)
   sendToFloatingBall('dock-state-changed', edge);
 }
 
+function resetFloatingBallVisibility(): void {
+  let win = getFloatingBallWindow();
+  if (!win || win.isDestroyed()) {
+    win = createFloatingBallWindow(isDev);
+  }
+  clearDockState();
+  if (!win || win.isDestroyed()) return;
+
+  const bounds = getDefaultFloatingBallBounds();
+  win.setBounds(bounds);
+  enforceFloatingBallWidth(win);
+  win.setIgnoreMouseEvents(false);
+  broadcastDockState(null);
+
+  if (!win.isVisible()) {
+    win.show();
+  }
+}
+
 function refreshAppIcons(): void {
   updateTrayIcon(loadTrayIcon(settingsStore.get()));
 }
@@ -296,6 +325,50 @@ function setupIpc(): void {
     createFlowWindow(isDev, settingsStore.get());
   });
 
+  ipcMain.on('open-subscriptions', () => {
+    createSubscriptionsWindow(isDev, settingsStore.get());
+  });
+
+  ipcMain.handle('subscription-list-providers', () => subscriptionManager.listProviders());
+
+  ipcMain.handle(
+    'subscription-save-key',
+    async (
+      _event,
+      providerId: SubscriptionProviderId,
+      key: string,
+      kind?: SubscriptionCredentialKind,
+    ) => {
+      if (!key || !key.trim()) throw new Error('凭据不能为空');
+      await subscriptionManager.saveKey(providerId, key, kind ?? 'apiKey');
+      return true;
+    },
+  );
+
+  ipcMain.handle(
+    'subscription-clear-key',
+    async (_event, providerId: SubscriptionProviderId, kind?: SubscriptionCredentialKind) => {
+      await subscriptionManager.clearKey(providerId, kind ?? 'apiKey');
+      return true;
+    },
+  );
+
+  ipcMain.handle('subscription-fetch-info', (_event, providerId: SubscriptionProviderId) =>
+    subscriptionManager.fetchInfo(providerId),
+  );
+
+  ipcMain.handle(
+    'subscription-fetch-usage',
+    (_event, providerId: SubscriptionProviderId, query: SubscriptionUsageQuery) => {
+      const month = Number.isInteger(query?.month) ? query.month : 0;
+      const year = Number.isInteger(query?.year) ? query.year : 0;
+      if (month < 1 || month > 12 || year < 2000 || year > 2100) {
+        return { success: false, providerId, message: '无效的查询月份' };
+      }
+      return subscriptionManager.fetchUsage(providerId, { month, year });
+    },
+  );
+
   ipcMain.handle(
     'fetch-usage-flow',
     async (_event, query: UsageFlowQuery, dateRangeLabel?: string): Promise<UsageFlowFetchResult> => {
@@ -345,10 +418,12 @@ function setupIpc(): void {
     if (!win || win.isDestroyed()) return null;
     const point = screen.getCursorScreenPoint();
     const bounds = win.getContentBounds();
-    return {
-      x: point.x - bounds.x,
-      y: point.y - bounds.y,
-    };
+    const x = point.x - bounds.x;
+    const y = point.y - bounds.y;
+    if (x < 0 || y < 0 || x >= bounds.width || y >= bounds.height) {
+      return null;
+    }
+    return { x, y };
   });
 
   ipcMain.on('move-window', (event, payload: {
@@ -439,6 +514,7 @@ app.whenReady().then(async () => {
   settingsStore = new SettingsStore();
   providerManager = new ProviderManager(settingsStore);
   await providerManager.initialize();
+  subscriptionManager = new SubscriptionManager(settingsStore);
   poller = new Poller(providerManager, settingsStore);
 
   setupIpc();
@@ -450,7 +526,9 @@ app.whenReady().then(async () => {
   createTray({
     getIcon: () => loadTrayIcon(settingsStore.get()),
     onOpenFlow: () => createFlowWindow(isDev, settingsStore.get()),
+    onOpenSubscriptions: () => createSubscriptionsWindow(isDev, settingsStore.get()),
     onOpenSettings: () => createSettingsWindow(isDev, settingsStore.get()),
+    onResetFloatingBall: () => resetFloatingBallVisibility(),
     onQuit: () => app.quit(),
   });
 

@@ -11,6 +11,8 @@ import {
 } from './windows/floatingBall';
 
 export const DOCK_THRESHOLD = 24;
+/** When two edges are within threshold and this close, prefer left/right over top/bottom. */
+export const CORNER_DOCK_TIE = 8;
 export const PEEK_TAB_WIDTH = 32;
 export const PEEK_TAB_LENGTH = 72;
 export const ORB_WINDOW_PADDING = 12;
@@ -34,6 +36,12 @@ const dockState: DockState = {
 
 export function getDockState(): { docked: boolean; edge: DockEdge | null } {
   return { docked: dockState.docked, edge: dockState.edge };
+}
+
+export function clearDockState(): void {
+  dockState.docked = false;
+  dockState.edge = null;
+  dockState.savedBounds = null;
 }
 
 function getOrbAnchorRect(bounds: Electron.Rectangle): Electron.Rectangle {
@@ -146,18 +154,19 @@ function getDockedWindowBounds(
     height: ORB_WINDOW_HEIGHT,
   };
 
+  const hide = ORB_DOCK_HIDE_OFFSET;
   switch (edge) {
     case 'right':
-      next.x = workArea.x + workArea.width - ORB_PANEL_WIDTH;
+      next.x = workArea.x + workArea.width - ORB_PANEL_WIDTH + hide;
       break;
     case 'left':
-      next.x = workArea.x;
+      next.x = workArea.x - hide;
       break;
     case 'bottom':
-      next.y = workArea.y + workArea.height - ORB_WINDOW_HEIGHT;
+      next.y = workArea.y + workArea.height - ORB_WINDOW_HEIGHT + hide;
       break;
     case 'top':
-      next.y = workArea.y;
+      next.y = workArea.y - hide;
       break;
   }
 
@@ -197,6 +206,21 @@ export function tryDockWindow(win: BrowserWindow, enabled: boolean): DockEdge | 
     if (dists[edge] < minDist) {
       minDist = dists[edge];
       nearest = edge;
+    }
+  }
+
+  if (minDist <= DOCK_THRESHOLD) {
+    const horiz: DockEdge[] = ['left', 'right'];
+    const vert: DockEdge[] = ['top', 'bottom'];
+    const horizIn = horiz.filter((e) => dists[e] <= DOCK_THRESHOLD);
+    const vertIn = vert.filter((e) => dists[e] <= DOCK_THRESHOLD);
+    if (horizIn.length > 0 && vertIn.length > 0) {
+      const bestH = horizIn.reduce((a, b) => (dists[a] <= dists[b] ? a : b));
+      const bestV = vertIn.reduce((a, b) => (dists[a] <= dists[b] ? a : b));
+      if (Math.abs(dists[bestH] - dists[bestV]) <= CORNER_DOCK_TIE) {
+        nearest = bestH;
+        minDist = dists[bestH];
+      }
     }
   }
 

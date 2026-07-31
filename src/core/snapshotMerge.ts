@@ -29,6 +29,44 @@ function mergeTodayField<T>(next: T | null | undefined, previous: T | null | und
   return null;
 }
 
+function hasCycleTokenValue(metrics: UsageMetrics): boolean {
+  return (
+    metrics.totalTokens !== null || metrics.apiTokens !== null || metrics.autoTokens !== null
+  );
+}
+
+/**
+ * When a refresh loses the cycle token detail (events + aggregated endpoints
+ * both failed, e.g. TLS resets), keep the last known values from the same
+ * billing cycle instead of showing "token 明细不可用".
+ */
+export function mergeCycleTokensFromCache(
+  next: TokenSnapshot,
+  previous: TokenSnapshot | null | undefined,
+): TokenSnapshot {
+  if (!previous || !hasCycleTokenValue(previous.metrics)) return next;
+  if (!isSameBillingCycle(next, previous)) return next;
+
+  const usesCachedValue =
+    (next.metrics.totalTokens == null && previous.metrics.totalTokens != null) ||
+    (next.metrics.apiTokens == null && previous.metrics.apiTokens != null) ||
+    (next.metrics.autoTokens == null && previous.metrics.autoTokens != null);
+  if (!usesCachedValue) return next;
+
+  const metrics: UsageMetrics = {
+    ...next.metrics,
+    totalTokens: mergeTodayField(next.metrics.totalTokens, previous.metrics.totalTokens),
+    apiTokens: mergeTodayField(next.metrics.apiTokens, previous.metrics.apiTokens),
+    autoTokens: mergeTodayField(next.metrics.autoTokens, previous.metrics.autoTokens),
+  };
+
+  return {
+    ...next,
+    metrics,
+    stale: next.stale || usesCachedValue,
+  };
+}
+
 /** Reject snapshots that cannot drive the primary dashboard/orb percent. */
 export function isEmptyUsageSnapshot(snapshot: TokenSnapshot): boolean {
   const hasPrimaryPercent = snapshot.metrics.totalUsedPercent !== null;

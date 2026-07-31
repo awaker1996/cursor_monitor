@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   ProviderResult,
+  RawAggregatedUsageResponse,
   RawCookieResponse,
   RawUsageEventsResponse,
   TokenProvider,
@@ -137,6 +138,50 @@ function errorToMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Total attempts per endpoint for network-level failures (TLS resets etc.). */
+const NETWORK_RETRY_ATTEMPTS = 3;
+const NETWORK_RETRY_BASE_DELAY_MS = 400;
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError';
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `cursor.com` intermittently resets TLS connections (ECONNRESET before the
+ * handshake completes), which used to blank the whole token detail for a
+ * refresh cycle. Retry only thrown network errors — HTTP responses (401/500
+ * etc.) are returned to the caller untouched, and caller-driven aborts stop
+ * the retry loop immediately.
+ */
+async function fetchWithNetworkRetry(
+  url: string,
+  init: RequestInit,
+  attempts = NETWORK_RETRY_ATTEMPTS,
+): Promise<Response> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      lastError = err;
+      if (isAbortError(err)) throw err;
+      if (attempt < attempts) {
+        log.warn('Network error, retrying request', {
+          url,
+          attempt,
+          error: errorToMessage(err),
+        });
+        await delay(NETWORK_RETRY_BASE_DELAY_MS * attempt);
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 /**
  * Reject HTML/error/legacy `/api/usage` payloads that would normalize to all `--`.
  * A usable summary must expose billing cycle dates and/or individual usage buckets.
@@ -219,7 +264,7 @@ export class CookieProvider implements TokenProvider {
       const timeout = setTimeout(() => controller.abort(), settings.requestTimeoutSec * 1000);
 
       try {
-        const response = await fetch(endpoint, {
+        const response = await fetchWithNetworkRetry(endpoint, {
           method: 'GET',
           headers: buildDashboardHeaders(cookieHeader),
           signal: controller.signal,
@@ -361,12 +406,81 @@ export class CookieProvider implements TokenProvider {
       if (!record) return null;
 
       const events = Array.isArray(record.usageEventsDisplay) ? record.usageEventsDisplay : [];
+      const totalRaw = record.totalUsageEventsCount;
+      const totalUsageEventsCount =
+        typeof totalRaw === 'number' && Number.isFinite(totalRaw) && totalRaw > 0
+          ? Math.floor(totalRaw)
+          : undefined;
 
       return {
         usageEventsDisplay: events as RawUsageEventsResponse['usageEventsDisplay'],
-        totalUsageEventsCount: record.totalUsageEventsCount ?? 0,
+        ...(totalUsageEventsCount !== undefined ? { totalUsageEventsCount } : {}),
         eventsComplete: true,
       };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /** Server-side per-model aggregation for a custom flow date range. */
+  async fetchUsageFlowAggregated(
+    startDateMs: number,
+    endDateMs: number,
+  ): Promise<RawAggregatedUsageResponse | null> {
+    const cookie = await credentialVault.getCookie();
+    if (!cookie) {
+      throw new Error('Cookie not configured. Please add your session cookie in Settings.');
+    }
+
+    const settings = this.getSettings();
+    const cookieHeader = normalizeWorkosCookie(cookie);
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.max(settings.requestTimeoutSec, 15) * 1000,
+    );
+
+    try {
+      const payload = await fetchAggregatedUsage(
+        cookieHeader,
+        { startDate: String(startDateMs), endDate: String(endDateMs) },
+        controller.signal,
+      );
+      if (!payload || typeof payload !== 'object') return null;
+      return payload as RawAggregatedUsageResponse;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /** Paginated events for flow stats when aggregation is unavailable. */
+  async fetchUsageFlowEventsForStats(
+    startDateMs: number,
+    endDateMs: number,
+    maxPages = 30,
+  ): Promise<RawUsageEventsResponse | null> {
+    const cookie = await credentialVault.getCookie();
+    if (!cookie) {
+      throw new Error('Cookie not configured. Please add your session cookie in Settings.');
+    }
+
+    const settings = this.getSettings();
+    const cookieHeader = normalizeWorkosCookie(cookie);
+    const userId = extractUserId(cookie);
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.max(settings.requestTimeoutSec, 30) * 1000,
+    );
+
+    try {
+      return await fetchUsageEvents(
+        cookieHeader,
+        { startDate: String(startDateMs), endDate: String(endDateMs) },
+        controller.signal,
+        maxPages,
+        userId,
+      );
     } finally {
       clearTimeout(timeout);
     }
@@ -445,7 +559,7 @@ async function fetchUsageEventsPage(
 ): Promise<{ usageEventsDisplay?: unknown[]; totalUsageEventsCount?: number } | null> {
   for (const endpoint of DASHBOARD_EVENTS_ENDPOINTS) {
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetchWithNetworkRetry(endpoint, {
         method: 'POST',
         headers: buildDashboardHeaders(cookieHeader),
         body: JSON.stringify({
@@ -501,7 +615,7 @@ async function fetchAggregatedUsage(
   for (const endpoint of DASHBOARD_AGGREGATED_ENDPOINTS) {
     for (const body of bodyVariants) {
       try {
-        const response = await fetch(endpoint, {
+        const response = await fetchWithNetworkRetry(endpoint, {
           method: 'POST',
           headers: buildDashboardHeaders(cookieHeader),
           body: JSON.stringify(body),

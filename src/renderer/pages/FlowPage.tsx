@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ErrorHint from '../components/ErrorHint';
 import UsageFlowFilters from '../components/UsageFlowFilters';
+import UsageFlowModelStatsPanel from '../components/UsageFlowModelStats';
 import UsageFlowPagination from '../components/UsageFlowPagination';
 import UsageFlowTable from '../components/UsageFlowTable';
 import type { UsageFlowDisplay } from '../../shared/types';
@@ -9,14 +10,17 @@ import {
   type UsageFlowDateRange,
   type UsageFlowPreset,
 } from '../../shared/usageFlowDates';
-
-const PAGE_SIZE = 100;
+import {
+  DEFAULT_USAGE_FLOW_PAGE_SIZE,
+  type UsageFlowPageSize,
+} from '../../shared/usageFlowPagination';
 
 export default function FlowPage() {
   const [hasCookie, setHasCookie] = useState<boolean | null>(null);
   const [preset, setPreset] = useState<UsageFlowPreset>('1d');
   const [dateRange, setDateRange] = useState<UsageFlowDateRange>(() => resolveUsageFlowPreset('1d'));
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<UsageFlowPageSize>(DEFAULT_USAGE_FLOW_PAGE_SIZE);
   const [flowDisplay, setFlowDisplay] = useState<UsageFlowDisplay | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +31,7 @@ export default function FlowPage() {
       range: UsageFlowDateRange,
       targetPage: number,
       activePreset: UsageFlowPreset,
+      targetPageSize: UsageFlowPageSize = pageSize,
     ) => {
       const fetchId = ++fetchIdRef.current;
       setLoading(true);
@@ -38,7 +43,7 @@ export default function FlowPage() {
             startDateMs: range.startDateMs,
             endDateMs: range.endDateMs,
             page: targetPage,
-            pageSize: PAGE_SIZE,
+            pageSize: targetPageSize,
           },
           range.label,
         );
@@ -65,13 +70,14 @@ export default function FlowPage() {
         }
         setPreset(activePreset);
         setDateRange(range);
+        setPageSize(targetPageSize);
       } finally {
         if (fetchId === fetchIdRef.current) {
           setLoading(false);
         }
       }
     },
-    [],
+    [pageSize],
   );
 
   useEffect(() => {
@@ -96,7 +102,13 @@ export default function FlowPage() {
 
   const handlePageChange = (nextPage: number) => {
     setPage(nextPage);
-    void loadFlow(dateRange, nextPage, preset);
+    void loadFlow(dateRange, nextPage, preset, pageSize);
+  };
+
+  const handlePageSizeChange = (nextPageSize: UsageFlowPageSize) => {
+    setPageSize(nextPageSize);
+    setPage(1);
+    void loadFlow(dateRange, 1, preset, nextPageSize);
   };
 
   const emptyMessage =
@@ -140,14 +152,21 @@ export default function FlowPage() {
         <ErrorHint message={emptyMessage} />
       ) : flowDisplay && flowDisplay.available ? (
         <>
-          <UsageFlowTable display={flowDisplay} />
-          <UsageFlowPagination
-            page={flowDisplay.page}
-            totalPages={flowDisplay.totalPages}
-            totalCount={flowDisplay.totalCount}
-            disabled={loading}
-            onPageChange={handlePageChange}
-          />
+          {flowDisplay.modelStats?.available && (
+            <UsageFlowModelStatsPanel stats={flowDisplay.modelStats} />
+          )}
+          <div className="flow-page__content">
+            <UsageFlowTable display={flowDisplay} />
+            <UsageFlowPagination
+              page={flowDisplay.page}
+              totalPages={flowDisplay.totalPages}
+              totalCount={flowDisplay.totalCount}
+              pageSize={pageSize}
+              disabled={loading}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          </div>
         </>
       ) : (
         <div className="flow-page__loading">

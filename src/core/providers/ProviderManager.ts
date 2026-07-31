@@ -1,17 +1,22 @@
 import type {
   DataSource,
   ProviderHealth,
+  RawUsageEventsResponse,
   TokenSnapshot,
   UsageFlowFetchResult,
   UsageFlowQuery,
 } from '../../shared/types';
-import { normalize, buildUsageFlowPage } from '../normalizer';
+import { normalize, buildUsageFlowPage, buildUsageFlowPageFromEvents, buildUsageFlowModelStats, resolveUsageFlowTotalCount } from '../normalizer';
 import { SnapshotCache } from '../SnapshotCache';
-import { isEmptyUsageSnapshot, mergeTodayMetricsFromCache } from '../snapshotMerge';
+import { isEmptyUsageSnapshot, mergeCycleTokensFromCache, mergeTodayMetricsFromCache } from '../snapshotMerge';
 import { OfficialProvider } from './OfficialProvider';
 import { CookieProvider } from './CookieProvider';
 import type { SettingsStore } from '../../settings/SettingsStore';
+import { DEFAULT_USAGE_FLOW_PAGE_SIZE } from '../../shared/usageFlowPagination';
 import { createLogger } from '../../utils/logger';
+
+/** When total events in range are at most this many, paginate in-app after a full fetch. */
+const USAGE_FLOW_CLIENT_PAGINATION_MAX = 1000;
 
 const log = createLogger('ProviderManager');
 
@@ -71,7 +76,10 @@ export class ProviderManager {
     try {
       const result = await provider.fetch();
       const normalized = normalize(result.raw, result.source);
-      const snapshot = mergeTodayMetricsFromCache(normalized, this.lastSnapshot);
+      const snapshot = mergeCycleTokensFromCache(
+        mergeTodayMetricsFromCache(normalized, this.lastSnapshot),
+        this.lastSnapshot,
+      );
       if (isEmptyUsageSnapshot(snapshot)) {
         throw new Error(
           source === 'cookie'
@@ -134,19 +142,61 @@ export class ProviderManager {
       };
     }
 
-    const pageSize = query.pageSize ?? 100;
+    const pageSize = query.pageSize ?? DEFAULT_USAGE_FLOW_PAGE_SIZE;
+    const page = query.page >= 1 ? Math.floor(query.page) : 1;
     try {
-      const raw = await this.cookie.fetchUsageFlowPage(
+      const aggregated = await this.cookie.fetchUsageFlowAggregated(
         query.startDateMs,
         query.endDateMs,
-        query.page,
+      );
+
+      const probe = await this.cookie.fetchUsageFlowPage(
+        query.startDateMs,
+        query.endDateMs,
+        1,
         pageSize,
       );
-      const data = buildUsageFlowPage(raw, {
-        page: query.page,
-        pageSize,
-        dateRangeLabel,
-      });
+      const reportedTotal = resolveUsageFlowTotalCount(probe, probe?.usageEventsDisplay?.length ?? 0);
+
+      let eventsForStats: RawUsageEventsResponse | null = null;
+      let data;
+
+      if (reportedTotal > 0 && reportedTotal <= USAGE_FLOW_CLIENT_PAGINATION_MAX) {
+        const maxPages = Math.max(1, Math.ceil(reportedTotal / 100));
+        eventsForStats =
+          reportedTotal <= pageSize && probe?.usageEventsDisplay?.length
+            ? probe
+            : await this.cookie.fetchUsageFlowEventsForStats(
+                query.startDateMs,
+                query.endDateMs,
+                maxPages,
+              );
+        const allEvents = eventsForStats?.usageEventsDisplay ?? probe?.usageEventsDisplay ?? [];
+        data = buildUsageFlowPageFromEvents(
+          allEvents,
+          { page, pageSize, dateRangeLabel },
+          reportedTotal,
+        );
+      } else {
+        const raw =
+          page === 1 && probe
+            ? probe
+            : await this.cookie.fetchUsageFlowPage(
+                query.startDateMs,
+                query.endDateMs,
+                page,
+                pageSize,
+              );
+        data = buildUsageFlowPage(raw, { page, pageSize, dateRangeLabel });
+        if (!aggregated?.aggregations?.length) {
+          eventsForStats = await this.cookie.fetchUsageFlowEventsForStats(
+            query.startDateMs,
+            query.endDateMs,
+          );
+        }
+      }
+
+      data.modelStats = buildUsageFlowModelStats(aggregated, eventsForStats);
       return { success: true, hasCookie: true, data };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
