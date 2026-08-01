@@ -330,6 +330,9 @@ function clampTodayPercent(value: number, cyclePercent: number): number {
   return Math.max(0, Math.min(cyclePercent, value));
 }
 
+/** When cost share exceeds token share by this much, prefer the conservative token share. */
+const SHARE_DIVERGENCE_THRESHOLD = 0.05;
+
 function isCycleEventsPaginatedIncomplete(
   cycleEvents: RawUsageEventsResponse | null | undefined,
 ): boolean {
@@ -341,36 +344,96 @@ function isCycleEventsPaginatedIncomplete(
   return fetched < Number(total);
 }
 
+/**
+ * Prefer cost share unless it looks inflated vs token volume
+ * (missing historical cost fields, or expensive-model skew that would
+ * make "今日" appear near the full cycle when tokens say otherwise).
+ */
+function pickTodayShare(
+  costShare: number,
+  tokenShare: number,
+  cycleTokens: number,
+  todayTokens: number,
+): number {
+  const suspiciousCostShare =
+    costShare >= 0.999 &&
+    tokenShare < 0.999 &&
+    cycleTokens - todayTokens >= 1000;
+
+  const costExceedsToken =
+    costShare > tokenShare && costShare - tokenShare >= SHARE_DIVERGENCE_THRESHOLD;
+
+  if (suspiciousCostShare || costExceedsToken) {
+    return tokenShare;
+  }
+
+  return costShare;
+}
+
 export interface TodayUsedPercentInput {
   todayCostCents: number;
   cycleCostCents: number;
+  todayTokens: number;
+  cycleTokens: number;
   cyclePercent: number | null;
   todayComplete?: boolean;
   cycleCostReliable?: boolean;
+  cycleEventsIncomplete?: boolean;
 }
 
 /**
- * Derive today's used percent from cost share only:
- * (todayCost / cycleCost) * cyclePercent.
+ * Derive today's used percent from cost/token shares:
+ * share * cyclePercent, preferring cost when aligned with tokens.
+ * When cost share is significantly higher than token share (≥5%),
+ * fall back to the more conservative token share.
  * Complete zero usage returns 0%.
  */
 export function todayUsedPercent(input: TodayUsedPercentInput): number | null {
   const {
     todayCostCents,
     cycleCostCents,
+    todayTokens,
+    cycleTokens,
     cyclePercent,
     todayComplete = false,
     cycleCostReliable = false,
+    cycleEventsIncomplete = false,
   } = input;
 
   if (cyclePercent === null) return null;
   if (!todayComplete) return null;
 
-  if (todayCostCents <= 0) return 0;
-  if (!cycleCostReliable || cycleCostCents <= 0) return null;
+  const hasCost = cycleCostReliable && cycleCostCents > 0 && todayCostCents > 0;
+  const hasTokens = cycleTokens > 0 && todayTokens > 0;
+  const tokenSetInvalid = hasTokens && todayTokens > cycleTokens;
+  const tokenDenominatorUnreliable = cycleEventsIncomplete || tokenSetInvalid;
 
-  const share = clampShare(todayCostCents / cycleCostCents);
-  return clampTodayPercent(share * cyclePercent, cyclePercent);
+  const costShare = hasCost ? clampShare(todayCostCents / cycleCostCents) : null;
+  const tokenShare =
+    hasTokens && !tokenDenominatorUnreliable ? clampShare(todayTokens / cycleTokens) : null;
+
+  const costBased =
+    costShare !== null ? clampTodayPercent(costShare * cyclePercent, cyclePercent) : null;
+  const tokenBased =
+    tokenShare !== null ? clampTodayPercent(tokenShare * cyclePercent, cyclePercent) : null;
+
+  // Truncated cycle token totals would inflate token share — prefer cost.
+  if (tokenDenominatorUnreliable) {
+    if (costBased !== null) return costBased;
+    if (todayCostCents <= 0 && todayTokens <= 0) return 0;
+    return null;
+  }
+
+  if (costShare !== null && tokenShare !== null) {
+    const pickedShare = pickTodayShare(costShare, tokenShare, cycleTokens, todayTokens);
+    return clampTodayPercent(pickedShare * cyclePercent, cyclePercent);
+  }
+
+  if (costBased !== null) return costBased;
+  if (tokenBased !== null) return tokenBased;
+
+  if (todayCostCents <= 0 && todayTokens <= 0) return 0;
+  return null;
 }
 
 interface BucketCycleCosts {
@@ -423,6 +486,57 @@ function resolveCycleCosts(
   return sumAggregatedCycleCosts(aggregatedUsage) ?? sumEventCycleCosts(cycleEvents);
 }
 
+interface BucketCycleTokens {
+  apiTokens: number;
+  autoTokens: number;
+  reliable: boolean;
+}
+
+/** Complete-cycle token totals from aggregated usage (no event pagination). */
+function sumAggregatedCycleTokens(
+  aggregated: RawAggregatedUsageResponse | null | undefined,
+): BucketCycleTokens | null {
+  const rows = aggregated?.aggregations;
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  let apiTokens = 0;
+  let autoTokens = 0;
+  for (const item of rows) {
+    const tokens = aggregationTokens(item);
+    if (tokens <= 0) continue;
+    if (isFirstPartyAggregation(item)) autoTokens += tokens;
+    else apiTokens += tokens;
+  }
+
+  if (apiTokens <= 0 && autoTokens <= 0) return null;
+  return { apiTokens, autoTokens, reliable: true };
+}
+
+function sumEventCycleTokens(
+  cycleEvents: RawUsageEventsResponse | null | undefined,
+): BucketCycleTokens | null {
+  if (!cycleEvents || isCycleEventsPaginatedIncomplete(cycleEvents)) return null;
+
+  let apiTokens = 0;
+  let autoTokens = 0;
+  for (const event of cycleEvents.usageEventsDisplay ?? []) {
+    const tokens = eventTokens(event);
+    if (tokens <= 0) continue;
+    if (isAutoModel(event.model)) autoTokens += tokens;
+    else apiTokens += tokens;
+  }
+
+  if (apiTokens <= 0 && autoTokens <= 0) return null;
+  return { apiTokens, autoTokens, reliable: true };
+}
+
+function resolveCycleTokens(
+  aggregatedUsage: RawAggregatedUsageResponse | null | undefined,
+  cycleEvents: RawUsageEventsResponse | null | undefined,
+): BucketCycleTokens | null {
+  return sumAggregatedCycleTokens(aggregatedUsage) ?? sumEventCycleTokens(cycleEvents);
+}
+
 interface TokenAggregate {
   apiTokens: number;
   autoTokens: number;
@@ -469,24 +583,32 @@ function aggregateTokenEvents(
     result.autoCycleCostCents = cycleCosts.autoCycleCostCents;
   }
 
-  for (const event of cycleEvents?.usageEventsDisplay ?? []) {
-    const tokens = eventTokens(event);
-    if (!cycleCosts) {
-      const costCents = eventCostCents(event) ?? 0;
+  // Prefer aggregated (or complete-event) cycle tokens so today% denominator
+  // matches the token totals shown in the UI — not a truncated 15-page sample.
+  const cycleTokens = resolveCycleTokens(aggregatedUsage, cycleEvents);
+  if (cycleTokens) {
+    result.apiTokens = cycleTokens.apiTokens;
+    result.autoTokens = cycleTokens.autoTokens;
+  } else {
+    for (const event of cycleEvents?.usageEventsDisplay ?? []) {
+      const tokens = eventTokens(event);
+      if (!cycleCosts) {
+        const costCents = eventCostCents(event) ?? 0;
+        if (isAutoModel(event.model)) {
+          if (tokens > 0) result.autoTokens += tokens;
+          if (costCents > 0) result.autoCycleCostCents += costCents;
+        } else {
+          if (tokens > 0) result.apiTokens += tokens;
+          if (costCents > 0) result.apiCycleCostCents += costCents;
+        }
+        continue;
+      }
+
       if (isAutoModel(event.model)) {
         if (tokens > 0) result.autoTokens += tokens;
-        if (costCents > 0) result.autoCycleCostCents += costCents;
-      } else {
-        if (tokens > 0) result.apiTokens += tokens;
-        if (costCents > 0) result.apiCycleCostCents += costCents;
+      } else if (tokens > 0) {
+        result.apiTokens += tokens;
       }
-      continue;
-    }
-
-    if (isAutoModel(event.model)) {
-      if (tokens > 0) result.autoTokens += tokens;
-    } else if (tokens > 0) {
-      result.apiTokens += tokens;
     }
   }
 
@@ -504,6 +626,10 @@ function aggregateTokenEvents(
 
   const todayComplete = todayEvents?.eventsComplete === true;
   const cycleCostReliable = cycleCosts?.reliable === true;
+  // Aggregated cycle tokens are complete; only treat event pagination as
+  // unreliable when we had to fall back to (or lack) event totals.
+  const cycleEventsIncomplete =
+    cycleTokens?.reliable === true ? false : isCycleEventsPaginatedIncomplete(cycleEvents);
 
   return {
     totalTokens:
@@ -519,16 +645,22 @@ function aggregateTokenEvents(
     apiTodayUsedPercent: todayUsedPercent({
       todayCostCents: result.apiTodayCostCents,
       cycleCostCents: result.apiCycleCostCents,
+      todayTokens: result.apiTodayTokens,
+      cycleTokens: result.apiTokens,
       cyclePercent: apiUsedPercent,
       todayComplete,
       cycleCostReliable,
+      cycleEventsIncomplete,
     }),
     autoTodayUsedPercent: todayUsedPercent({
       todayCostCents: result.autoTodayCostCents,
       cycleCostCents: result.autoCycleCostCents,
+      todayTokens: result.autoTodayTokens,
+      cycleTokens: result.autoTokens,
       cyclePercent: autoUsedPercent,
       todayComplete,
       cycleCostReliable,
+      cycleEventsIncomplete,
     }),
   };
 }

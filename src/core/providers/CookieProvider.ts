@@ -500,6 +500,7 @@ async function fetchUsageEvents(
   const userIdNum = userId && /^\d+$/.test(userId) ? Number(userId) : undefined;
 
   try {
+    let stoppedEarly = false;
     for (let page = 1; page <= maxPages; page += 1) {
       const record = await fetchUsageEventsPage(
         cookieHeader,
@@ -520,9 +521,15 @@ async function fetchUsageEvents(
 
       if (pageEvents.length < pageSize) break;
       if (totalUsageEventsCount !== null && events.length >= totalUsageEventsCount) break;
+
+      // Full page at the maxPages cap: more events likely remain.
+      if (page === maxPages) {
+        stoppedEarly = true;
+        break;
+      }
     }
 
-    return buildUsageEventsResponse(events, totalUsageEventsCount, true);
+    return buildUsageEventsResponse(events, totalUsageEventsCount, !stoppedEarly);
   } catch (err) {
     log.warn('Usage events fetch aborted', { error: errorToMessage(err) });
     return buildUsageEventsResponse(events, totalUsageEventsCount, false);

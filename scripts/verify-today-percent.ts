@@ -26,6 +26,8 @@ console.log('todayUsedPercent scenarios');
   const result = todayUsedPercent({
     todayCostCents: 0,
     cycleCostCents: 1000,
+    todayTokens: 0,
+    cycleTokens: 50000,
     cyclePercent: CYCLE,
     todayComplete: true,
     cycleCostReliable: true,
@@ -33,17 +35,65 @@ console.log('todayUsedPercent scenarios');
   assert('complete zero usage returns 0%', result === 0);
 }
 
-// Cost share only
+// Historical cost missing: cycle cost ~= today cost but tokens differ
 {
   const result = todayUsedPercent({
-    todayCostCents: 200,
+    todayCostCents: 1000,
     cycleCostCents: 1000,
+    todayTokens: 5000,
+    cycleTokens: 50000,
     cyclePercent: CYCLE,
     todayComplete: true,
     cycleCostReliable: true,
   });
-  assert('cost share only', approx(result, 8.5));
+  assert('cost-missing falls back to token share', approx(result, 4.25));
   assert('never exceeds cycle', result !== null && result <= CYCLE);
+}
+
+// Cost exceeds token share by >5% (user report: ~22% cost vs <1% tokens)
+{
+  const result = todayUsedPercent({
+    todayCostCents: 800,
+    cycleCostCents: 1000,
+    todayTokens: 10000,
+    cycleTokens: 50000,
+    cyclePercent: CYCLE,
+    todayComplete: true,
+    cycleCostReliable: true,
+  });
+  assert('cost-divergence uses conservative token share', approx(result, 8.5));
+}
+
+// Same shape as screenshot: cycle Other Models 100%, tiny today tokens
+{
+  const result = todayUsedPercent({
+    todayCostCents: 2218,
+    cycleCostCents: 10000,
+    todayTokens: 641_900,
+    cycleTokens: 98_700_000,
+    cyclePercent: 100,
+    todayComplete: true,
+    cycleCostReliable: true,
+  });
+  assert(
+    'screenshot-like Other Models uses token share',
+    approx(result, (641_900 / 98_700_000) * 100),
+    `got ${result}`,
+  );
+}
+
+// Cost within threshold of token share (cost not inflated)
+{
+  const result = todayUsedPercent({
+    todayCostCents: 200,
+    cycleCostCents: 1000,
+    todayTokens: 10000,
+    cycleTokens: 50000,
+    cyclePercent: CYCLE,
+    todayComplete: true,
+    cycleCostReliable: true,
+  });
+  assert('aligned shares prefer cost', approx(result, 8.5));
 }
 
 // Incomplete today events return null
@@ -51,6 +101,8 @@ console.log('todayUsedPercent scenarios');
   const result = todayUsedPercent({
     todayCostCents: 200,
     cycleCostCents: 1000,
+    todayTokens: 10000,
+    cycleTokens: 50000,
     cyclePercent: CYCLE,
     todayComplete: false,
     cycleCostReliable: true,
@@ -58,43 +110,75 @@ console.log('todayUsedPercent scenarios');
   assert('incomplete today returns null', result === null);
 }
 
-// Unreliable cycle cost returns null when today has usage
+// Unreliable cycle cost with tokens still yields token-based percent
 {
   const result = todayUsedPercent({
     todayCostCents: 200,
     cycleCostCents: 1000,
+    todayTokens: 10000,
+    cycleTokens: 50000,
     cyclePercent: CYCLE,
     todayComplete: true,
     cycleCostReliable: false,
   });
-  assert('unreliable cycle cost returns null', result === null);
+  assert('unreliable cycle cost falls back to tokens', approx(result, 8.5));
 }
 
-// Idempotent
+// Paginated incomplete cycle: skip inflated token share
 {
-  const input = {
-    todayCostCents: 250,
-    cycleCostCents: 1000,
+  const inflated = todayUsedPercent({
+    todayCostCents: 500,
+    cycleCostCents: 2000,
+    todayTokens: 8000,
+    cycleTokens: 10000,
     cyclePercent: CYCLE,
     todayComplete: true,
     cycleCostReliable: true,
-  };
-  const a = todayUsedPercent(input);
-  const b = todayUsedPercent(input);
-  assert('idempotent', a === b);
+    cycleEventsIncomplete: true,
+  });
+  assert('incomplete cycle uses cost only', approx(inflated, 10.625));
+
+  const tokenOnly = todayUsedPercent({
+    todayCostCents: 0,
+    cycleCostCents: 0,
+    todayTokens: 8000,
+    cycleTokens: 10000,
+    cyclePercent: CYCLE,
+    todayComplete: true,
+    cycleCostReliable: false,
+    cycleEventsIncomplete: true,
+  });
+  assert('incomplete cycle without cost returns null', tokenOnly === null);
 }
 
-// Same input never flips between cost/token paths (fixed cost-only)
+// Today tokens exceed cycle tokens (truncated cycle aggregate)
+{
+  const result = todayUsedPercent({
+    todayCostCents: 300,
+    cycleCostCents: 1000,
+    todayTokens: 12000,
+    cycleTokens: 8000,
+    cyclePercent: CYCLE,
+    todayComplete: true,
+    cycleCostReliable: true,
+  });
+  assert('token set invalid falls back to cost', approx(result, 12.75));
+}
+
+// Idempotent / stable across runs (no cost↔token flip-flop)
 {
   const input = {
     todayCostCents: 800,
     cycleCostCents: 1000,
+    todayTokens: 10000,
+    cycleTokens: 50000,
     cyclePercent: CYCLE,
     todayComplete: true,
     cycleCostReliable: true,
   };
   const runs = Array.from({ length: 5 }, () => todayUsedPercent(input));
-  assert('fixed cost-only is stable across runs', runs.every((value) => value === runs[0]));
+  assert('divergence path is stable across runs', runs.every((value) => value === runs[0]));
+  assert('idempotent', runs[0] === todayUsedPercent(input));
 }
 
 console.log('normalizeCookie integration');
@@ -144,7 +228,8 @@ console.log('normalizeCookie integration');
         aggregations: [
           {
             modelIntent: 'gpt-4',
-            inputTokens: '10000',
+            // Match event token sum (1500 + 13500) so cost/token denominators align.
+            inputTokens: '15000',
             totalCents: 2000,
             tier: 1,
           },
@@ -156,12 +241,148 @@ console.log('normalizeCookie integration');
 
   const apiToday = snapshot.metrics.apiTodayUsedPercent;
   const apiCycle = snapshot.metrics.apiUsedPercent;
+  // Cost share 500/2000=25% → 7.5%; token share 1500/15000=10% → 3%.
+  // Divergence 15% ≥ 5% → prefer token share 3%.
   assert(
-    'integration uses aggregated cycle cost',
-    approx(apiToday, 7.5),
+    'integration falls back when cost exceeds token share',
+    approx(apiToday, 3),
     `got ${apiToday}`,
   );
   assert('integration today <= cycle api', apiToday !== null && apiCycle !== null && apiToday <= apiCycle);
+}
+
+{
+  // Truncated cycle events + complete aggregated tokens (real Cookie path):
+  // cost share looks like ~22%, but aggregated Other Models tokens say <1%.
+  const snapshot = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            limit: 100,
+            apiPercentUsed: 100,
+            autoPercentUsed: 86.96,
+            totalPercentUsed: 88.54,
+          },
+        },
+      },
+      todayEvents: {
+        eventsComplete: true,
+        usageEventsDisplay: [
+          {
+            model: 'gpt-5.3-codex',
+            tokenUsage: { inputTokens: 641_900, outputTokens: 0 },
+            chargedCents: 2218,
+          },
+        ],
+      },
+      cycleEvents: {
+        // Paginated sample only — not the full cycle.
+        totalUsageEventsCount: 50_000,
+        eventsComplete: false,
+        usageEventsDisplay: [
+          {
+            model: 'gpt-5.3-codex',
+            tokenUsage: { inputTokens: 2_900_000, outputTokens: 0 },
+            chargedCents: 2218,
+          },
+        ],
+      },
+      aggregatedUsage: {
+        aggregations: [
+          {
+            modelIntent: 'gpt-5.3-codex',
+            inputTokens: '98700000',
+            totalCents: 10000,
+            tier: 1,
+          },
+          {
+            modelIntent: 'composer-2',
+            inputTokens: '669800000',
+            totalCents: 50000,
+            tier: 2,
+          },
+        ],
+      },
+    },
+    new Date().toISOString(),
+  );
+
+  const apiToday = snapshot.metrics.apiTodayUsedPercent;
+  const expected = (641_900 / 98_700_000) * 100;
+  assert(
+    'truncated events still use aggregated token denominator',
+    approx(apiToday, expected, 0.02),
+    `got ${apiToday}, expected ~${expected}`,
+  );
+  assert(
+    'display apiTokens come from aggregation',
+    snapshot.metrics.apiTokens === 98_700_000,
+    `got ${snapshot.metrics.apiTokens}`,
+  );
+}
+
+{
+  // Aligned cost/token: prefer cost share
+  const snapshot = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            limit: 100,
+            apiPercentUsed: 30,
+            autoPercentUsed: 12,
+            totalPercentUsed: 42,
+          },
+        },
+      },
+      todayEvents: {
+        eventsComplete: true,
+        usageEventsDisplay: [
+          {
+            model: 'gpt-4',
+            tokenUsage: { inputTokens: 2500, outputTokens: 0 },
+            chargedCents: 500,
+          },
+        ],
+      },
+      cycleEvents: {
+        totalUsageEventsCount: 2,
+        eventsComplete: true,
+        usageEventsDisplay: [
+          {
+            model: 'gpt-4',
+            tokenUsage: { inputTokens: 2500, outputTokens: 0 },
+            chargedCents: 500,
+          },
+          {
+            model: 'gpt-4',
+            tokenUsage: { inputTokens: 7500, outputTokens: 0 },
+            chargedCents: 1500,
+          },
+        ],
+      },
+      aggregatedUsage: {
+        aggregations: [
+          {
+            modelIntent: 'gpt-4',
+            inputTokens: '10000',
+            totalCents: 2000,
+            tier: 1,
+          },
+        ],
+      },
+    },
+    new Date().toISOString(),
+  );
+
+  const apiToday = snapshot.metrics.apiTodayUsedPercent;
+  // Cost 25% and token 25% aligned → 7.5%
+  assert('integration prefers cost when aligned', approx(apiToday, 7.5), `got ${apiToday}`);
 }
 
 console.log('mergeTodayMetricsFromCache');
@@ -187,8 +408,19 @@ console.log('mergeTodayMetricsFromCache');
         usageEventsDisplay: [
           {
             model: 'gpt-4',
-            tokenUsage: { inputTokens: 1000 },
+            tokenUsage: { inputTokens: 2500 },
             chargedCents: 500,
+          },
+        ],
+      },
+      cycleEvents: {
+        totalUsageEventsCount: 1,
+        eventsComplete: true,
+        usageEventsDisplay: [
+          {
+            model: 'gpt-4',
+            tokenUsage: { inputTokens: 10000 },
+            chargedCents: 2000,
           },
         ],
       },
