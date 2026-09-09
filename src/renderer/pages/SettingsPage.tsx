@@ -283,6 +283,10 @@ export default function SettingsPage() {
         <p className="field-hint">
           自定义图标即时生效于托盘与设置窗口。安装包/任务栏固定图标需重新打包安装后更新。
         </p>
+        <p className="field-hint">
+          建议使用 <strong>正方形 PNG</strong>，尺寸 <strong>256×256</strong> 以上，位深 32bit。
+          非正方形图片将自动居中裁剪为正方形；尺寸过小会在高 DPI 屏幕上显示模糊。
+        </p>
       </section>
 
       {toast && <p className="settings-toast">{toast}</p>}

@@ -3,7 +3,7 @@ Add-Type -AssemblyName System.Drawing
 $root = Split-Path $PSScriptRoot -Parent
 $pngPath = Join-Path $root 'build\icon.png'
 $icoPath = Join-Path $root 'build\icon.ico'
-$sizes = @(16, 32, 48, 256)
+$sizes = @(16, 32, 48, 64, 256)
 
 function New-SquareBitmap {
     param(
@@ -31,29 +31,36 @@ function New-SquareBitmap {
 function Save-PngIco {
     param(
         [string]$Path,
+        [int[]]$Sizes,
         [System.Collections.Generic.List[byte[]]]$Images
     )
 
     $stream = [System.IO.File]::Create($Path)
     $writer = New-Object System.IO.BinaryWriter($stream)
 
-    $writer.Write([UInt16]0)
-    $writer.Write([UInt16]1)
+    # ICONDIR header
+    $writer.Write([UInt16]0)   # reserved
+    $writer.Write([UInt16]1)   # type = ICO
     $writer.Write([UInt16]$Images.Count)
 
+    # ICONDIRENTRY records (16 bytes each)
     $offset = 6 + (16 * $Images.Count)
-    foreach ($imageBytes in $Images) {
-        $writer.Write([byte]0)
-        $writer.Write([byte]0)
-        $writer.Write([byte]0)
-        $writer.Write([byte]0)
-        $writer.Write([UInt16]1)
-        $writer.Write([UInt16]32)
-        $writer.Write([UInt32]$imageBytes.Length)
-        $writer.Write([UInt32]$offset)
-        $offset += $imageBytes.Length
+    for ($i = 0; $i -lt $Images.Count; $i++) {
+        $size = $Sizes[$i]
+        # ICO spec: width/height byte = 0 means 256, otherwise literal pixel value
+        $sizeByte = [byte]$(if ($size -eq 256) { 0 } else { $size })
+        $writer.Write($sizeByte)                    # width
+        $writer.Write($sizeByte)                    # height
+        $writer.Write([byte]0)                      # color palette (0 = no palette)
+        $writer.Write([byte]0)                      # reserved
+        $writer.Write([UInt16]1)                     # color planes
+        $writer.Write([UInt16]32)                    # bits per pixel
+        $writer.Write([UInt32]$Images[$i].Length)    # image data size
+        $writer.Write([UInt32]$offset)              # image data offset
+        $offset += $Images[$i].Length
     }
 
+    # Image data (PNG blobs)
     foreach ($imageBytes in $Images) {
         $writer.Write($imageBytes)
     }
@@ -75,7 +82,7 @@ try {
         $bitmap.Dispose()
     }
 
-    Save-PngIco -Path $icoPath -Images $pngImages
+    Save-PngIco -Path $icoPath -Sizes $sizes -Images $pngImages
     Write-Host "Created $icoPath ($((Get-Item $icoPath).Length) bytes)"
 }
 finally {
