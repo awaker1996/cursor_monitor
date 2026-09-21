@@ -4,11 +4,13 @@ import type {
   DockEdge,
   PollerState,
   TestConnectionResult,
+  UsageFlowCacheSnapshot,
   UsageFlowFetchResult,
   UsageFlowQuery,
   TokenSnapshot,
 } from '../src/shared/types';
 import type {
+  SubscriptionCacheSnapshot,
   SubscriptionCredentialKind,
   SubscriptionInfoResult,
   SubscriptionProviderId,
@@ -36,6 +38,7 @@ export interface ElectronAPI {
   openFlow: () => void;
   openSubscriptions: () => void;
   listSubscriptionProviders: () => Promise<SubscriptionProviderMeta[]>;
+  getCachedSubscriptions: () => Promise<SubscriptionCacheSnapshot>;
   saveSubscriptionKey: (
     providerId: SubscriptionProviderId,
     key: string,
@@ -51,6 +54,7 @@ export interface ElectronAPI {
     query: SubscriptionUsageQuery,
   ) => Promise<SubscriptionUsageResult>;
   fetchUsageFlow: (query: UsageFlowQuery, dateRangeLabel?: string) => Promise<UsageFlowFetchResult>;
+  getCachedUsageFlow: () => Promise<UsageFlowCacheSnapshot>;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;
@@ -101,6 +105,7 @@ const api: ElectronAPI = {
   openFlow: () => ipcRenderer.send('open-flow'),
   openSubscriptions: () => ipcRenderer.send('open-subscriptions'),
   listSubscriptionProviders: () => ipcRenderer.invoke('subscription-list-providers'),
+  getCachedSubscriptions: () => ipcRenderer.invoke('subscription-get-cached'),
   saveSubscriptionKey: (providerId, key, kind) =>
     ipcRenderer.invoke('subscription-save-key', providerId, key, kind),
   clearSubscriptionKey: (providerId, kind) =>
@@ -111,6 +116,7 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('subscription-fetch-usage', providerId, query),
   fetchUsageFlow: (query, dateRangeLabel) =>
     ipcRenderer.invoke('fetch-usage-flow', query, dateRangeLabel),
+  getCachedUsageFlow: () => ipcRenderer.invoke('flow-get-cached'),
   setOrbMode: (mode) => ipcRenderer.send('set-orb-mode', mode),
   setOrbModeAsync: (mode) => ipcRenderer.invoke('set-orb-mode-async', mode),
   setExpanded: (expanded) => ipcRenderer.send('set-expanded', expanded),

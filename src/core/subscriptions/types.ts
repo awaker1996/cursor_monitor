@@ -12,6 +12,8 @@ export interface SubscriptionProvider {
   readonly credentialAccount: string;
   /** CredentialVault account name for the usage token; undefined when usage query is unsupported. */
   readonly usageCredentialAccount?: string;
+  /** CredentialVault account name for the flow (browser-session) credential; undefined when flow query needs no session. */
+  readonly sessionCredentialAccount?: string;
   isConfigured(): Promise<boolean>;
   fetchInfo(): Promise<SubscriptionInfoResult>;
   fetchUsage?(query: SubscriptionUsageQuery): Promise<SubscriptionUsageResult>;

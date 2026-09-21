@@ -2,8 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import electron from 'vite-plugin-electron/simple';
 import path from 'path';
+import { DEV_SERVER_PORT } from './src/shared/devServer';
 
 export default defineConfig({
+  server: {
+    port: DEV_SERVER_PORT,
+    strictPort: true,
+  },
   plugins: [
     react(),
     electron({

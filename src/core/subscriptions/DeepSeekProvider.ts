@@ -73,6 +73,44 @@ function parseModelUsages(bizData: RawDeepSeekUsageBizData): DeepSeekModelUsage[
   });
 }
 
+/**
+ * 把接口返回的 `biz_data.total` 汇总成表格数据与合计。
+ * 合计始终按接口返回的全部模型计算，与表格是否隐藏零用量行无关。
+ */
+function buildUsage(models: DeepSeekModelUsage[]): {
+  models: DeepSeekModelUsage[];
+  totalTokens: number;
+  totalRequests: number;
+  totalResponseTokens: number;
+  cacheHitRatePercent: number | null;
+  zeroUsageModelCount: number;
+} {
+  let totalTokens = 0;
+  let totalRequests = 0;
+  let totalResponseTokens = 0;
+  let cacheHitTokens = 0;
+  let inputTokens = 0;
+
+  const withUsage = models.filter((model) => {
+    totalTokens += model.totalTokens;
+    totalRequests += model.requests;
+    totalResponseTokens += model.responseTokens;
+    cacheHitTokens += model.cacheHitTokens;
+    inputTokens += model.cacheHitTokens + model.cacheMissTokens;
+    return model.totalTokens > 0 || model.requests > 0;
+  });
+
+  return {
+    models: withUsage,
+    totalTokens,
+    totalRequests,
+    totalResponseTokens,
+    cacheHitRatePercent:
+      inputTokens > 0 ? Math.round((cacheHitTokens / inputTokens) * 1000) / 10 : null,
+    zeroUsageModelCount: models.length - withUsage.length,
+  };
+}
+
 export class DeepSeekProvider implements SubscriptionProvider {
   readonly id = 'deepseek' as const;
   readonly label = 'DeepSeek';
@@ -205,7 +243,7 @@ export class DeepSeekProvider implements SubscriptionProvider {
         };
       }
 
-      const models = parseModelUsages(bizData);
+      const usage = buildUsage(parseModelUsages(bizData));
       return {
         success: true,
         providerId: this.id,
@@ -214,9 +252,7 @@ export class DeepSeekProvider implements SubscriptionProvider {
           providerId: this.id,
           month: query.month,
           year: query.year,
-          models,
-          totalTokens: models.reduce((sum, m) => sum + m.totalTokens, 0),
-          totalRequests: models.reduce((sum, m) => sum + m.requests, 0),
+          ...usage,
         },
       };
     } catch (err) {

@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron';
 import path from 'path';
 import { loadWindowIcon } from '../iconManager';
 import type { AppSettings } from '../../src/shared/types';
+import { devServerUrl } from '../../src/shared/devServer';
 
 let flowWindow: BrowserWindow | null = null;
 
@@ -29,7 +30,7 @@ export function createFlowWindow(isDev: boolean, settings?: AppSettings): Browse
   });
 
   if (isDev) {
-    flowWindow.loadURL('http://localhost:5173/flow.html');
+    flowWindow.loadURL(devServerUrl('/flow.html'));
   } else {
     flowWindow.loadFile(path.join(__dirname, '../dist/flow.html'));
   }

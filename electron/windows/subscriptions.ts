@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron';
 import path from 'path';
 import { loadWindowIcon } from '../iconManager';
 import type { AppSettings } from '../../src/shared/types';
+import { devServerUrl } from '../../src/shared/devServer';
 
 let subscriptionsWindow: BrowserWindow | null = null;
 
@@ -29,7 +30,7 @@ export function createSubscriptionsWindow(isDev: boolean, settings?: AppSettings
   });
 
   if (isDev) {
-    subscriptionsWindow.loadURL('http://localhost:5173/subscriptions.html');
+    subscriptionsWindow.loadURL(devServerUrl('/subscriptions.html'));
   } else {
     subscriptionsWindow.loadFile(path.join(__dirname, '../dist/subscriptions.html'));
   }

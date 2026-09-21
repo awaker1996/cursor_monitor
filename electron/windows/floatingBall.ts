@@ -1,5 +1,6 @@
 import { BrowserWindow, screen } from 'electron';
 import path from 'path';
+import { devServerUrl } from '../../src/shared/devServer';
 
 let floatingBallWindow: BrowserWindow | null = null;
 
@@ -105,7 +106,7 @@ export function createFloatingBallWindow(isDev: boolean): BrowserWindow {
   });
 
   if (isDev) {
-    floatingBallWindow.loadURL('http://localhost:5173/');
+    floatingBallWindow.loadURL(devServerUrl());
   } else {
     floatingBallWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }

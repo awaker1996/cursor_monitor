@@ -14,7 +14,6 @@ import type {
   TokenSnapshot,
   UsageFlowDisplay,
   UsageFlowEntry,
-  UsageFlowModelStats,
   UsageMetrics,
 } from '../shared/types';
 import { CURSOR_MODELS_LABEL, OTHER_MODELS_LABEL, formatUsageFlowDate } from '../shared/format';
@@ -110,6 +109,14 @@ function percentFromUsed(used: number | null, limit: number | null): number | nu
   return (used / limit) * 100;
 }
 
+/** Grok Bot models that should not count toward local IDE usage stats. */
+const EXCLUDED_GROK_BOT_MODELS = new Set(['grok-bot-automation', 'grok-bot-default']);
+
+function isExcludedGrokBotModel(model: string | undefined): boolean {
+  if (!model) return false;
+  return EXCLUDED_GROK_BOT_MODELS.has(model.trim().toLowerCase());
+}
+
 function isAutoModel(model: string | undefined): boolean {
   if (!model) return false;
   const normalized = model.toLowerCase();
@@ -158,8 +165,11 @@ export function buildUsageFlowPage(
   eventsResponse: RawUsageEventsResponse | null | undefined,
   query: { page: number; pageSize: number; dateRangeLabel?: string },
 ): UsageFlowDisplay {
-  const events = eventsResponse?.usageEventsDisplay ?? [];
-  const totalCount = resolveUsageFlowTotalCount(eventsResponse, events.length);
+  const rawEvents = eventsResponse?.usageEventsDisplay ?? [];
+  const events = filterExcludedGrokBotUsageEvents(rawEvents);
+  const reportedTotal = resolveUsageFlowTotalCount(eventsResponse, rawEvents.length);
+  const excludedOnPage = rawEvents.length - events.length;
+  const totalCount = Math.max(0, reportedTotal - excludedOnPage);
   const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
   const page = clampUsageFlowPage(query.page, totalPages);
 
@@ -197,11 +207,12 @@ export function buildUsageFlowPageFromEvents(
   reportedTotal?: number,
 ): UsageFlowDisplay {
   const deduped = dedupeUsageFlowEvents(allEvents);
-  const totalCount = deduped.length;
+  const prepared = filterExcludedGrokBotUsageEvents(deduped);
+  const totalCount = prepared.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
   const page = clampUsageFlowPage(query.page, totalPages);
   const start = (page - 1) * query.pageSize;
-  const allEntries = mapAndSortUsageFlowEntries(deduped);
+  const allEntries = mapAndSortUsageFlowEntries(prepared);
   const entries = allEntries.slice(start, start + query.pageSize);
 
   return {
@@ -253,6 +264,10 @@ function dedupeUsageFlowEvents(events: RawUsageEvent[]): RawUsageEvent[] {
   return out;
 }
 
+function filterExcludedGrokBotUsageEvents(events: RawUsageEvent[]): RawUsageEvent[] {
+  return events.filter((event) => !isExcludedGrokBotModel(event.model));
+}
+
 function mapAndSortUsageFlowEntries(events: RawUsageEvent[]): UsageFlowEntry[] {
   const entries: UsageFlowEntry[] = events.map((event) =>
     mapUsageFlowEntry(event, eventTokens(event), eventCostCents(event), formatUsageFlowDate),
@@ -266,57 +281,6 @@ function mapAndSortUsageFlowEntries(events: RawUsageEvent[]): UsageFlowEntry[] {
   });
 
   return entries;
-}
-
-/** Sum tokens by model for the flow window's selected date range. */
-export function buildUsageFlowModelStats(
-  aggregated: RawAggregatedUsageResponse | null | undefined,
-  events: RawUsageEventsResponse | null | undefined,
-): UsageFlowModelStats {
-  const modelMap = new Map<string, number>();
-
-  const rows = aggregated?.aggregations;
-  if (Array.isArray(rows) && rows.length > 0) {
-    for (const item of rows) {
-      const model = normalizeModelName(item.modelIntent);
-      const tokens = aggregationTokens(item);
-      if (tokens <= 0) continue;
-      modelMap.set(model, (modelMap.get(model) ?? 0) + tokens);
-    }
-  } else {
-    for (const event of events?.usageEventsDisplay ?? []) {
-      const model = normalizeModelName(event.model);
-      const tokens = eventTokens(event);
-      if (tokens <= 0) continue;
-      modelMap.set(model, (modelMap.get(model) ?? 0) + tokens);
-    }
-  }
-
-  if (modelMap.size === 0) {
-    return { available: false, totalTokens: 0, models: [] };
-  }
-
-  const totalTokens = [...modelMap.values()].reduce((sum, value) => sum + value, 0);
-  const models = [...modelMap.entries()]
-    .map(([model, tokens]) => ({
-      model,
-      tokens,
-      sharePercent:
-        totalTokens > 0 ? Math.round((tokens / totalTokens) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.tokens - a.tokens);
-
-  const incomplete =
-    !Array.isArray(rows) || rows.length === 0
-      ? events?.eventsComplete === false
-      : undefined;
-
-  return {
-    available: true,
-    incomplete: incomplete || undefined,
-    totalTokens,
-    models,
-  };
 }
 
 /** Clamp a 0..1 share; guards bad denominators and partial aggregates. */
@@ -451,6 +415,7 @@ function sumAggregatedCycleCosts(
   let apiCycleCostCents = 0;
   let autoCycleCostCents = 0;
   for (const item of rows) {
+    if (isExcludedGrokBotModel(item.modelIntent)) continue;
     const costCents = asNumber(item.totalCents) ?? 0;
     if (costCents <= 0) continue;
     if (isFirstPartyAggregation(item)) autoCycleCostCents += costCents;
@@ -469,6 +434,7 @@ function sumEventCycleCosts(
   let apiCycleCostCents = 0;
   let autoCycleCostCents = 0;
   for (const event of cycleEvents.usageEventsDisplay ?? []) {
+    if (isExcludedGrokBotModel(event.model)) continue;
     const costCents = eventCostCents(event) ?? 0;
     if (costCents <= 0) continue;
     if (isAutoModel(event.model)) autoCycleCostCents += costCents;
@@ -502,6 +468,7 @@ function sumAggregatedCycleTokens(
   let apiTokens = 0;
   let autoTokens = 0;
   for (const item of rows) {
+    if (isExcludedGrokBotModel(item.modelIntent)) continue;
     const tokens = aggregationTokens(item);
     if (tokens <= 0) continue;
     if (isFirstPartyAggregation(item)) autoTokens += tokens;
@@ -520,6 +487,7 @@ function sumEventCycleTokens(
   let apiTokens = 0;
   let autoTokens = 0;
   for (const event of cycleEvents.usageEventsDisplay ?? []) {
+    if (isExcludedGrokBotModel(event.model)) continue;
     const tokens = eventTokens(event);
     if (tokens <= 0) continue;
     if (isAutoModel(event.model)) autoTokens += tokens;
@@ -591,6 +559,7 @@ function aggregateTokenEvents(
     result.autoTokens = cycleTokens.autoTokens;
   } else {
     for (const event of cycleEvents?.usageEventsDisplay ?? []) {
+      if (isExcludedGrokBotModel(event.model)) continue;
       const tokens = eventTokens(event);
       if (!cycleCosts) {
         const costCents = eventCostCents(event) ?? 0;
@@ -613,6 +582,7 @@ function aggregateTokenEvents(
   }
 
   for (const event of todayEvents?.usageEventsDisplay ?? []) {
+    if (isExcludedGrokBotModel(event.model)) continue;
     const tokens = eventTokens(event);
     const costCents = eventCostCents(event) ?? 0;
     if (isAutoModel(event.model)) {
@@ -718,15 +688,19 @@ function buildIncludedUsageCategory(
   label: string,
   models: Map<string, ModelAggregate>,
   categoryUsedPercent: number | null,
+  /** Full-category denominators (may include excluded Grok Bot cost/tokens). */
+  denominators?: { costCents: number; tokens: number },
 ): IncludedUsageCategory | null {
   if (models.size === 0) return null;
 
-  let categoryCost = 0;
-  let categoryTokens = 0;
+  let displayedCost = 0;
+  let displayedTokens = 0;
   for (const agg of models.values()) {
-    categoryCost += agg.costCents;
-    categoryTokens += agg.tokens;
+    displayedCost += agg.costCents;
+    displayedTokens += agg.tokens;
   }
+  const allocCost = denominators?.costCents ?? displayedCost;
+  const allocTokens = denominators?.tokens ?? displayedTokens;
 
   const modelItems: ModelUsageItem[] = [];
   for (const [model, agg] of models.entries()) {
@@ -736,8 +710,8 @@ function buildIncludedUsageCategory(
       usagePercent: modelUsagePercent(
         agg.costCents,
         agg.tokens,
-        categoryCost,
-        categoryTokens,
+        allocCost,
+        allocTokens,
         categoryUsedPercent,
       ),
     });
@@ -753,7 +727,7 @@ function buildIncludedUsageCategory(
   return {
     key,
     label,
-    totalTokens: categoryTokens > 0 ? categoryTokens : null,
+    totalTokens: displayedTokens > 0 ? displayedTokens : null,
     usagePercent: categoryUsedPercent,
     models: modelItems,
   };
@@ -767,12 +741,23 @@ export function aggregateIncludedUsageByModel(
 ): IncludedUsageBreakdown {
   const apiModels = new Map<string, ModelAggregate>();
   const autoModels = new Map<string, ModelAggregate>();
+  const apiDenom = { costCents: 0, tokens: 0 };
+  const autoDenom = { costCents: 0, tokens: 0 };
 
   for (const event of cycleEvents?.usageEventsDisplay ?? []) {
-    const model = normalizeModelName(event.model);
     const tokens = eventTokens(event);
     const costCents = eventCostCents(event) ?? 0;
-    const bucket = isAutoModel(event.model) ? autoModels : apiModels;
+    if (tokens <= 0 && costCents <= 0) continue;
+
+    const isAuto = isAutoModel(event.model);
+    const denom = isAuto ? autoDenom : apiDenom;
+    if (tokens > 0) denom.tokens += tokens;
+    if (costCents > 0) denom.costCents += costCents;
+
+    if (isExcludedGrokBotModel(event.model)) continue;
+
+    const model = normalizeModelName(event.model);
+    const bucket = isAuto ? autoModels : apiModels;
     const existing = bucket.get(model) ?? { tokens: 0, costCents: 0 };
     if (tokens > 0) existing.tokens += tokens;
     if (costCents > 0) existing.costCents += costCents;
@@ -785,8 +770,14 @@ export function aggregateIncludedUsageByModel(
   }
 
   const categories = [
-    buildIncludedUsageCategory('firstParty', CURSOR_MODELS_LABEL, autoModels, autoUsedPercent),
-    buildIncludedUsageCategory('api', OTHER_MODELS_LABEL, apiModels, apiUsedPercent),
+    buildIncludedUsageCategory(
+      'firstParty',
+      CURSOR_MODELS_LABEL,
+      autoModels,
+      autoUsedPercent,
+      autoDenom,
+    ),
+    buildIncludedUsageCategory('api', OTHER_MODELS_LABEL, apiModels, apiUsedPercent, apiDenom),
   ].filter((category): category is IncludedUsageCategory => category !== null);
 
   return {
@@ -812,14 +803,23 @@ export function aggregateIncludedUsageFromAggregations(
 
   const apiModels = new Map<string, ModelAggregate>();
   const autoModels = new Map<string, ModelAggregate>();
+  const apiDenom = { costCents: 0, tokens: 0 };
+  const autoDenom = { costCents: 0, tokens: 0 };
 
   for (const item of rows) {
-    const model = normalizeModelName(item.modelIntent);
     const tokens = aggregationTokens(item);
     const costCents = asNumber(item.totalCents) ?? 0;
     if (tokens <= 0 && costCents <= 0) continue;
 
-    const bucket = isFirstPartyAggregation(item) ? autoModels : apiModels;
+    const isAuto = isFirstPartyAggregation(item);
+    const denom = isAuto ? autoDenom : apiDenom;
+    if (tokens > 0) denom.tokens += tokens;
+    if (costCents > 0) denom.costCents += costCents;
+
+    if (isExcludedGrokBotModel(item.modelIntent)) continue;
+
+    const model = normalizeModelName(item.modelIntent);
+    const bucket = isAuto ? autoModels : apiModels;
     const existing = bucket.get(model) ?? { tokens: 0, costCents: 0 };
     if (tokens > 0) existing.tokens += tokens;
     if (costCents > 0) existing.costCents += costCents;
@@ -827,8 +827,14 @@ export function aggregateIncludedUsageFromAggregations(
   }
 
   const categories = [
-    buildIncludedUsageCategory('firstParty', CURSOR_MODELS_LABEL, autoModels, autoUsedPercent),
-    buildIncludedUsageCategory('api', OTHER_MODELS_LABEL, apiModels, apiUsedPercent),
+    buildIncludedUsageCategory(
+      'firstParty',
+      CURSOR_MODELS_LABEL,
+      autoModels,
+      autoUsedPercent,
+      autoDenom,
+    ),
+    buildIncludedUsageCategory('api', OTHER_MODELS_LABEL, apiModels, apiUsedPercent, apiDenom),
   ].filter((category): category is IncludedUsageCategory => category !== null);
 
   return {

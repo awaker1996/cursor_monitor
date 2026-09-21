@@ -2,11 +2,11 @@ import { Menu, Tray, nativeImage } from 'electron';
 
 let tray: Tray | null = null;
 
+export type SettingsTab = 'flow' | 'subscriptions' | 'settings';
+
 export interface TrayCallbacks {
   getIcon: () => Electron.NativeImage;
-  onOpenFlow: () => void;
-  onOpenSubscriptions: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: SettingsTab) => void;
   onResetFloatingBall: () => void;
   onQuit: () => void;
 }
@@ -20,19 +20,12 @@ export function createTray(callbacks: TrayCallbacks): Tray {
   const buildMenu = (): Menu => {
     return Menu.buildFromTemplate([
       {
-        label: '查看流水',
-        click: callbacks.onOpenFlow,
+        label: '设置',
+        click: () => callbacks.onOpenSettings(),
       },
+      { type: 'separator' },
       {
-        label: '其他订阅',
-        click: callbacks.onOpenSubscriptions,
-      },
-      {
-        label: '应用设置',
-        click: callbacks.onOpenSettings,
-      },
-      {
-        label: '重置悬浮',
+        label: '复位',
         click: callbacks.onResetFloatingBall,
       },
       { type: 'separator' },

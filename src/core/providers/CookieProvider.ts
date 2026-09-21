@@ -1,7 +1,6 @@
 import type {
   AppSettings,
   ProviderResult,
-  RawAggregatedUsageResponse,
   RawCookieResponse,
   RawUsageEventsResponse,
   TokenProvider,
@@ -422,39 +421,8 @@ export class CookieProvider implements TokenProvider {
     }
   }
 
-  /** Server-side per-model aggregation for a custom flow date range. */
-  async fetchUsageFlowAggregated(
-    startDateMs: number,
-    endDateMs: number,
-  ): Promise<RawAggregatedUsageResponse | null> {
-    const cookie = await credentialVault.getCookie();
-    if (!cookie) {
-      throw new Error('Cookie not configured. Please add your session cookie in Settings.');
-    }
-
-    const settings = this.getSettings();
-    const cookieHeader = normalizeWorkosCookie(cookie);
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      Math.max(settings.requestTimeoutSec, 15) * 1000,
-    );
-
-    try {
-      const payload = await fetchAggregatedUsage(
-        cookieHeader,
-        { startDate: String(startDateMs), endDate: String(endDateMs) },
-        controller.signal,
-      );
-      if (!payload || typeof payload !== 'object') return null;
-      return payload as RawAggregatedUsageResponse;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  /** Paginated events for flow stats when aggregation is unavailable. */
-  async fetchUsageFlowEventsForStats(
+  /** Fetch every event page across the range, for in-app pagination of small windows. */
+  async fetchUsageFlowEvents(
     startDateMs: number,
     endDateMs: number,
     maxPages = 30,

@@ -438,4 +438,101 @@ console.log('normalizeCookie plan used/limit without percent fields');
   assert('plan-only derived percent', approx(planOnly.metrics.totalUsedPercent, 40));
 }
 
+console.log('exclude grok-bot from Included Usage');
+
+{
+  // composer 300 + bot 100 = 400 category cost; autoUsedPercent 50.
+  // Without denom-including-bot, composer would get (300/300)*50 = 50%.
+  // With bot kept in denom only: (300/400)*50 = 37.5%.
+  const fromEvents = aggregateIncludedUsageByModel(
+    {
+      usageEventsDisplay: [
+        {
+          model: 'composer-2.5-fast',
+          tokenUsage: { inputTokens: 3_000_000 },
+          chargedCents: 300,
+        },
+        {
+          model: 'grok-bot-automation',
+          tokenUsage: { inputTokens: 1_000_000 },
+          chargedCents: 100,
+        },
+        {
+          model: 'grok-bot-default',
+          tokenUsage: { inputTokens: 500_000 },
+          chargedCents: 50,
+        },
+        {
+          model: 'grok-4.5-fast-xhigh',
+          tokenUsage: { inputTokens: 500_000 },
+          chargedCents: 50,
+        },
+      ],
+    },
+    null,
+    50,
+  );
+
+  const firstParty = fromEvents.categories.find((c) => c.key === 'firstParty');
+  assert(
+    'bot models omitted from list',
+    firstParty?.models.every(
+      (m) => m.model !== 'grok-bot-automation' && m.model !== 'grok-bot-default',
+    ) === true,
+  );
+  assert(
+    'ide grok kept',
+    firstParty?.models.some((m) => m.model === 'grok-4.5-fast-xhigh') === true,
+  );
+  assert(
+    'displayed tokens exclude bot',
+    firstParty?.totalTokens === 3_500_000,
+  );
+
+  const composer = firstParty?.models.find((m) => m.model === 'composer-2.5-fast');
+  // denom cost = 300+100+50+50 = 500; composer share = 300/500 * 50 = 30
+  assert('composer does not absorb bot share', approx(composer?.usagePercent ?? null, 30));
+
+  const fromAgg = aggregateIncludedUsageFromAggregations(
+    {
+      aggregations: [
+        {
+          modelIntent: 'composer-2.5-fast',
+          inputTokens: '3000000',
+          totalCents: 300,
+          tier: 2,
+        },
+        {
+          modelIntent: 'grok-bot-automation',
+          inputTokens: '1000000',
+          totalCents: 100,
+          tier: 2,
+        },
+        {
+          modelIntent: 'grok-bot-default',
+          inputTokens: '500000',
+          totalCents: 50,
+          tier: 2,
+        },
+      ],
+    },
+    null,
+    50,
+  );
+  const aggFp = fromAgg.categories.find((c) => c.key === 'firstParty');
+  assert(
+    'aggregated omits bot models',
+    aggFp?.models.every(
+      (m) => m.model !== 'grok-bot-automation' && m.model !== 'grok-bot-default',
+    ) === true,
+  );
+  const aggComposer = aggFp?.models.find((m) => m.model === 'composer-2.5-fast');
+  // denom = 450; 300/450 * 50 ≈ 33.33
+  assert(
+    'aggregated composer keeps bot gap',
+    approx(aggComposer?.usagePercent ?? null, 33.33),
+  );
+  assert('category header keeps official percent', aggFp?.usagePercent === 50);
+}
+
 console.log('\nAll included-usage checks passed.');

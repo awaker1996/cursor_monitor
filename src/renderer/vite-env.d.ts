@@ -5,11 +5,13 @@ import type {
   DockEdge,
   PollerState,
   TestConnectionResult,
+  UsageFlowCacheSnapshot,
   UsageFlowFetchResult,
   UsageFlowQuery,
   TokenSnapshot,
 } from '../shared/types';
 import type {
+  SubscriptionCacheSnapshot,
   SubscriptionCredentialKind,
   SubscriptionInfoResult,
   SubscriptionProviderId,
@@ -37,6 +39,7 @@ export interface ElectronAPI {
   openFlow: () => void;
   openSubscriptions: () => void;
   listSubscriptionProviders: () => Promise<SubscriptionProviderMeta[]>;
+  getCachedSubscriptions: () => Promise<SubscriptionCacheSnapshot>;
   saveSubscriptionKey: (
     providerId: SubscriptionProviderId,
     key: string,
@@ -52,6 +55,7 @@ export interface ElectronAPI {
     query: SubscriptionUsageQuery,
   ) => Promise<SubscriptionUsageResult>;
   fetchUsageFlow: (query: UsageFlowQuery, dateRangeLabel?: string) => Promise<UsageFlowFetchResult>;
+  getCachedUsageFlow: () => Promise<UsageFlowCacheSnapshot>;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;

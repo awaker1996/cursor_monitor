@@ -112,6 +112,42 @@ console.log('\nbuildUsageFlowPageFromEvents pagination');
   assert('page2 page index', page2.page === 2);
 }
 
+console.log('\nbuildUsageFlowPageFromEvents excludes grok-bot');
+
+{
+  const events = [
+    ...Array.from({ length: 18 }, (_, index) => ({
+      timestamp: String(1_750_979_225_854 - index * 60_000),
+      model: 'composer-2.5-fast',
+      kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS',
+      tokenUsage: { inputTokens: 1000 + index },
+    })),
+    {
+      timestamp: '1750979225000',
+      model: 'grok-bot-automation',
+      kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS',
+      tokenUsage: { inputTokens: 50_000 },
+    },
+    {
+      timestamp: '1750979224000',
+      model: 'grok-bot-default',
+      kind: 'USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS',
+      tokenUsage: { inputTokens: 30_000 },
+    },
+  ];
+
+  const page1 = buildUsageFlowPageFromEvents(events, { page: 1, pageSize: 20 }, 20);
+  assert('filtered total count', page1.totalCount === 18, String(page1.totalCount));
+  assert('filtered page1 full', page1.entries.length === 18, String(page1.entries.length));
+  assert(
+    'no grok-bot on page',
+    page1.entries.every(
+      (e) => e.model !== 'grok-bot-automation' && e.model !== 'grok-bot-default',
+    ),
+  );
+  assert('single page after filter', page1.totalPages === 1);
+}
+
 console.log('\nbuildUsageFlowPage integration');
 
 {

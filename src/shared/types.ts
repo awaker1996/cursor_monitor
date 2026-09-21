@@ -1,3 +1,5 @@
+import type { UsageFlowPreset } from './usageFlowDates';
+
 export type DataSource = 'official' | 'cookie';
 
 export interface TokenQuota {
@@ -38,20 +40,8 @@ export interface UsageFlowEntry {
   modelMax?: boolean;
   tokens: string;
   cost: string;
-}
-
-export interface UsageFlowModelStat {
-  model: string;
-  tokens: number;
-  /** Share of total tokens in the selected period (0–100). */
-  sharePercent: number;
-}
-
-export interface UsageFlowModelStats {
-  available: boolean;
-  incomplete?: boolean;
-  totalTokens: number;
-  models: UsageFlowModelStat[];
+  /** 数据来源平台 */
+  platform?: string;
 }
 
 export interface UsageFlowDisplay {
@@ -64,7 +54,6 @@ export interface UsageFlowDisplay {
   dateRangeLabel?: string;
   billingPeriod?: { start: string | null; end: string | null };
   entries: UsageFlowEntry[];
-  modelStats?: UsageFlowModelStats;
 }
 
 export interface UsageFlowQuery {
@@ -72,13 +61,38 @@ export interface UsageFlowQuery {
   endDateMs: number;
   page: number;
   pageSize?: number;
+  /** 订阅平台筛选，默认 cursor */
+  platform?: FlowPlatform;
+  /** 日期预设，随缓存一并保存以恢复上次视图。 */
+  preset?: UsageFlowPreset;
 }
+
+/** 流水支持的平台 */
+export type FlowPlatform = 'cursor' | 'commandcode' | 'deepseek';
 
 export interface UsageFlowFetchResult {
   success: boolean;
   message?: string;
   hasCookie: boolean;
   data?: UsageFlowDisplay | null;
+}
+
+/** 主进程内存缓存的单平台流水视图：查询条件 + 上次成功结果，供重新进入页面时回填。 */
+export interface UsageFlowCacheEntry {
+  platform: FlowPlatform;
+  startDateMs: number;
+  endDateMs: number;
+  dateRangeLabel: string;
+  preset: UsageFlowPreset;
+  page: number;
+  pageSize: number;
+  result: UsageFlowFetchResult;
+  fetchedAt: string;
+}
+
+export interface UsageFlowCacheSnapshot {
+  lastPlatform: FlowPlatform | null;
+  entries: Partial<Record<FlowPlatform, UsageFlowCacheEntry>>;
 }
 
 export interface UsageMetrics {

@@ -322,6 +322,13 @@ function computeRemainingPercentFromUsed(value: number | null | undefined): numb
   return normalizePercentValue(100 - value);
 }
 
+/** 由「已用百分比」换算「剩余百分比」文本，与 formatUsedPercent 两位小数口径对齐。 */
+export function formatRemainingFromUsedPercent(value: number | null | undefined): string {
+  const remaining = computeRemainingPercentFromUsed(value);
+  if (remaining === null) return '--';
+  return `${remaining.toFixed(2)}%`;
+}
+
 function formatRemainingPercentValue(value: number | null): string {
   if (value === null) return '--';
   return `${Math.round(value)}%`;
@@ -359,7 +366,11 @@ export function formatOrbSummary(snapshot: TokenSnapshot | null): {
   };
 }
 
-/** Multi-line tray tooltip: one metric or label per line. */
+/**
+ * Multi-line tray tooltip: one metric per line, with source and update time
+ * sharing the last line. Model labels are padded so the metric lines end at
+ * the same column.
+ */
 export function formatTrayTooltip(snapshot: TokenSnapshot | null): string {
   if (!snapshot) {
     return '暂无数据';
@@ -373,13 +384,16 @@ export function formatTrayTooltip(snapshot: TokenSnapshot | null): string {
     second: '2-digit',
   });
 
+  const modelsWidth = Math.max(CURSOR_MODELS_LABEL.length, OTHER_MODELS_LABEL.length);
+  const cursorModels = CURSOR_MODELS_LABEL.padEnd(modelsWidth);
+  const otherModels = OTHER_MODELS_LABEL.padEnd(modelsWidth);
+
   return [
     `总消耗 ${formatUsedPercent(m.totalUsedPercent ?? null)}`,
-    `今日 ${CURSOR_MODELS_LABEL} ${formatUsedPercent(m.autoTodayUsedPercent ?? null)}`,
-    `今日 ${OTHER_MODELS_LABEL} ${formatUsedPercent(m.apiTodayUsedPercent ?? null)}`,
-    `周期 ${CURSOR_MODELS_LABEL} ${formatUsedPercent(m.autoUsedPercent ?? null)}`,
-    `周期 ${OTHER_MODELS_LABEL} ${formatUsedPercent(m.apiUsedPercent ?? null)}`,
-    `来源 ${sourceLabel}`,
-    `更新 ${updatedAt}`,
+    `今日 ${cursorModels} ${formatUsedPercent(m.autoTodayUsedPercent ?? null)}`,
+    `今日 ${otherModels} ${formatUsedPercent(m.apiTodayUsedPercent ?? null)}`,
+    `周期 ${cursorModels} ${formatUsedPercent(m.autoUsedPercent ?? null)}`,
+    `周期 ${otherModels} ${formatUsedPercent(m.apiUsedPercent ?? null)}`,
+    `来源 ${sourceLabel}  更新 ${updatedAt}`,
   ].join('\n');
 }

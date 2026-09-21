@@ -1,127 +1,205 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ErrorHint from '../components/ErrorHint';
+import ProviderSwitcher from '../components/ProviderSwitcher';
+import SubscriptionPanel from '../components/SubscriptionPanels';
+import TestConnectionResultPanel from '../components/TestConnectionResultPanel';
+import {
+  EMPTY_PROVIDER_ENTRY,
+  formatFetchedAt,
+  currentMonthValue,
+  parseMonthValue,
+  type ProviderCacheEntry,
+} from '../components/SubscriptionUtils';
 import type {
-  SubscriptionInfoResult,
+  SubscriptionCacheSnapshot,
   SubscriptionProviderId,
   SubscriptionProviderMeta,
   SubscriptionUsageResult,
 } from '../../shared/subscriptionTypes';
-
-function formatFetchedAt(iso?: string): string {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleString('zh-CN', { hour12: false });
-}
-
-function formatTokens(value: number): string {
-  return value.toLocaleString('zh-CN');
-}
-
-function currentMonthValue(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function parseMonthValue(value: string): { month: number; year: number } | null {
-  const [yearStr, monthStr] = value.split('-');
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  if (!Number.isInteger(year) || !Number.isInteger(month)) return null;
-  return { month, year };
-}
+import type { AppSettings, TestConnectionResult } from '../../shared/types';
 
 export default function SubscriptionsPage() {
   const [providers, setProviders] = useState<SubscriptionProviderMeta[]>([]);
-  const [activeId, setActiveId] = useState<SubscriptionProviderId>('deepseek');
+  const [activeId, setActiveId] = useState<SubscriptionProviderId>('cursor');
   const [toast, setToast] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [keyInput, setKeyInput] = useState('');
+  const [cookieInput, setCookieInput] = useState('');
   const [usageTokenInput, setUsageTokenInput] = useState('');
+  const [sessionInput, setSessionInput] = useState('');
   const [usageMonth, setUsageMonth] = useState(currentMonthValue());
   const [refreshing, setRefreshing] = useState(false);
-  const [balanceResult, setBalanceResult] = useState<SubscriptionInfoResult | null>(null);
-  const [usageResult, setUsageResult] = useState<SubscriptionUsageResult | null>(null);
+  const [cache, setCache] = useState<Partial<Record<SubscriptionProviderId, ProviderCacheEntry>>>({});
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
+  const [testing, setTesting] = useState(false);
   const initRef = useRef(false);
+  const refreshingRef = useRef(false);
+  const providersRef = useRef<SubscriptionProviderMeta[]>([]);
+  const monthRef = useRef(usageMonth);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  // 读取设置页的刷新配置
+  useEffect(() => {
+    window.electronAPI.getSettings().then(setSettings);
+    const unsub = window.electronAPI.onSettingsChanged((s) => setSettings(s));
+    return unsub;
+  }, []);
+
   const refreshProviders = useCallback(async (): Promise<SubscriptionProviderMeta[]> => {
     const list = await window.electronAPI.listSubscriptionProviders();
     setProviders(list);
-    setActiveId((prev) =>
-      list.length > 0 && !list.some((p) => p.id === prev) ? list[0].id : prev,
-    );
+    setActiveId((prev) => (list.length > 0 && !list.some((p) => p.id === prev) ? list[0].id : prev));
     return list;
   }, []);
 
-  /** 一次刷新同时拉取余额与当月用量，避免两块数据割裂。 */
   const runQueries = useCallback(
     async (meta: SubscriptionProviderMeta, monthValue: string) => {
       const period = parseMonthValue(monthValue);
-      setRefreshing(true);
       try {
-        const balancePromise = window.electronAPI.fetchSubscriptionInfo(meta.id);
+        const infoPromise = window.electronAPI.fetchSubscriptionInfo(meta.id);
         const usagePromise =
           meta.usageSupported && meta.usageConfigured && period
             ? window.electronAPI.fetchSubscriptionUsage(meta.id, period)
             : Promise.resolve<SubscriptionUsageResult | null>(null);
-        const [balance, usage] = await Promise.all([balancePromise, usagePromise]);
-        setBalanceResult(balance);
-        setUsageResult(usage);
-      } catch (e) {
-        setBalanceResult({
-          success: false,
-          providerId: meta.id,
-          message: e instanceof Error ? e.message : String(e),
+        const [info, usage] = await Promise.all([infoPromise, usagePromise]);
+        setCache((prev) => {
+          const previous = prev[meta.id] ?? EMPTY_PROVIDER_ENTRY;
+          return {
+            ...prev,
+            [meta.id]: {
+              info: info.success ? info : previous.info,
+              usage: usage ? (usage.success ? usage : previous.usage) : null,
+              infoError: info.success ? null : info.message ?? '查询失败',
+              usageError: usage && !usage.success ? usage.message ?? '用量查询失败' : null,
+            },
+          };
         });
-        setUsageResult(null);
-      } finally {
-        setRefreshing(false);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        setCache((prev) => ({
+          ...prev,
+          [meta.id]: { ...(prev[meta.id] ?? EMPTY_PROVIDER_ENTRY), infoError: message },
+        }));
       }
     },
     [],
   );
 
+  const refreshAll = useCallback(
+    async (list: SubscriptionProviderMeta[], monthValue: string) => {
+      const targets = list.filter((meta) => meta.configured);
+      if (targets.length === 0) return;
+      refreshingRef.current = true;
+      setRefreshing(true);
+      try {
+        await Promise.all(targets.map((meta) => runQueries(meta, monthValue)));
+      } finally {
+        refreshingRef.current = false;
+        setRefreshing(false);
+      }
+    },
+    [runQueries],
+  );
+
+  const active = providers.find((p) => p.id === activeId) ?? null;
+
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
     void (async () => {
-      const list = await refreshProviders();
-      const first = list[0];
-      if (!first) return;
-      // 凭据未配置时默认展开配置区；已配置则直接自动拉取数据
-      setConfigOpen(!first.configured || (first.usageSupported && !first.usageConfigured));
-      if (first.configured) {
-        void runQueries(first, currentMonthValue());
-      }
-    })();
-  }, [refreshProviders, runQueries]);
+      const cached: SubscriptionCacheSnapshot = await window.electronAPI.getCachedSubscriptions();
+      setCache((prev) => {
+        const next = { ...prev };
+        for (const [id, entry] of Object.entries(cached)) {
+          if (!entry) continue;
+          next[id as SubscriptionProviderId] = {
+            info: entry.info ?? null,
+            usage: entry.usage ?? null,
+            infoError: null,
+            usageError: null,
+          };
+        }
+        return next;
+      });
 
-  const active = providers.find((p) => p.id === activeId) ?? null;
+      const list = await refreshProviders();
+      const first = list.find((p) => p.configured) ?? list[0];
+      setConfigOpen(
+        !first?.configured ||
+          (Boolean(first?.usageSupported) && !first?.usageConfigured) ||
+          (Boolean(first?.sessionSupported) && !first?.sessionConfigured),
+      );
+      await refreshAll(list, currentMonthValue());
+    })();
+  }, [refreshProviders, refreshAll]);
+
+  // 自动刷新：取设置页的 autoRefreshEnabled 和 refreshIntervalSec
+  const autoRefreshEnabled = settings?.autoRefreshEnabled ?? false;
+  const refreshIntervalSec = settings?.refreshIntervalSec ?? 30;
+  const autoRefreshMs = refreshIntervalSec * 1000;
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+    const timer = window.setInterval(() => {
+      if (refreshingRef.current) return;
+      void refreshAll(providersRef.current, monthRef.current);
+    }, autoRefreshMs);
+    return () => window.clearInterval(timer);
+  }, [autoRefreshEnabled, autoRefreshMs, refreshAll]);
+
+  useEffect(() => {
+    providersRef.current = providers;
+    monthRef.current = usageMonth;
+  });
 
   const handleSelectProvider = (id: SubscriptionProviderId) => {
     if (id === activeId) return;
     setActiveId(id);
     setKeyInput('');
+    setCookieInput('');
     setUsageTokenInput('');
-    setBalanceResult(null);
-    setUsageResult(null);
+    setSessionInput('');
+    setTestResult(null);
+    const meta = providers.find((p) => p.id === id);
+    setConfigOpen(
+      !meta?.configured ||
+        (Boolean(meta?.usageSupported) && !meta?.usageConfigured) ||
+        (Boolean(meta?.sessionSupported) && !meta?.sessionConfigured),
+    );
   };
 
   const handleRefresh = async () => {
     if (!active) return;
     if (!active.configured) {
       setConfigOpen(true);
-      showToast('请先配置 API Key');
+      showToast(activeId === 'cursor' ? '请先配置 Cookie' : '请先配置 API Key');
       return;
     }
-    await runQueries(active, usageMonth);
+    await refreshAll(providers, usageMonth);
   };
 
   const handleSaveKey = async () => {
+    if (activeId === 'cursor') {
+      if (!cookieInput.trim()) {
+        showToast('Cookie 不能为空');
+        return;
+      }
+      try {
+        await window.electronAPI.saveCookie(cookieInput.trim());
+        setCookieInput('');
+        const list = await refreshProviders();
+        showToast('Cookie 已安全保存');
+        await refreshAll(list, usageMonth);
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : String(e));
+      }
+      return;
+    }
     if (!keyInput.trim()) {
       showToast('API Key 不能为空');
       return;
@@ -131,24 +209,40 @@ export default function SubscriptionsPage() {
       setKeyInput('');
       const list = await refreshProviders();
       showToast('API Key 已安全保存');
-      const meta = list.find((p) => p.id === activeId);
-      if (meta?.configured) {
-        void runQueries(meta, usageMonth);
-      }
+      await refreshAll(list, usageMonth);
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e));
     }
   };
 
   const handleClearKey = async () => {
+    if (activeId === 'cursor') {
+      try {
+        await window.electronAPI.clearCookie();
+        const list = await refreshProviders();
+        showToast('Cookie 已清除');
+        await refreshAll(list, usageMonth);
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : String(e));
+      }
+      return;
+    }
     try {
       await window.electronAPI.clearSubscriptionKey(activeId);
-      setBalanceResult(null);
-      await refreshProviders();
+      const list = await refreshProviders();
       showToast('API Key 已清除');
+      await refreshAll(list, usageMonth);
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    const result = await window.electronAPI.testConnection();
+    setTestResult(result);
+    setTesting(false);
   };
 
   const handleSaveUsageToken = async () => {
@@ -161,10 +255,7 @@ export default function SubscriptionsPage() {
       setUsageTokenInput('');
       const list = await refreshProviders();
       showToast('用量 Token 已安全保存');
-      const meta = list.find((p) => p.id === activeId);
-      if (meta?.configured) {
-        void runQueries(meta, usageMonth);
-      }
+      await refreshAll(list, usageMonth);
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e));
     }
@@ -173,210 +264,211 @@ export default function SubscriptionsPage() {
   const handleClearUsageToken = async () => {
     try {
       await window.electronAPI.clearSubscriptionKey(activeId, 'usageToken');
-      setUsageResult(null);
-      await refreshProviders();
+      setCache((prev) => ({
+        ...prev,
+        [activeId]: { ...(prev[activeId] ?? EMPTY_PROVIDER_ENTRY), usage: null, usageError: null },
+      }));
+      const list = await refreshProviders();
       showToast('用量 Token 已清除');
+      await refreshAll(list, usageMonth);
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const lastFetchedAt = balanceResult?.fetchedAt ?? usageResult?.fetchedAt;
-  const balanceData =
-    balanceResult?.success && balanceResult.data?.providerId === 'deepseek'
-      ? balanceResult.data
-      : null;
-  const usageData =
-    usageResult?.success && usageResult.data?.providerId === 'deepseek'
-      ? usageResult.data
-      : null;
+  const handleSaveSession = async () => {
+    if (!sessionInput.trim()) {
+      showToast('流水会话凭据不能为空');
+      return;
+    }
+    try {
+      await window.electronAPI.saveSubscriptionKey(activeId, sessionInput.trim(), 'sessionToken');
+      setSessionInput('');
+      const list = await refreshProviders();
+      showToast('流水会话凭据已安全保存');
+      await refreshAll(list, usageMonth);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleClearSession = async () => {
+    try {
+      await window.electronAPI.clearSubscriptionKey(activeId, 'sessionToken');
+      const list = await refreshProviders();
+      showToast('流水会话凭据已清除');
+      await refreshAll(list, usageMonth);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const activeEntry = cache[activeId] ?? EMPTY_PROVIDER_ENTRY;
+  const lastFetchedAt = activeEntry.info?.fetchedAt ?? activeEntry.usage?.fetchedAt;
+  const isCursor = activeId === 'cursor';
+  const autoRefreshLabel = autoRefreshEnabled
+    ? `每 ${Math.round(refreshIntervalSec / 60)} 分钟自动刷新`
+    : '自动刷新已暂停';
 
   return (
-    <div className="settings-page subscription-page">
-      <h1>其他订阅</h1>
-      <p className="settings-subtitle">查询第三方平台的订阅余额与用量信息</p>
-
-      <div className="subscription-provider-tabs">
-        {providers.map((p) => (
+    <div className="page-shell page-shell--subscriptions">
+      <header className="page-shell__header">
+        <div className="page-shell__title-wrap">
+          <h1>订阅</h1>
+          <p className="page-shell__subtitle">查询各平台订阅用量与余额信息</p>
+        </div>
+        <div className="page-shell__actions">
           <button
-            key={p.id}
             type="button"
-            className={
-              p.id === activeId
-                ? 'subscription-provider-tab subscription-provider-tab--active'
-                : 'subscription-provider-tab'
-            }
-            onClick={() => handleSelectProvider(p.id)}
+            className="btn-primary btn-primary--compact"
+            onClick={handleRefresh}
+            disabled={refreshing}
           >
-            {p.label}
+            {refreshing ? '正在查询' : '刷新'}
           </button>
-        ))}
+        </div>
+      </header>
+
+      <div className="page-shell__meta">
+        <span className="page-shell__meta-left">
+          {lastFetchedAt ? `查询于 ${formatFetchedAt(lastFetchedAt)}` : '尚未查询'}
+        </span>
+        <span className="page-shell__meta-right">{autoRefreshLabel}</span>
       </div>
 
-      <section className="settings-section subscription-overview">
-        <div className="subscription-overview__toolbar">
-          <h2>订阅概览</h2>
-          <div className="subscription-usage-controls">
-            <input
-              type="month"
-              value={usageMonth}
-              onChange={(e) => setUsageMonth(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              {refreshing ? '刷新中...' : '刷新'}
-            </button>
-          </div>
-        </div>
-        {lastFetchedAt && (
-          <p className="field-hint">查询时间 {formatFetchedAt(lastFetchedAt)}</p>
-        )}
+      <ProviderSwitcher
+        providers={providers}
+        activeId={activeId}
+        cache={cache}
+        onSelect={handleSelectProvider}
+      />
 
-        <div className="subscription-block">
-          <h3 className="subscription-block__title">账户余额</h3>
-          {!active?.configured ? (
-            <p className="field-hint">尚未配置 API Key，请在下方"凭据配置"中完成配置</p>
-          ) : balanceResult && !balanceResult.success ? (
-            <div className="subscription-inline-error">{balanceResult.message ?? '查询失败'}</div>
-          ) : balanceData ? (
-            <div className="subscription-balance">
-              <span
-                className={
-                  balanceData.isAvailable
-                    ? 'subscription-status subscription-status--ok'
-                    : 'subscription-status subscription-status--bad'
-                }
-              >
-                {balanceData.isAvailable ? '可用' : '不可用'}
-              </span>
-              {balanceData.balances.length === 0 ? (
-                <span className="field-hint">接口未返回余额明细</span>
-              ) : (
-                balanceData.balances.map((b) => (
-                  <div className="subscription-balance__item" key={b.currency}>
-                    <div>
-                      <span className="subscription-balance__amount">{b.totalBalance}</span>
-                      <span className="subscription-balance__currency">{b.currency}</span>
-                    </div>
-                    <span className="subscription-balance__detail">
-                      充值 {b.toppedUpBalance} · 赠送 {b.grantedBalance}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          ) : (
-            <p className="field-hint">{refreshing ? '加载中...' : '暂无数据，点击刷新查询'}</p>
-          )}
-        </div>
+      {activeEntry.infoError && activeEntry.info?.data && (
+        <ErrorHint
+          tone="warn"
+          message={`最近一次查询失败，当前显示上次结果：${activeEntry.infoError}`}
+        />
+      )}
 
-        {active?.usageSupported && (
-          <div className="subscription-block">
-            <h3 className="subscription-block__title">
-              {parseMonthValue(usageMonth)
-                ? `${parseMonthValue(usageMonth)!.year} 年 ${parseMonthValue(usageMonth)!.month} 月用量`
-                : '月度用量'}
-            </h3>
-            {!active.usageConfigured ? (
-              <p className="field-hint">
-                尚未配置用量 Token，请在下方"凭据配置"中完成配置（数据来自平台控制台内部接口）
-              </p>
-            ) : usageResult && !usageResult.success ? (
-              <div className="subscription-inline-error">{usageResult.message ?? '查询失败'}</div>
-            ) : usageData ? (
-              <>
-                <p className="subscription-usage-summary">
-                  总 Token {formatTokens(usageData.totalTokens)} · 总请求数{' '}
-                  {formatTokens(usageData.totalRequests)}
-                </p>
-                {usageData.models.length === 0 ? (
-                  <p className="field-hint">该月份无用量记录</p>
-                ) : (
-                  <table className="subscription-balance-table">
-                    <thead>
-                      <tr>
-                        <th>模型</th>
-                        <th>总 Token</th>
-                        <th>输出 Token</th>
-                        <th>缓存命中率</th>
-                        <th>请求数</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {usageData.models.map((m) => (
-                        <tr key={m.model}>
-                          <td>{m.model}</td>
-                          <td>{formatTokens(m.totalTokens)}</td>
-                          <td>{formatTokens(m.responseTokens)}</td>
-                          <td>
-                            {m.cacheHitRatePercent == null ? '-' : `${m.cacheHitRatePercent}%`}
-                          </td>
-                          <td>{formatTokens(m.requests)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </>
-            ) : (
-              <p className="field-hint">{refreshing ? '加载中...' : '暂无数据，点击刷新查询'}</p>
-            )}
-          </div>
-        )}
-      </section>
+      {active && (
+        <SubscriptionPanel
+          meta={active}
+          info={activeEntry.info}
+          usage={activeEntry.usage}
+          infoError={activeEntry.infoError}
+          usageError={activeEntry.usageError}
+          refreshing={refreshing}
+          usageMonth={usageMonth}
+          onUsageMonthChange={setUsageMonth}
+        />
+      )}
 
       <section className="settings-section">
         <button
           type="button"
-          className="subscription-config-toggle"
+          className="sub-config-toggle"
+          aria-expanded={configOpen}
           onClick={() => setConfigOpen((open) => !open)}
         >
-          <span>凭据配置</span>
-          <span className="subscription-config-toggle__meta">
-            API Key {active?.configured ? '已配置' : '未配置'}
-            {active?.usageSupported &&
+          <span>{active ? `${active.label} 凭据配置` : '凭据配置'}</span>
+          <span className="sub-config-toggle__meta">
+            {isCursor
+              ? `Cookie ${active?.configured ? '已配置' : '未配置'}`
+              : `API Key ${active?.configured ? '已配置' : '未配置'}`}
+            {!isCursor && active?.usageSupported &&
               ` · 用量 Token ${active.usageConfigured ? '已配置' : '未配置'}`}
-            <span className="subscription-config-toggle__chevron">{configOpen ? '▴' : '▾'}</span>
+            {!isCursor && active?.sessionSupported &&
+              ` · 流水凭据 ${active.sessionConfigured ? '已配置' : '未配置'}`}
+            <span className="sub-config-toggle__chevron">{configOpen ? '▴' : '▾'}</span>
           </span>
         </button>
 
         {configOpen && (
-          <div className="subscription-config-body">
-            <div className="subscription-config-group">
-              <div className="form-group">
-                <label htmlFor="subscription-key">
-                  {active ? `${active.label} API Key` : 'API Key'}
-                </label>
-                <input
-                  id="subscription-key"
-                  type="password"
-                  value={keyInput}
-                  placeholder="sk-..."
-                  onChange={(e) => setKeyInput(e.target.value)}
-                />
-                <p className="field-hint">用于查询账户余额，出于安全考虑已保存的 Key 不回显</p>
-              </div>
-              <div className="btn-row">
-                <button type="button" className="btn-primary" onClick={handleSaveKey}>
-                  保存 Key
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleClearKey}
-                  disabled={!active?.configured}
+          <div className="sub-config-body">
+            {isCursor ? (
+              <div className="sub-config-group">
+                <div
+                  className={`settings-section__status ${active?.configured ? 'settings-section__status--ok' : 'settings-section__status--warn'}`}
                 >
-                  清除 Key
-                </button>
+                  {active?.configured ? '✓ 已配置 Cookie' : '未配置 Cookie'}
+                </div>
+                <p className="field-hint">
+                  打开 cursor.com/dashboard/usage 后，从浏览器开发者工具复制 WorkosCursorSessionToken
+                  的值。也可以粘贴包含该字段的完整 Cookie 字符串。
+                </p>
+                <div className="form-group">
+                  <label htmlFor="subscription-cookie">WorkosCursorSessionToken</label>
+                  <textarea
+                    id="subscription-cookie"
+                    rows={4}
+                    placeholder="粘贴 WorkosCursorSessionToken 值或完整 Cookie..."
+                    value={cookieInput}
+                    onChange={(e) => setCookieInput(e.target.value)}
+                  />
+                </div>
+                <div className="btn-row">
+                  <button type="button" className="btn-primary" onClick={handleSaveKey}>
+                    保存 Cookie
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleClearKey}
+                    disabled={!active?.configured}
+                  >
+                    清除 Cookie
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleTestConnection}
+                    disabled={testing || !active?.configured}
+                  >
+                    {testing ? '测试中...' : '测试连接'}
+                  </button>
+                </div>
+                {testResult && <TestConnectionResultPanel result={testResult} />}
               </div>
-            </div>
+            ) : (
+              <div className="sub-config-group">
+                <div className="form-group">
+                  <label htmlFor="subscription-key">
+                    {active ? `${active.label} API Key` : 'API Key'}
+                  </label>
+                  <input
+                    id="subscription-key"
+                    type="password"
+                    value={keyInput}
+                    placeholder={activeId === 'commandcode' ? 'user_...' : 'sk-...'}
+                    onChange={(e) => setKeyInput(e.target.value)}
+                  />
+                  {activeId === 'commandcode' ? (
+                    <p className="field-hint">
+                      留空即自动读取 cmd login 写入的 ~/.commandcode/auth.json；手动保存可覆盖该凭据，
+                      清除后回退自动读取。
+                    </p>
+                  ) : (
+                    <p className="field-hint">用于查询账户余额，出于安全考虑已保存的 Key 不回显</p>
+                  )}
+                </div>
+                <div className="btn-row">
+                  <button type="button" className="btn-primary" onClick={handleSaveKey}>
+                    保存 Key
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleClearKey}
+                    disabled={!active?.configured}
+                  >
+                    清除 Key
+                  </button>
+                </div>
+              </div>
+            )}
 
-            {active?.usageSupported && (
-              <div className="subscription-config-group">
+            {!isCursor && active?.usageSupported && (
+              <div className="sub-config-group">
                 <div className="form-group">
                   <label htmlFor="subscription-usage-token">用量 Token（与 API Key 不同）</label>
                   <input
@@ -403,6 +495,38 @@ export default function SubscriptionsPage() {
                     disabled={!active.usageConfigured}
                   >
                     清除 Token
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!isCursor && active?.sessionSupported && (
+              <div className="sub-config-group">
+                <div className="form-group">
+                  <label htmlFor="subscription-session">流水凭据（网页会话）</label>
+                  <input
+                    id="subscription-session"
+                    type="password"
+                    value={sessionInput}
+                    placeholder="登录 commandcode.ai 后的 Cookie 或会话 Token"
+                    onChange={(e) => setSessionInput(e.target.value)}
+                  />
+                  <p className="field-hint">
+                    逐条流水仅浏览器会话可访问（API Key 会返回 401）。登录 commandcode.ai 后，
+                    从开发者工具 Network 复制请求的 Cookie，或粘贴浏览器存储中的会话 Token。
+                  </p>
+                </div>
+                <div className="btn-row">
+                  <button type="button" className="btn-primary" onClick={handleSaveSession}>
+                    保存凭据
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleClearSession}
+                    disabled={!active.sessionConfigured}
+                  >
+                    清除凭据
                   </button>
                 </div>
               </div>

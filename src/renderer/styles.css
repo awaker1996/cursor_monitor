@@ -30,6 +30,18 @@ body.page-settings {
   user-select: text;
 }
 
+body.page-settings-tab {
+  background: #f8fafc;
+  overflow: hidden;
+  user-select: text;
+}
+
+body.page-settings-tab #root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 body.page-flow {
   background: #f8fafc;
   overflow: hidden;
@@ -40,6 +52,39 @@ body.page-flow #root {
   height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* ── Scrollbars ── */
+
+/* 统一弱化：细、无轨道底色、低对比拇指，悬停时才略变清晰。
+   深色悬浮球区域由各自的 .included-usage__* 规则覆盖（特异性更高）。 */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.38) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
 }
 
 /* ── Floating Ball ── */
@@ -1700,28 +1745,108 @@ body.page-flow #root {
 
 .error-hint {
   display: flex;
-  gap: 8px;
-  padding: 8px;
-  background: rgba(239, 68, 68, 0.1);
-  border-radius: 6px;
-  margin-top: 6px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid;
+  background: white;
 }
 
 .error-hint__icon {
-  color: #f87171;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
   font-weight: 700;
-  font-size: 14px;
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
+  line-height: 1;
+}
+
+.error-hint__content {
+  min-width: 0;
+  flex: 1;
 }
 
 .error-hint__message {
-  color: #fca5a5;
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1e293b;
 }
 
 .error-hint__action {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.error-hint--info {
+  border-color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.error-hint--info .error-hint__icon {
+  background: rgba(59, 130, 246, 0.15);
+  color: #1d4ed8;
+}
+
+.error-hint--info .error-hint__message {
+  color: #1d4ed8;
+}
+
+.error-hint--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.error-hint--warn .error-hint__icon {
+  background: #fde68a;
+  color: #92400e;
+}
+
+.error-hint--warn .error-hint__message {
+  color: #92400e;
+}
+
+.error-hint--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.error-hint--error .error-hint__icon {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.error-hint--error .error-hint__message {
+  color: #b91c1c;
+}
+
+/* 浮动球面板(深色背景)沿用原暗色 ErrorHint */
+.floating-ball .error-hint,
+.floating-ball__panel .error-hint {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.floating-ball .error-hint__icon,
+.floating-ball__panel .error-hint__icon {
+  background: transparent;
+  color: #f87171;
+}
+
+.floating-ball .error-hint__message,
+.floating-ball__panel .error-hint__message {
+  color: #fca5a5;
+}
+
+.floating-ball .error-hint__action,
+.floating-ball__panel .error-hint__action {
   color: #9ca3af;
-  font-size: 10px;
-  margin-top: 2px;
 }
 
 .status-banner {
@@ -1743,41 +1868,136 @@ body.page-flow #root {
   margin-bottom: 8px;
 }
 
-/* ── Settings Page ── */
+/* ── Page Shell (Settings / Flow / Subscriptions 通用页壳) ── */
 
-.settings-page {
+.page-shell {
   padding: 24px 32px 32px;
-  max-width: 520px;
+  max-width: 760px;
   width: 100%;
   margin: 0 auto;
   min-height: 100%;
   box-sizing: border-box;
   color: #1e293b;
+  display: flex;
+  flex-direction: column;
 }
 
-.settings-page h1 {
+.page-shell--flow {
+  height: 100%;
+}
+
+.page-shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.page-shell__title-wrap {
+  min-width: 0;
+}
+
+.page-shell h1 {
+  margin: 0;
   font-size: 20px;
   font-weight: 700;
+  color: #1e293b;
 }
 
-.settings-subtitle {
+.page-shell__subtitle {
+  margin: 4px 0 0;
   color: #64748b;
-  font-size: 14px;
-  margin-bottom: 24px;
+  font-size: 13px;
 }
+
+.page-shell__actions {
+display: flex;
+align-items: center;
+gap: 12px;
+flex-shrink: 0;
+}
+
+.flow-platform-filter {
+display: inline-flex;
+gap: 2px;
+padding: 2px;
+background: #e2e8f0;
+border-radius: 8px;
+}
+
+.flow-platform-filter__btn {
+padding: 4px 12px;
+border: none;
+border-radius: 6px;
+background: transparent;
+color: #64748b;
+font-size: 13px;
+cursor: pointer;
+transition: all 0.15s ease;
+}
+
+.flow-platform-filter__btn:hover:not(.flow-platform-filter__btn--active) {
+color: #334155;
+}
+
+.flow-platform-filter__btn--active {
+background: #fff;
+color: #1e293b;
+font-weight: 500;
+box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.sub-section-title {
+margin: 0 0 8px;
+font-size: 14px;
+font-weight: 600;
+color: #475569;
+}
+
+.page-shell__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.page-shell__meta-left,
+.page-shell__meta-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.page-shell__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Settings Page ── */
+
+/* 设置页继承 .page-shell，仅补充 settings-section 卡片样式 */
 
 .settings-section {
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 16px 20px;
-  margin-bottom: 16px;
 }
 
 .settings-section h2 {
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin: 0 0 12px;
+  color: #1e293b;
 }
 
 .form-group {
@@ -2021,49 +2241,9 @@ body.page-flow #root {
 
 /* ── Flow Page ── */
 
-.flow-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: 20px 24px 24px;
-  box-sizing: border-box;
-  color: #1e293b;
-}
+/* 流水页继承 .page-shell，仅补充流水页特有的 body 子类 */
 
-.flow-page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-  flex-shrink: 0;
-}
-
-.flow-page h1 {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.flow-page__subtitle {
-  color: #64748b;
-  font-size: 13px;
-  margin: 4px 0 0;
-}
-
-.flow-page__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.flow-page__count {
-  font-size: 13px;
-  color: #64748b;
-}
-
-.flow-page__hint {
+.page-shell__hint {
   flex-shrink: 0;
   margin: 0 0 12px;
   padding: 8px 12px;
@@ -2072,132 +2252,6 @@ body.page-flow #root {
   border-radius: 6px;
   color: #92400e;
   font-size: 12px;
-}
-
-.flow-page__error {
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  color: #b91c1c;
-  font-size: 13px;
-}
-
-.flow-model-stats {
-  flex-shrink: 0;
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
-}
-
-.flow-model-stats__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.flow-model-stats__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.flow-model-stats__total {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.flow-model-stats__total-label {
-  font-size: 11px;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.flow-model-stats__total-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
-  font-variant-numeric: tabular-nums;
-}
-
-.flow-model-stats__hint {
-  margin: 0 0 10px;
-  font-size: 12px;
-  color: #92400e;
-}
-
-.flow-model-stats__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.flow-model-stats__row-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-
-.flow-model-stats__model {
-  font-size: 13px;
-  font-weight: 500;
-  color: #334155;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.flow-model-stats__metrics {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.flow-model-stats__tokens {
-  font-size: 13px;
-  color: #475569;
-}
-
-.flow-model-stats__share {
-  font-size: 13px;
-  font-weight: 600;
-  color: #2563eb;
-  min-width: 3.5em;
-  text-align: right;
-}
-
-.flow-model-stats__bar-track {
-  height: 8px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  overflow: hidden;
-}
-
-.flow-model-stats__bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
-  transition: width 0.25s ease;
 }
 
 .flow-filters {
@@ -2378,7 +2432,7 @@ body.page-flow #root {
   padding: 6px 12px;
 }
 
-.flow-page__loading {
+.page-shell__loading {
   flex: 1;
   display: flex;
   align-items: center;
@@ -2387,7 +2441,7 @@ body.page-flow #root {
   font-size: 14px;
 }
 
-.flow-page__content {
+.page-shell__content {
   flex: 1;
   min-height: 0;
   display: grid;
@@ -2521,210 +2575,596 @@ body.page-flow #root {
 
 /* ── Subscriptions Page ── */
 
-.subscription-provider-tabs {
+/* 与「其他」分区一致：区块之间统一 16px 间距，不再让卡片紧贴 */
+
+.page-shell--subscriptions {
+  gap: 16px;
+}
+
+.page-shell--subscriptions > .page-shell__header,
+.page-shell--subscriptions > .page-shell__meta {
+  margin-bottom: 0;
+}
+
+/* provider 切换：卡片式（名称 + 健康点 + 一行摘要） */
+
+.provider-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.provider-card {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.subscription-provider-tab {
-  padding: 6px 16px;
-  background: white;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.subscription-provider-tab:hover {
-  border-color: #94a3b8;
-}
-
-.subscription-provider-tab--active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-
-.subscription-balance-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  background: #f8fafc;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.subscription-balance-table th,
-.subscription-balance-table td {
-  padding: 6px 10px;
+  border-radius: 10px;
+  background: white;
+  font-family: inherit;
   text-align: left;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
 }
 
-.subscription-balance-table th {
-  font-weight: 600;
-  opacity: 0.8;
+.provider-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
-.subscription-balance-table tbody tr:last-child td {
-  border-bottom: none;
+.provider-card:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
 }
 
-.subscription-usage-controls {
+.provider-card--active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), 0 4px 12px rgba(59, 130, 246, 0.12);
+}
+
+.provider-card__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
 }
 
-.subscription-usage-controls input[type='month'] {
-  padding: 7px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+.provider-card__name {
   font-size: 13px;
-  font-family: inherit;
-  background: white;
+  font-weight: 600;
   color: #1e293b;
 }
 
-.subscription-usage-controls input[type='month']:focus {
+.provider-card__value {
+  font-size: 12px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-card__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+
+.provider-card__dot--green {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18);
+}
+
+.provider-card__dot--gray {
+  background: #9ca3af;
+}
+
+.provider-card__dot--yellow {
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+/* 三平台统一骨架：概览 → 关键指标 → 周期与账户 → 用量明细 */
+
+.sub-block + .sub-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.sub-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sub-block__head .sub-section-title {
+  margin: 0;
+}
+
+.sub-block__head input[type='month'] {
+  padding: 5px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: white;
+  color: #1e293b;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.sub-block__head input[type='month']:focus-visible {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-.subscription-overview__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.sub-table-group + .sub-table-group {
+  margin-top: 14px;
 }
 
-.subscription-overview__toolbar h2 {
-  margin-bottom: 0;
-}
-
-.subscription-overview__toolbar .subscription-usage-controls {
-  margin-bottom: 0;
-}
-
-.subscription-block {
-  padding: 12px 0 4px;
-}
-
-.subscription-block + .subscription-block {
-  border-top: 1px dashed #e2e8f0;
-  margin-top: 8px;
-}
-
-.subscription-block__title {
-  margin: 0 0 8px;
+.sub-table__caption {
+  margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-.subscription-status {
-  display: inline-block;
-  padding: 2px 10px;
+/* 状态徽标：文案与颜色同时表达状态，不依赖颜色单独承载 */
+.sub-badge {
+  flex: none;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
-.subscription-status--ok {
+.sub-badge--ok {
   background: #f0fdf4;
   color: #15803d;
   border: 1px solid #bbf7d0;
 }
 
-.subscription-status--bad {
+.sub-badge--bad {
   background: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fecaca;
 }
 
-.subscription-balance {
+/* 主数值区 */
+.sub-hero {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.subscription-balance__amount {
-  font-size: 22px;
+.sub-hero__amount {
+  font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
 }
 
-.subscription-balance__currency {
-  margin-left: 4px;
+.sub-hero__unit {
+  margin-left: 6px;
   font-size: 12px;
-  color: #64748b;
+  font-weight: 500;
+  color: #94a3b8;
 }
 
-.subscription-balance__detail {
+.sub-hero__detail {
   display: block;
   margin-top: 2px;
   font-size: 12px;
   color: #94a3b8;
+  font-variant-numeric: tabular-nums;
 }
 
-.subscription-usage-summary {
-  margin: 0 0 8px;
+/* 指标栏：显式列数，避免 auto-fit 在窄窗口下产生多余空轨道 */
+.sub-metrics {
+  display: grid;
+  gap: 12px;
+}
+
+.sub-metrics--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sub-metrics--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sub-metric__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sub-metric__value {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 键值行 */
+.sub-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.sub-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 13px;
-  color: #475569;
 }
 
-.subscription-inline-error {
-  padding: 8px 12px;
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
+.sub-row__key {
+  flex: none;
+  color: #94a3b8;
+}
+
+.sub-row__value {
+  color: #334155;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* 分段用量计量条 */
+.sub-meter + .sub-meter {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.sub-meter__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sub-meter__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sub-meter__percent {
   font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
 }
 
-.subscription-config-toggle {
+.sub-meter__track {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.sub-meter__seg {
+  flex: 1 1 0;
+  height: 14px;
+  border-radius: 2px;
+  background: #e2e8f0;
+}
+
+.sub-meter__seg--ok {
+  background: #10b981;
+}
+
+.sub-meter__seg--warn {
+  background: #f59e0b;
+}
+
+.sub-meter__seg--bad {
+  background: #ef4444;
+}
+
+.sub-meter__reset {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* 无边框表格：靠行分隔线分组；固定布局确保窄窗口下收敛而非撑破面板 */
+.sub-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sub-table th {
+  padding: 0 4px 6px 0;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.sub-table td {
+  padding: 7px 4px 7px 0;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+.sub-table th:last-child,
+.sub-table td:last-child {
+  padding-right: 0;
+}
+
+.sub-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* 数值列定宽：需容纳「6947.4万」这类格式化后的 token 文本 */
+.sub-table__num {
+  width: 80px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 模型名占余下宽度，过长时省略而不是把表格顶出面板 */
+.sub-table__model {
+  color: #1e293b;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 两列表格（指标 / 数值）的数值列：右对齐但不锁死宽度 */
+.sub-table__value {
+  text-align: right;
+}
+
+/* 明细表合计行：与最后一行之间用一条更明显的分隔线 */
+.sub-table__total td {
+  padding-top: 9px;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: none;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+/* 凭据配置 */
+.sub-config-toggle {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: none;
-  border: none;
   padding: 0;
+  border: none;
+  background: none;
+  color: #1e293b;
+  font-family: inherit;
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
   cursor: pointer;
-  font-family: inherit;
 }
 
-.subscription-config-toggle__meta {
+.sub-config-toggle:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.sub-config-toggle__meta {
   font-size: 12px;
   font-weight: 400;
   color: #94a3b8;
 }
 
-.subscription-config-toggle__chevron {
+.sub-config-toggle__chevron {
   margin-left: 6px;
   color: #64748b;
 }
 
-.subscription-config-body {
-  margin-top: 12px;
-  padding-top: 12px;
+.sub-config-body {
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid #e2e8f0;
 }
 
-.subscription-config-group + .subscription-config-group {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed #e2e8f0;
+.sub-config-group + .sub-config-group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* ── Settings Page (Tab Layout) ── */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.tab-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 8px 16px 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.tab-bar__item {
+  position: relative;
+  padding: 10px 16px 11px;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.tab-bar__item:hover {
+  color: #334155;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.tab-bar__item--active {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.tab-bar__item--active:hover {
+  color: #1e293b;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.tab-bar__item--active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #3b82f6;
+  border-radius: 2px 2px 0 0;
+}
+
+.tab-bar__item:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: -3px;
+  border-radius: 8px 8px 0 0;
+}
+
+.settings-page__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.settings-page__body .page-shell {
+  padding: 20px 32px 32px;
+  max-width: none;
+}
+
+.settings-page__body .page-shell--flow {
+  height: 100%;
+  padding: 20px 32px 24px;
+}
+
+.page-shell--settings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto minmax(160px, 1fr);
+  gap: 16px;
+  height: 100%;
+}
+
+.page-shell--settings .settings-section--wide {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-shell--settings .settings-section--wide > h2 {
+  flex-shrink: 0;
+}
+
+.project-features {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.project-features__intro {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #475569;
+}
+
+.project-features__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.project-features__list code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+/* 卡片悬停：抬升 + 描边高亮；同时压低未悬停卡片，聚焦当前卡片。
+   仅作用于「其他」tab，避免订阅页长列表在滚动中反复明暗闪动。 */
+
+.page-shell--settings .settings-section {
+  transition:
+    opacity 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.page-shell--settings .settings-section:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.09);
+  transform: translateY(-2px);
+}
+
+.page-shell--settings:has(.settings-section:hover) .settings-section:not(:hover) {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-shell--settings .settings-section:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 940px) {
+  .page-shell--settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto minmax(160px, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .page-shell--settings {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(3, auto) minmax(160px, 1fr);
+  }
 }

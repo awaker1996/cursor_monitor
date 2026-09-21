@@ -6,6 +6,7 @@ import { credentialVault } from '../src/security/CredentialVault';
 import { ProviderManager } from '../src/core/providers/ProviderManager';
 import { Poller } from '../src/core/poller';
 import { SubscriptionManager } from '../src/core/subscriptions/SubscriptionManager';
+import { SubscriptionCache } from '../src/core/subscriptions/SubscriptionCache';
 import {
   createFloatingBallWindow,
   enforceFloatingBallWidth,
@@ -14,9 +15,7 @@ import {
   sendToFloatingBall,
 } from './windows/floatingBall';
 import { createSettingsWindow } from './windows/settings';
-import { createFlowWindow } from './windows/flow';
-import { createSubscriptionsWindow } from './windows/subscriptions';
-import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip } from './tray';
+import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip, type SettingsTab } from './tray';
 import {
   clearDockState,
   getDockState,
@@ -322,14 +321,16 @@ function setupIpc(): void {
   });
 
   ipcMain.on('open-flow', () => {
-    createFlowWindow(isDev, settingsStore.get());
+    createSettingsWindow(isDev, settingsStore.get(), 'flow');
   });
 
   ipcMain.on('open-subscriptions', () => {
-    createSubscriptionsWindow(isDev, settingsStore.get());
+    createSettingsWindow(isDev, settingsStore.get(), 'subscriptions');
   });
 
   ipcMain.handle('subscription-list-providers', () => subscriptionManager.listProviders());
+
+  ipcMain.handle('subscription-get-cached', () => subscriptionManager.getCached());
 
   ipcMain.handle(
     'subscription-save-key',
@@ -386,11 +387,15 @@ function setupIpc(): void {
           endDateMs: query.endDateMs,
           page,
           pageSize,
+          platform: query.platform,
+          preset: query.preset,
         },
         dateRangeLabel,
       );
     },
   );
+
+  ipcMain.handle('flow-get-cached', () => providerManager.getCachedUsageFlow());
 
   ipcMain.on('set-orb-mode', (_event, mode: 'collapsed' | 'hover' | 'expanded') => {
     applyOrbMode(mode);
@@ -514,7 +519,11 @@ app.whenReady().then(async () => {
   settingsStore = new SettingsStore();
   providerManager = new ProviderManager(settingsStore);
   await providerManager.initialize();
-  subscriptionManager = new SubscriptionManager(settingsStore);
+  subscriptionManager = new SubscriptionManager(
+    settingsStore,
+    new SubscriptionCache(),
+    () => providerManager.getLastSnapshot(),
+  );
   poller = new Poller(providerManager, settingsStore);
 
   setupIpc();
@@ -525,9 +534,7 @@ app.whenReady().then(async () => {
 
   createTray({
     getIcon: () => loadTrayIcon(settingsStore.get()),
-    onOpenFlow: () => createFlowWindow(isDev, settingsStore.get()),
-    onOpenSubscriptions: () => createSubscriptionsWindow(isDev, settingsStore.get()),
-    onOpenSettings: () => createSettingsWindow(isDev, settingsStore.get()),
+    onOpenSettings: (tab?: SettingsTab) => createSettingsWindow(isDev, settingsStore.get(), tab),
     onResetFloatingBall: () => resetFloatingBallVisibility(),
     onQuit: () => app.quit(),
   });
