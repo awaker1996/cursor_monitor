@@ -21,4 +21,14 @@ export class UsageFlowCache {
     this.entries.set(entry.platform, entry);
     this.lastPlatform = entry.platform;
   }
+
+  clear(platform?: FlowPlatform): void {
+    if (platform) {
+      this.entries.delete(platform);
+      if (this.lastPlatform === platform) this.lastPlatform = null;
+      return;
+    }
+    this.entries.clear();
+    this.lastPlatform = null;
+  }
 }

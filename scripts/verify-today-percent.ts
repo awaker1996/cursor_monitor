@@ -663,6 +663,61 @@ console.log('exclude grok-bot from today percent');
     'cycle auto percent stays official API',
     approx(snapshot.metrics.autoUsedPercent, 40),
   );
+
+  const withBot = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            limit: 100,
+            apiPercentUsed: 10,
+            autoPercentUsed: 40,
+            totalPercentUsed: 50,
+          },
+        },
+      },
+      aggregatedUsage: {
+        aggregations: [
+          {
+            modelIntent: 'composer-2.5-fast',
+            inputTokens: '8000',
+            totalCents: 800,
+            tier: 2,
+          },
+          {
+            modelIntent: 'grok-bot-automation',
+            inputTokens: '2000',
+            totalCents: 200,
+            tier: 2,
+          },
+        ],
+      },
+      todayEvents: {
+        eventsComplete: true,
+        usageEventsDisplay: [
+          {
+            model: 'composer-2.5-fast',
+            tokenUsage: { inputTokens: 800 },
+            chargedCents: 80,
+          },
+          {
+            model: 'grok-bot-automation',
+            tokenUsage: { inputTokens: 400 },
+            chargedCents: 40,
+          },
+        ],
+      },
+    },
+    new Date().toISOString(),
+    { includeGrokBotUsage: true },
+  );
+  assert('include grok-bot cycle tokens', withBot.metrics.autoTokens === 10_000);
+  assert(
+    'include grok-bot today percent',
+    approx(withBot.metrics.autoTodayUsedPercent, 4.8),
+  );
 }
 
 console.log('\nAll today-percent checks passed.');

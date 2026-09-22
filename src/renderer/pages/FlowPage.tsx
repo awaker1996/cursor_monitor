@@ -177,6 +177,30 @@ export default function FlowPage() {
     [preset, dateRange],
   );
 
+  useEffect(() => {
+    let prevIncludeGrokBot: boolean | undefined;
+    void window.electronAPI.getSettings().then((s) => {
+      prevIncludeGrokBot = s.includeGrokBotUsage;
+    });
+
+    const unsub = window.electronAPI.onSettingsChanged((settings) => {
+      if (
+        prevIncludeGrokBot === undefined ||
+        settings.includeGrokBotUsage === prevIncludeGrokBot
+      ) {
+        return;
+      }
+      prevIncludeGrokBot = settings.includeGrokBotUsage;
+      if (platform !== 'cursor' || !hasFetched) return;
+
+      const { cursor: _cursor, ...restEntries } = cacheRef.current.entries;
+      cacheRef.current = { ...cacheRef.current, entries: restEntries };
+      void loadFlow(resolveActiveRange(), page, preset, pageSize, 'cursor');
+    });
+
+    return unsub;
+  }, [platform, hasFetched, page, preset, pageSize, loadFlow, resolveActiveRange]);
+
   const handleRefresh = () => {
     void loadFlow(resolveActiveRange(), page, preset);
   };

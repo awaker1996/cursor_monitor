@@ -100,6 +100,19 @@ export default function SettingsTabContent() {
     showToast(updated.autoRefreshEnabled ? '已启用自动刷新' : '已暂停自动刷新');
   };
 
+  const handleToggleIncludeGrokBot = async () => {
+    if (!settings) return;
+    const updated = await window.electronAPI.updateSettings({
+      includeGrokBotUsage: !settings.includeGrokBotUsage,
+    });
+    setSettings(updated);
+    showToast(
+      updated.includeGrokBotUsage
+        ? '已计入 Grok Bot 用量'
+        : '已剔除 Grok Bot 用量',
+    );
+  };
+
   const handleToggleEdgeDock = async () => {
     if (!settings) return;
     const updated = await window.electronAPI.updateSettings({
@@ -131,80 +144,91 @@ export default function SettingsTabContent() {
 
   return (
     <div className="page-shell page-shell--settings">
-      <section className="settings-section settings-section--primary">
+      <section className="settings-section settings-section--primary settings-section--tile">
         <h2>数据刷新</h2>
-        <label className="toggle-row">
-          <input
-            type="checkbox"
-            checked={settings.autoRefreshEnabled}
-            onChange={handleToggleAutoRefresh}
-          />
-          <span>启用自动刷新</span>
-        </label>
-
-        <div className="form-group">
-          <label htmlFor="interval">刷新间隔（秒）</label>
-          <input
-            id="interval"
-            type="number"
-            min={REFRESH_INTERVAL_MIN}
-            max={REFRESH_INTERVAL_MAX}
-            value={intervalInput}
-            onChange={(e) => handleIntervalChange(e.target.value)}
-            onBlur={handleIntervalBlur}
-          />
-          {intervalError && <p className="field-error">{intervalError}</p>}
-          <p className="field-hint">
-            允许范围: {REFRESH_INTERVAL_MIN}-{REFRESH_INTERVAL_MAX} 秒；修改后自动保存
-          </p>
+        <div className="settings-section__body">
+          <div className="settings-toggles">
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={settings.autoRefreshEnabled}
+                onChange={handleToggleAutoRefresh}
+              />
+              <span>启用自动刷新</span>
+            </label>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={settings.includeGrokBotUsage}
+                onChange={handleToggleIncludeGrokBot}
+              />
+              <span>计入 Grok Bot 用量</span>
+            </label>
+          </div>
+          <div className="form-group form-group--flush">
+            <label htmlFor="interval">刷新间隔（秒）</label>
+            <input
+              id="interval"
+              type="number"
+              min={REFRESH_INTERVAL_MIN}
+              max={REFRESH_INTERVAL_MAX}
+              value={intervalInput}
+              onChange={(e) => handleIntervalChange(e.target.value)}
+              onBlur={handleIntervalBlur}
+            />
+            {intervalError && <p className="field-error">{intervalError}</p>}
+          </div>
         </div>
+        <p className="settings-section__footnote field-hint">
+          按间隔拉取用量；关闭 Grok Bot 时今日统计与流水不含 Bot 调用，周期账单占比仍以官方为准。
+        </p>
       </section>
 
-      <section className="settings-section">
+      <section className="settings-section settings-section--tile">
         <h2>悬浮球</h2>
-        <label className="toggle-row">
-          <input
-            type="checkbox"
-            checked={settings.edgeAutoDockEnabled}
-            onChange={handleToggleEdgeDock}
-          />
-          <span>贴边缘自动收起</span>
-        </label>
-        <p className="field-hint">
-          拖拽悬浮球贴近屏幕边缘松手后自动收起；向外拖出即可恢复完整显示。
+        <div className="settings-section__body">
+          <label className="toggle-row toggle-row--solo">
+            <input
+              type="checkbox"
+              checked={settings.edgeAutoDockEnabled}
+              onChange={handleToggleEdgeDock}
+            />
+            <span>贴边缘自动收起</span>
+          </label>
+        </div>
+        <p className="settings-section__footnote field-hint">
+          拖至屏幕边缘松手后收起为细条，向外拖出即可恢复完整显示。
         </p>
       </section>
 
-      <section className="settings-section">
+      <section className="settings-section settings-section--tile">
         <h2>外观</h2>
-        <div className="icon-picker">
-          <div className="icon-picker__preview">
-            {iconPreview ? (
-              <img src={iconPreview} alt="当前图标" className="icon-picker__image" />
-            ) : (
-              <div className="icon-picker__placeholder">无图标</div>
-            )}
-          </div>
-          <div className="icon-picker__actions">
-            <button type="button" className="btn-secondary" onClick={handleSelectIcon}>
-              选择图标
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={handleClearIcon}
-              disabled={!settings.customIconPath}
-            >
-              恢复默认
-            </button>
+        <div className="settings-section__body">
+          <div className="icon-picker">
+            <div className="icon-picker__preview">
+              {iconPreview ? (
+                <img src={iconPreview} alt="当前图标" className="icon-picker__image" />
+              ) : (
+                <div className="icon-picker__placeholder">无图标</div>
+              )}
+            </div>
+            <div className="icon-picker__actions">
+              <button type="button" className="btn-secondary" onClick={handleSelectIcon}>
+                选择图标
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleClearIcon}
+                disabled={!settings.customIconPath}
+              >
+                恢复默认
+              </button>
+            </div>
           </div>
         </div>
-        <p className="field-hint">
-          自定义图标即时生效于托盘与设置窗口。安装包/任务栏固定图标需重新打包安装后更新。
-        </p>
-        <p className="field-hint">
-          建议使用 <strong>正方形 PNG</strong>，尺寸 <strong>256×256</strong> 以上，位深 32bit。
-          非正方形图片将自动居中裁剪为正方形；尺寸过小会在高 DPI 屏幕上显示模糊。
+        <p className="settings-section__footnote field-hint">
+          即时更新托盘与设置窗口图标；建议 256×256 正方形 PNG。任务栏图标需重新安装后生效。
         </p>
       </section>
 

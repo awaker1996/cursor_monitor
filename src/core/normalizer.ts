@@ -15,6 +15,7 @@ import type {
   UsageFlowDisplay,
   UsageFlowEntry,
   UsageMetrics,
+  UsageNormalizationOptions,
 } from '../shared/types';
 import { CURSOR_MODELS_LABEL, OTHER_MODELS_LABEL, formatUsageFlowDate } from '../shared/format';
 import {
@@ -112,7 +113,11 @@ function percentFromUsed(used: number | null, limit: number | null): number | nu
 /** Grok Bot models that should not count toward local IDE usage stats. */
 const EXCLUDED_GROK_BOT_MODELS = new Set(['grok-bot-automation', 'grok-bot-default']);
 
-function isExcludedGrokBotModel(model: string | undefined): boolean {
+function isExcludedGrokBotModel(
+  model: string | undefined,
+  options?: UsageNormalizationOptions,
+): boolean {
+  if (options?.includeGrokBotUsage) return false;
   if (!model) return false;
   return EXCLUDED_GROK_BOT_MODELS.has(model.trim().toLowerCase());
 }
@@ -164,9 +169,10 @@ function eventTokens(event: RawUsageEvent): number {
 export function buildUsageFlowPage(
   eventsResponse: RawUsageEventsResponse | null | undefined,
   query: { page: number; pageSize: number; dateRangeLabel?: string },
+  options?: UsageNormalizationOptions,
 ): UsageFlowDisplay {
   const rawEvents = eventsResponse?.usageEventsDisplay ?? [];
-  const events = filterExcludedGrokBotUsageEvents(rawEvents);
+  const events = filterExcludedGrokBotUsageEvents(rawEvents, options);
   const reportedTotal = resolveUsageFlowTotalCount(eventsResponse, rawEvents.length);
   const excludedOnPage = rawEvents.length - events.length;
   const totalCount = Math.max(0, reportedTotal - excludedOnPage);
@@ -205,9 +211,10 @@ export function buildUsageFlowPageFromEvents(
   allEvents: RawUsageEvent[],
   query: { page: number; pageSize: number; dateRangeLabel?: string },
   reportedTotal?: number,
+  options?: UsageNormalizationOptions,
 ): UsageFlowDisplay {
   const deduped = dedupeUsageFlowEvents(allEvents);
-  const prepared = filterExcludedGrokBotUsageEvents(deduped);
+  const prepared = filterExcludedGrokBotUsageEvents(deduped, options);
   const totalCount = prepared.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
   const page = clampUsageFlowPage(query.page, totalPages);
@@ -264,8 +271,11 @@ function dedupeUsageFlowEvents(events: RawUsageEvent[]): RawUsageEvent[] {
   return out;
 }
 
-function filterExcludedGrokBotUsageEvents(events: RawUsageEvent[]): RawUsageEvent[] {
-  return events.filter((event) => !isExcludedGrokBotModel(event.model));
+function filterExcludedGrokBotUsageEvents(
+  events: RawUsageEvent[],
+  options?: UsageNormalizationOptions,
+): RawUsageEvent[] {
+  return events.filter((event) => !isExcludedGrokBotModel(event.model, options));
 }
 
 function mapAndSortUsageFlowEntries(events: RawUsageEvent[]): UsageFlowEntry[] {
@@ -408,6 +418,7 @@ interface BucketCycleCosts {
 
 function sumAggregatedCycleCosts(
   aggregated: RawAggregatedUsageResponse | null | undefined,
+  options?: UsageNormalizationOptions,
 ): BucketCycleCosts | null {
   const rows = aggregated?.aggregations;
   if (!Array.isArray(rows) || rows.length === 0) return null;
@@ -415,7 +426,7 @@ function sumAggregatedCycleCosts(
   let apiCycleCostCents = 0;
   let autoCycleCostCents = 0;
   for (const item of rows) {
-    if (isExcludedGrokBotModel(item.modelIntent)) continue;
+    if (isExcludedGrokBotModel(item.modelIntent, options)) continue;
     const costCents = asNumber(item.totalCents) ?? 0;
     if (costCents <= 0) continue;
     if (isFirstPartyAggregation(item)) autoCycleCostCents += costCents;
@@ -428,13 +439,14 @@ function sumAggregatedCycleCosts(
 
 function sumEventCycleCosts(
   cycleEvents: RawUsageEventsResponse | null | undefined,
+  options?: UsageNormalizationOptions,
 ): BucketCycleCosts | null {
   if (!cycleEvents || isCycleEventsPaginatedIncomplete(cycleEvents)) return null;
 
   let apiCycleCostCents = 0;
   let autoCycleCostCents = 0;
   for (const event of cycleEvents.usageEventsDisplay ?? []) {
-    if (isExcludedGrokBotModel(event.model)) continue;
+    if (isExcludedGrokBotModel(event.model, options)) continue;
     const costCents = eventCostCents(event) ?? 0;
     if (costCents <= 0) continue;
     if (isAutoModel(event.model)) autoCycleCostCents += costCents;
@@ -448,8 +460,12 @@ function sumEventCycleCosts(
 function resolveCycleCosts(
   aggregatedUsage: RawAggregatedUsageResponse | null | undefined,
   cycleEvents: RawUsageEventsResponse | null | undefined,
+  options?: UsageNormalizationOptions,
 ): BucketCycleCosts | null {
-  return sumAggregatedCycleCosts(aggregatedUsage) ?? sumEventCycleCosts(cycleEvents);
+  return (
+    sumAggregatedCycleCosts(aggregatedUsage, options) ??
+    sumEventCycleCosts(cycleEvents, options)
+  );
 }
 
 interface BucketCycleTokens {
@@ -461,6 +477,7 @@ interface BucketCycleTokens {
 /** Complete-cycle token totals from aggregated usage (no event pagination). */
 function sumAggregatedCycleTokens(
   aggregated: RawAggregatedUsageResponse | null | undefined,
+  options?: UsageNormalizationOptions,
 ): BucketCycleTokens | null {
   const rows = aggregated?.aggregations;
   if (!Array.isArray(rows) || rows.length === 0) return null;
@@ -468,7 +485,7 @@ function sumAggregatedCycleTokens(
   let apiTokens = 0;
   let autoTokens = 0;
   for (const item of rows) {
-    if (isExcludedGrokBotModel(item.modelIntent)) continue;
+    if (isExcludedGrokBotModel(item.modelIntent, options)) continue;
     const tokens = aggregationTokens(item);
     if (tokens <= 0) continue;
     if (isFirstPartyAggregation(item)) autoTokens += tokens;
@@ -481,13 +498,14 @@ function sumAggregatedCycleTokens(
 
 function sumEventCycleTokens(
   cycleEvents: RawUsageEventsResponse | null | undefined,
+  options?: UsageNormalizationOptions,
 ): BucketCycleTokens | null {
   if (!cycleEvents || isCycleEventsPaginatedIncomplete(cycleEvents)) return null;
 
   let apiTokens = 0;
   let autoTokens = 0;
   for (const event of cycleEvents.usageEventsDisplay ?? []) {
-    if (isExcludedGrokBotModel(event.model)) continue;
+    if (isExcludedGrokBotModel(event.model, options)) continue;
     const tokens = eventTokens(event);
     if (tokens <= 0) continue;
     if (isAutoModel(event.model)) autoTokens += tokens;
@@ -501,8 +519,12 @@ function sumEventCycleTokens(
 function resolveCycleTokens(
   aggregatedUsage: RawAggregatedUsageResponse | null | undefined,
   cycleEvents: RawUsageEventsResponse | null | undefined,
+  options?: UsageNormalizationOptions,
 ): BucketCycleTokens | null {
-  return sumAggregatedCycleTokens(aggregatedUsage) ?? sumEventCycleTokens(cycleEvents);
+  return (
+    sumAggregatedCycleTokens(aggregatedUsage, options) ??
+    sumEventCycleTokens(cycleEvents, options)
+  );
 }
 
 interface TokenAggregate {
@@ -522,6 +544,7 @@ function aggregateTokenEvents(
   aggregatedUsage: RawAggregatedUsageResponse | null | undefined,
   apiUsedPercent: number | null,
   autoUsedPercent: number | null,
+  options?: UsageNormalizationOptions,
 ): Pick<
   UsageMetrics,
   | 'totalTokens'
@@ -545,7 +568,7 @@ function aggregateTokenEvents(
     autoTodayCostCents: 0,
   };
 
-  const cycleCosts = resolveCycleCosts(aggregatedUsage, cycleEvents);
+  const cycleCosts = resolveCycleCosts(aggregatedUsage, cycleEvents, options);
   if (cycleCosts) {
     result.apiCycleCostCents = cycleCosts.apiCycleCostCents;
     result.autoCycleCostCents = cycleCosts.autoCycleCostCents;
@@ -553,13 +576,13 @@ function aggregateTokenEvents(
 
   // Prefer aggregated (or complete-event) cycle tokens so today% denominator
   // matches the token totals shown in the UI — not a truncated 15-page sample.
-  const cycleTokens = resolveCycleTokens(aggregatedUsage, cycleEvents);
+  const cycleTokens = resolveCycleTokens(aggregatedUsage, cycleEvents, options);
   if (cycleTokens) {
     result.apiTokens = cycleTokens.apiTokens;
     result.autoTokens = cycleTokens.autoTokens;
   } else {
     for (const event of cycleEvents?.usageEventsDisplay ?? []) {
-      if (isExcludedGrokBotModel(event.model)) continue;
+      if (isExcludedGrokBotModel(event.model, options)) continue;
       const tokens = eventTokens(event);
       if (!cycleCosts) {
         const costCents = eventCostCents(event) ?? 0;
@@ -582,7 +605,7 @@ function aggregateTokenEvents(
   }
 
   for (const event of todayEvents?.usageEventsDisplay ?? []) {
-    if (isExcludedGrokBotModel(event.model)) continue;
+    if (isExcludedGrokBotModel(event.model, options)) continue;
     const tokens = eventTokens(event);
     const costCents = eventCostCents(event) ?? 0;
     if (isAutoModel(event.model)) {
@@ -738,6 +761,7 @@ export function aggregateIncludedUsageByModel(
   cycleEvents: RawUsageEventsResponse | null | undefined,
   apiUsedPercent: number | null,
   autoUsedPercent: number | null,
+  options?: UsageNormalizationOptions,
 ): IncludedUsageBreakdown {
   const apiModels = new Map<string, ModelAggregate>();
   const autoModels = new Map<string, ModelAggregate>();
@@ -754,7 +778,7 @@ export function aggregateIncludedUsageByModel(
     if (tokens > 0) denom.tokens += tokens;
     if (costCents > 0) denom.costCents += costCents;
 
-    if (isExcludedGrokBotModel(event.model)) continue;
+    if (isExcludedGrokBotModel(event.model, options)) continue;
 
     const model = normalizeModelName(event.model);
     const bucket = isAuto ? autoModels : apiModels;
@@ -795,6 +819,7 @@ export function aggregateIncludedUsageFromAggregations(
   aggregated: RawAggregatedUsageResponse | null | undefined,
   apiUsedPercent: number | null,
   autoUsedPercent: number | null,
+  options?: UsageNormalizationOptions,
 ): IncludedUsageBreakdown {
   const rows = aggregated?.aggregations;
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -816,7 +841,7 @@ export function aggregateIncludedUsageFromAggregations(
     if (tokens > 0) denom.tokens += tokens;
     if (costCents > 0) denom.costCents += costCents;
 
-    if (isExcludedGrokBotModel(item.modelIntent)) continue;
+    if (isExcludedGrokBotModel(item.modelIntent, options)) continue;
 
     const model = normalizeModelName(item.modelIntent);
     const bucket = isAuto ? autoModels : apiModels;
@@ -849,14 +874,16 @@ export function resolveIncludedUsage(
   cycleEvents: RawUsageEventsResponse | null | undefined,
   apiUsedPercent: number | null,
   autoUsedPercent: number | null,
+  options?: UsageNormalizationOptions,
 ): IncludedUsageBreakdown {
   const fromAggregated = aggregateIncludedUsageFromAggregations(
     aggregated,
     apiUsedPercent,
     autoUsedPercent,
+    options,
   );
   if (fromAggregated.available) return fromAggregated;
-  return aggregateIncludedUsageByModel(cycleEvents, apiUsedPercent, autoUsedPercent);
+  return aggregateIncludedUsageByModel(cycleEvents, apiUsedPercent, autoUsedPercent, options);
 }
 
 function buildMetricsFromPlan(
@@ -864,6 +891,7 @@ function buildMetricsFromPlan(
   cycleEvents?: RawUsageEventsResponse | null,
   todayEvents?: RawUsageEventsResponse | null,
   aggregatedUsage?: RawAggregatedUsageResponse | null,
+  options?: UsageNormalizationOptions,
 ): UsageMetrics {
   const limit = asNumber(plan?.limit);
   const used = asNumber(plan?.used);
@@ -882,6 +910,7 @@ function buildMetricsFromPlan(
     aggregatedUsage,
     apiUsedPercent,
     autoUsedPercent,
+    options,
   );
 
   return {
@@ -901,6 +930,7 @@ function buildMetricsFromOverall(
   cycleEvents?: RawUsageEventsResponse | null,
   todayEvents?: RawUsageEventsResponse | null,
   aggregatedUsage?: RawAggregatedUsageResponse | null,
+  options?: UsageNormalizationOptions,
 ): { auto: TokenQuota; api: TokenQuota; metrics: UsageMetrics } {
   const limit = asNumber(overall.limit);
   const used = asNumber(overall.used);
@@ -917,6 +947,7 @@ function buildMetricsFromOverall(
     aggregatedUsage,
     apiUsedPercent,
     autoUsedPercent,
+    options,
   );
 
   return {
@@ -1069,7 +1100,11 @@ export function normalizeOfficial(raw: unknown, fetchedAt: string): TokenSnapsho
   };
 }
 
-export function normalizeCookie(raw: unknown, fetchedAt: string): TokenSnapshot {
+export function normalizeCookie(
+  raw: unknown,
+  fetchedAt: string,
+  options?: UsageNormalizationOptions,
+): TokenSnapshot {
   const { summary: data, todayEvents, cycleEvents, aggregatedUsage } = unwrapCookieRaw(raw);
 
   let auto = toQuota(data.autoRemaining, data.autoLimit, data.autoResetAt);
@@ -1098,13 +1133,14 @@ export function normalizeCookie(raw: unknown, fetchedAt: string): TokenSnapshot 
       api = toQuota(remaining, limit, resetAt);
     }
 
-    metrics = buildMetricsFromPlan(plan, cycleEvents, todayEvents, aggregatedUsage);
+    metrics = buildMetricsFromPlan(plan, cycleEvents, todayEvents, aggregatedUsage, options);
   } else if (data.individualUsage?.overall) {
     const fromOverall = buildMetricsFromOverall(
       data.individualUsage.overall,
       cycleEvents,
       todayEvents,
       aggregatedUsage,
+      options,
     );
     auto = { ...fromOverall.auto, resetAt };
     api = { ...fromOverall.api, resetAt };
@@ -1118,6 +1154,7 @@ export function normalizeCookie(raw: unknown, fetchedAt: string): TokenSnapshot 
     cycleEvents,
     metrics.apiUsedPercent,
     metrics.autoUsedPercent,
+    options,
   );
   metrics = backfillMetricsTokensFromIncludedUsage(metrics, includedUsage);
 
@@ -1144,8 +1181,9 @@ export function normalize(
   raw: unknown,
   source: DataSource,
   fetchedAt: string = new Date().toISOString(),
+  options?: UsageNormalizationOptions,
 ): TokenSnapshot {
   return source === 'official'
     ? normalizeOfficial(raw, fetchedAt)
-    : normalizeCookie(raw, fetchedAt);
+    : normalizeCookie(raw, fetchedAt, options);
 }

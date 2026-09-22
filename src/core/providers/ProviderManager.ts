@@ -8,6 +8,7 @@ import type {
   UsageFlowFetchResult,
   UsageFlowQuery,
   FlowPlatform,
+  UsageNormalizationOptions,
 } from '../../shared/types';
 import type {
   RawDeepSeekUsageAmountResponse,
@@ -90,6 +91,15 @@ export class ProviderManager {
     return this.lastSnapshot;
   }
 
+  private normalizationOptions(): UsageNormalizationOptions {
+    const { includeGrokBotUsage } = this.settingsStore.get();
+    return { includeGrokBotUsage };
+  }
+
+  clearUsageFlowCache(platform?: FlowPlatform): void {
+    this.flowCache.clear(platform);
+  }
+
   getHealth(): ProviderHealth[] {
     return Object.values(this.health);
   }
@@ -102,7 +112,7 @@ export class ProviderManager {
 
     try {
       const result = await provider.fetch();
-      const normalized = normalize(result.raw, result.source);
+      const normalized = normalize(result.raw, result.source, undefined, this.normalizationOptions());
       const snapshot = mergeCycleTokensFromCache(
         mergeTodayMetricsFromCache(normalized, this.lastSnapshot),
         this.lastSnapshot,
@@ -209,6 +219,7 @@ export class ProviderManager {
 
     const pageSize = query.pageSize ?? DEFAULT_USAGE_FLOW_PAGE_SIZE;
     const page = query.page >= 1 ? Math.floor(query.page) : 1;
+    const normOptions = this.normalizationOptions();
     try {
       const probe = await this.cookie.fetchUsageFlowPage(
         query.startDateMs,
@@ -235,6 +246,7 @@ export class ProviderManager {
           allEvents,
           { page, pageSize, dateRangeLabel },
           reportedTotal,
+          normOptions,
         );
       } else {
         const raw =
@@ -246,7 +258,7 @@ export class ProviderManager {
                 page,
                 pageSize,
               );
-        data = buildUsageFlowPage(raw, { page, pageSize, dateRangeLabel });
+        data = buildUsageFlowPage(raw, { page, pageSize, dateRangeLabel }, normOptions);
       }
 
       return { success: true, hasCookie: true, data };

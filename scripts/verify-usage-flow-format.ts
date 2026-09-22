@@ -146,6 +146,18 @@ console.log('\nbuildUsageFlowPageFromEvents excludes grok-bot');
     ),
   );
   assert('single page after filter', page1.totalPages === 1);
+
+  const included = buildUsageFlowPageFromEvents(
+    events,
+    { page: 1, pageSize: 20 },
+    20,
+    { includeGrokBotUsage: true },
+  );
+  assert('include grok-bot total', included.totalCount === 20, String(included.totalCount));
+  assert(
+    'include grok-bot rows',
+    included.entries.some((e) => e.model === 'grok-bot-automation'),
+  );
 }
 
 console.log('\nbuildUsageFlowPage integration');

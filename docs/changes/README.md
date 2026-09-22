@@ -71,3 +71,5 @@
 | 2026-09-20 | 流水页 Command Code 平台与内存缓存 | feature, refactor | [2026-09-20-流水页CommandCode平台与内存缓存.md](./2026-09-20-流水页CommandCode平台与内存缓存.md) |
 | 2026-09-20 | Cursor 订阅概览口径改为剩余 | fix | [2026-09-20-Cursor订阅概览口径改为剩余.md](./2026-09-20-Cursor订阅概览口径改为剩余.md) |
 | 2026-09-21 | 剔除 Grok Bot 本地用量 | fix | [2026-09-21-剔除GrokBot本地用量.md](./2026-09-21-剔除GrokBot本地用量.md) |
+| 2026-09-22 | Grok Bot 计入开关 | feature | [2026-09-22-GrokBot计入开关.md](./2026-09-22-GrokBot计入开关.md) |
+| 2026-09-22 | 设置页「其他」Tab 排版优化 | refactor | [2026-09-22-设置页其他Tab排版优化.md](./2026-09-22-设置页其他Tab排版优化.md) |

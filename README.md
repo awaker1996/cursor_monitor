@@ -47,12 +47,13 @@
 - Cursor Models / Other Models 余量与 Dashboard 用量指标展示（概览 / 用量切换）
 - 设置窗口三分区 Tab：订阅 / 流水 / 其他（URL hash 定位，默认订阅）
 - 订阅额度与用量查询：Cursor 周期用量、Command Code 额度与 5 小时/每周/每月限额、DeepSeek 余额与按月模型用量
-- 用量流水按平台查询（Cursor / Command Code / DeepSeek）：日期预设与自定义范围、分页、手动刷新，字段对齐 cursor.com 控制台；结果按平台驻留内存缓存
+- 用量流水按平台查询（Cursor / Command Code / DeepSeek）：日期预设与自定义范围、分页、字段对齐控制台；结果按平台驻留内存缓存
+- Grok Bot 用量可选计入：默认从今日%、模型明细、流水剔除 `grok-bot-*` 模型，可在「其他」分区开关；周期官方占比不变
 - 系统托盘悬停展示概览用量摘要；右键提供设置 / 复位 / 退出
 - 自动刷新与间隔配置（订阅页自动刷新共用同一份配置）
 - 双 Provider 故障切换（Official ⇄ Cookie）
 - Dashboard API 多端点候选与局部降级
-- 凭据手动配置与连通性测试（Cursor Cookie、各订阅平台 API Key / 用量 Token）
+- 凭据手动配置与连通性测试（Cursor Cookie、各订阅平台 API Key / 用量 Token / 流水会话）
 - 订阅结果与快照本地缓存（打开即有数据，查询失败保留上次成功结果）
 - 自定义应用图标（托盘/设置窗即时生效）
 
@@ -202,7 +203,8 @@ npm run dist
 - 服务端分页：每页可选 10 / 20 / 50 / 100，默认 20；提供首页 / 上一页 / 下一页 / 末页
 - 列表五列对齐控制台：Date (UTC+8)、Type、Model、Tokens、Cost；Token 统一按万 / 亿格式，缺字段显示 `-`
 - 字段映射：`default`→`auto`；`maxMode` 显示蓝色 MAX 徽标；Included / Free / Usage-based 等 Type/Cost 与控制台一致（映射见 `src/shared/usageFlowFormat.ts`）
-- 数据来源：Cursor 走 `get-filtered-usage-events`（与控制台同源）；DeepSeek 走 `/api/v0/usage/amount`；Command Code 走 `/internal/usage?from=…&to=…&limit=…`（仅浏览器会话可访问，需在订阅页配置「流水凭据」，API Key 会返回 401；服务端 `limit` 上限 100，按 `offset` 分页，响应体为 `{ usages: [...] }`）
+- 数据来源：Cursor 走 `get-filtered-usage-events`（与控制台同源，小窗口拉全量后本地分页）；DeepSeek 走 `/api/v0/usage/amount`；Command Code 走 `/internal/usage`（仅浏览器会话可访问，需在订阅页配置「流水凭据」）
+- Cursor 流水默认剔除 `grok-bot-automation` / `grok-bot-default`（与「其他」分区「计入 Grok Bot 用量」开关联动）
 - 无凭据时提示需配置 Cookie / 平台凭据
 
 ### FR-11 订阅额度与用量查询
@@ -220,12 +222,12 @@ npm run dist
 ### FR-12 设置窗口结构
 
 - 设置窗口 1120×720（最小 800×480），顶部 Tab 切换三个分区：**订阅、流水、其他**（默认订阅，`#subscriptions` / `#flow` / `#settings` 定位）
-- 「其他」分区四个卡片，宽窗口下按三列网格排列（数据刷新 / 悬浮球 / 外观同处一行，「核心功能」卡跨列占满剩余高度）：
-  - **数据刷新**：自动刷新开关 + 刷新间隔（30–3600 秒，整数校验，600ms 防抖自动保存、失焦立即保存）
+- 「其他」分区四张卡片：顶行三列等高（数据刷新 / 悬浮球 / 外观），底行「核心功能」跨列占满剩余高度；默认窗口无整页滚动条
+  - **数据刷新**：自动刷新、计入 Grok Bot 用量（默认关闭）、刷新间隔（30–3600 秒，防抖自动保存）
   - **悬浮球**：贴边缘自动收起开关
   - **外观**：自定义图标选择 / 恢复默认（即时生效于托盘与设置窗口）
-  - **核心功能**：内容由 `README.md` 派生（见下）
-- 「核心功能」卡通过 Vite `?raw` 在构建期导入 `README.md`，提取开头简介与「范围内」清单渲染，改 README 即同步；内容超出卡片高度时在卡内滚动
+  - **核心功能**：由 `README.md` 派生（见下）
+- 「核心功能」卡通过 Vite `?raw` 在构建期导入 `README.md`，提取开头简介与「范围内」清单；仅该卡内容区内部滚动
 
 ### 非功能需求
 
@@ -625,19 +627,20 @@ OfficialProvider 请求
 
 **流水**
 
-- 平台切换：Cursor / DeepSeek
+- 平台切换：Cursor / Command Code / DeepSeek
 - 日期快捷：1d / 7d / 30d / MTD / Last month + 自定义范围
-- 进入分区不自动加载，点击「刷新」才请求；切换平台不自动请求；切换筛选 / 分页 / 每页条数会重新拉取
+- 进入分区优先回填内存缓存；无缓存时自动请求最近 1 天
 - 表格：Date (UTC+8)、Type、Model（含 MAX 徽标）、Tokens、Cost
 - 分页：每页 10 / 20 / 50 / 100（默认 20），首页 / 上一页 / 下一页 / 末页
-- 有模型统计时展示按模型 Tokens 占比条形图
+- Cursor 流水默认剔除 Grok Bot 模型行（可在「其他」分区开启计入）
 
 **其他**
 
-- 数据刷新：自动刷新开关 + 间隔（30–3600 秒，整数校验，600ms 防抖自动保存）
-- 悬浮球：贴边缘自动收起开关
+- 顶行三卡等高，说明文案收至卡片底部脚注；默认窗口无整页滚动
+- 数据刷新：自动刷新、计入 Grok Bot 用量（默认关闭）、间隔（30–3600 秒）
+- 悬浮球：贴边缘自动收起
 - 外观：自定义应用图标（选择 / 恢复默认）
-- 核心功能：由 `README.md` 派生的项目功能清单，改 README 即同步
+- 核心功能：由 `README.md` 派生的项目功能清单（构建期 `?raw` 同步）
 
 ### 托盘
 
@@ -673,6 +676,7 @@ OfficialProvider 请求
 | cookieEndpoint | `https://cursor.com/api/usage-summary` | 用户自定义 Cookie 汇总接口候选 |
 | failureThreshold | 3 | 切换 Provider 的失败次数阈值 |
 | edgeAutoDockEnabled | true | 贴边缘自动收起 |
+| includeGrokBotUsage | false | 是否将 Grok Bot 计入今日%、模型明细与流水 |
 | customIconPath | null | 自定义图标路径（null 为默认） |
 
 修改端点或映射逻辑见 [维护与扩展](#13-维护与扩展)。
@@ -756,9 +760,10 @@ Get-Process -Name "Cursor Token Monitor" -ErrorAction SilentlyContinue | Stop-Pr
 - [ ] 订阅分区「刷新」覆盖全部已配置提供方；重新进入分区立即显示缓存
 - [ ] Command Code 展示额度与 5 小时/每周/每月限额；DeepSeek 可按月查询模型用量
 - [ ] 订阅查询失败时保留上次成功结果并给出黄色提示，不显示空白
-- [ ] 流水分区需手动点「刷新」加载，可按平台与日期筛选、可改每页条数
+- [ ] 流水分区可按平台与日期筛选、可改每页条数；Cursor 默认不含 Grok Bot 行
 - [ ] 「其他」分区改刷新间隔后，订阅页自动刷新同步生效
-- [ ] 「其他」分区四张卡片在默认窗口下按三列排列，核心功能卡内容与 README「范围内」清单一致
+- [ ] 「其他」分区顶行三卡等高、无整页滚动；核心功能卡内容与 README「范围内」清单一致
+- [ ] 「计入 Grok Bot 用量」开关切换后用量与流水立即按新口径刷新
 - [ ] 自定义图标可即时生效于托盘与设置窗
 - [ ] 安装包可在 Windows 环境安装运行
 

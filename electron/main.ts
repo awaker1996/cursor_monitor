@@ -247,6 +247,13 @@ function setupIpc(): void {
     }
     const settings = settingsStore.update(partial);
     poller.applySettingsChange();
+    if (partial.includeGrokBotUsage !== undefined) {
+      providerManager.clearUsageFlowCache('cursor');
+      void poller.manualRefresh().then(() => {
+        broadcastSnapshot();
+        broadcastPollerState();
+      });
+    }
     if (partial.edgeAutoDockEnabled === false) {
       const floatWin = getFloatingBallWindow();
       if (floatWin && !floatWin.isDestroyed() && getDockState().docked) {

@@ -533,6 +533,31 @@ console.log('exclude grok-bot from Included Usage');
     approx(aggComposer?.usagePercent ?? null, 33.33),
   );
   assert('category header keeps official percent', aggFp?.usagePercent === 50);
+
+  const withBot = aggregateIncludedUsageByModel(
+    {
+      usageEventsDisplay: [
+        {
+          model: 'composer-2.5-fast',
+          tokenUsage: { inputTokens: 3_000_000 },
+          chargedCents: 300,
+        },
+        {
+          model: 'grok-bot-automation',
+          tokenUsage: { inputTokens: 1_000_000 },
+          chargedCents: 100,
+        },
+      ],
+    },
+    null,
+    50,
+    { includeGrokBotUsage: true },
+  );
+  const withBotFp = withBot.categories.find((c) => c.key === 'firstParty');
+  assert(
+    'include grok-bot in list',
+    withBotFp?.models.some((m) => m.model === 'grok-bot-automation') === true,
+  );
 }
 
 console.log('\nAll included-usage checks passed.');
