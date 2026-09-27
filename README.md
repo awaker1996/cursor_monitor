@@ -1,6 +1,6 @@
 # Cursor Token Monitor — 项目参考文档
 
-> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口内按 **智能体 / 订阅 / 流水 / 其他** 四个分区承载本地智能体链路观测、订阅额度查询、用量流水与其他配置。  
+> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口内按 **订阅 / 流水 / 其他** 三个分区承载订阅额度查询、用量流水与其他配置。  
 > 本文档整合需求说明、架构设计、实现细节、使用与维护指南，便于后续查阅。
 
 ---
@@ -30,14 +30,14 @@
 |---|---|
 | 项目名称 | Cursor Token Monitor（Cursor Token 悬浮球） |
 | 平台 | Windows |
-| 技术栈 | Electron + TypeScript + React + Vite（`better-sqlite3` 只读解析本地 Cursor 数据库） |
+| 技术栈 | Electron + TypeScript + React + Vite |
 | 版本 | v1.0.0 |
 | 目标用户 | 个人开发者（账号所有者本人） |
 
 ### 背景与目标
 
 - **背景**：需要在桌面实时查看 Cursor 账号 token 余量，避免频繁打开网页或控制台。
-- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 Cursor Models 与 Other Models 用量概览、周期明细及余量；并在设置窗口内集中提供本地智能体（Composer / Agent）链路观测、订阅额度查询（Cursor / Command Code / DeepSeek）与用量流水查询。
+- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 Cursor Models 与 Other Models 用量概览、周期明细及余量；并在设置窗口内集中提供订阅额度查询（Cursor / Command Code / DeepSeek）与用量流水查询。
 - **数据策略**：官方接口优先（`OfficialProvider`），连续失败后自动回退到 Dashboard Cookie 接口（`CookieProvider`）。Cookie 方案优先读取 `usage-summary` 汇总数据；`get-aggregated-usage-events` 用于 Included Usage 周期模型明细；`get-filtered-usage-events` 作为今日/周期 token 与回退补充，避免明细接口不稳定时影响主数据展示。订阅数据独立于该链路，由 `SubscriptionManager` 按提供方各自查询（见第 4 章）。
 
 ### 范围
@@ -45,8 +45,7 @@
 **范围内：**
 - Windows 悬浮球（拖拽、置顶、贴边半隐收起、托盘）
 - Cursor Models / Other Models 余量与 Dashboard 用量指标展示（概览 / 用量切换）
-- 设置窗口四分区 Tab：智能体 / 订阅 / 流水 / 其他（URL hash 定位，默认智能体）
-- 智能体链路观测：只读解析本机 Cursor `state.vscdb`，按时间线展示最近一次 Composer 的思考 / 工具调用 / 工具结果 / 回复 / 用户五类 turn，2s 轮询自动追加
+- 设置窗口三分区 Tab：订阅 / 流水 / 其他（URL hash 定位，默认订阅）
 - 订阅额度与用量查询：Cursor 周期用量、Command Code 额度与 5 小时/每周/每月限额、DeepSeek 余额与按月模型用量
 - 用量流水按平台查询（Cursor / Command Code / DeepSeek）：日期预设与自定义范围、分页、字段对齐控制台；结果按平台驻留内存缓存
 - Grok Bot 用量可选计入：默认从今日%、模型明细、流水剔除 `grok-bot-*` 模型，可在「其他」分区开关；周期官方占比不变
@@ -63,7 +62,6 @@
 - 多账号切换（首版单账号）
 - 服务端中转
 - 历史趋势图表（首版不做）
-- 智能体历史归档与跨机同步（仅渲染本机最近一次 trace，不落盘、不回传）
 
 ### 术语
 
@@ -73,9 +71,6 @@
 | api | Other Models 池（原 API，非 Cursor 自有模型调用相关 token） |
 | Provider | 数据获取单元（Official / Cookie） |
 | TokenSnapshot | 统一后的展示数据结构 |
-| Composer | Cursor 内置的智能体会话单元（旧称 Agent），数据存于 `state.vscdb` |
-| cursorDiskKV | Cursor `state.vscdb` 中承载全部 Composer / Bubble 数据的单表（v3 schema） |
-| AgentTurn | 智能体链路归一化后的单条时间线节点（thinking / tool_call / tool_result / assistant / user） |
 
 ---
 
@@ -226,8 +221,7 @@ npm run dist
 
 ### FR-12 设置窗口结构
 
-- 设置窗口 1120×720（最小 800×480），顶部 Tab 切换四个分区：**智能体、订阅、流水、其他**（默认智能体，`#agent` / `#subscriptions` / `#flow` / `#settings` 定位）；窗口标题简化为「设置」
-- 「智能体」分区：本机 Cursor 智能体链路时间线（详见 FR-13）
+- 设置窗口 1120×720（最小 800×480），顶部 Tab 切换三个分区：**订阅、流水、其他**（默认订阅，`#subscriptions` / `#flow` / `#settings` 定位）；窗口标题简化为「设置」
 - 「其他」分区四张卡片：顶行三列等高（数据刷新 / 悬浮球 / 外观），底行「核心功能」跨列占满剩余高度
   - **数据刷新**：自动刷新、计入 Grok Bot 用量（默认关闭）、刷新间隔（30–3600 秒，防抖自动保存）
   - **悬浮球**：贴边缘自动收起开关
@@ -236,18 +230,6 @@ npm run dist
 - 顶行三卡采用横向 flex + wrap 自适应：宽窗三卡一行，窄窗自动换行，极窄单列；取消卡内滚动与裁剪，内容超出时由整页 body 滚动查看
 - 「核心功能」卡通过 Vite `?raw` 在构建期导入 `README.md`，提取开头简介与「范围内」清单
 
-### FR-13 智能体链路观测
-
-- 位于设置窗口「智能体」分区（默认分区），**只读**解析本机 `%APPDATA%/Cursor/User/{globalStorage,workspaceStorage/<id>}/state.vscdb`
-- 以 `readonly: true, fileMustExist: true` 打开，与 Cursor 自身写锁不冲突；workspace 库按 mtime 倒序只取前 5 个
-- 解析最近一次 Composer（`composerData:<id>` → `bubbleId:<composerId>:<bubbleId>` → `ofsContent:<bubbleId>:<fileURI>` / `codeBlockPartialInlineDiffFates:<bubbleId>:<fileURI>`），归一化为五类 turn：思考 / 工具调用 / 工具结果 / 回复 / 用户
-- 时间线按 turn 类型配色；工具调用的参数与结果以 JSON 折叠，长文本提供「展开全文」；`task-tool_*` / `task-call_*` 等 sub-agent 被排除
-- 主进程 2s 轮询，仅在 signature 变化时推送（避免无谓刷新）；连续 5 次同类错误后拉长到 30s
-- header 提供「重新探测」「暂停轮询」（暂停仅忽略推送，不停止主进程读库）
-- 错误分级：未安装（蓝色 info）/ 数据库被占用（黄色 warn，轮询继续）/ schema 未知（红色 error）/ 无数据（蓝色 info）/ 内部错误（红色 error）
-- 调试折叠展示数据库路径、类型、命中表、最近 turn 时间，并提供「复制诊断信息」（仅路径与字段名，不含用户输入文本）
-- 隐私：仅在本机内存中渲染，不发起任何网络回传
-
 ### 非功能需求
 
 | 类别 | 要求 |
@@ -255,7 +237,6 @@ npm run dist
 | 性能 | 冷启动 5 秒内显示悬浮球；单次请求超时默认 10 秒 |
 | 稳定性 | 接口失败不崩溃；指数退避重试 |
 | 安全 | Cookie 不明文存储；日志脱敏 |
-| 隐私 | 智能体链路数据仅在本机内存渲染，不外传 |
 | 可维护性 | Provider 与 UI 解耦；关键行为可追踪日志 |
 
 ---
@@ -266,7 +247,7 @@ npm run dist
 flowchart TD
     trayMenu[TrayMenu] --> mainProcess[MainProcess]
     floatingBall[FloatingBallWindow] --> mainProcess
-    settingsWindow[SettingsWindow 智能体/订阅/流水/其他] --> mainProcess
+    settingsWindow[SettingsWindow 订阅/流水/其他] --> mainProcess
     mainProcess --> pollerCore[PollerCore]
     pollerCore --> providerManager[ProviderManager]
     providerManager --> officialProvider[OfficialProvider]
@@ -291,9 +272,6 @@ flowchart TD
     settingsWindow --> subscriptionManager
     mainProcess --> floatingBallDock[FloatingBallDock]
     floatingBallDock --> floatingBall
-    mainProcess --> agentTraceService[AgentTraceService]
-    agentTraceService --> cursorStateDb[("Cursor state.vscdb (readonly)")]
-    agentTraceService --> settingsWindow
 ```
 
 ### 模块职责
@@ -304,7 +282,7 @@ flowchart TD
 | 边缘吸附 | `electron/floatingBallDock.ts` | 贴边半隐、悬停滑入、窗口 undock |
 | 图标管理 | `electron/iconManager.ts` | 自定义图标读写与预览 |
 | 悬浮窗 | `electron/windows/floatingBall.ts` | 无边框置顶窗口 |
-| 设置窗 | `electron/windows/settings.ts` | 设置窗口（智能体 / 订阅 / 流水 / 其他 四分区容器，按 tab 参数定位） |
+| 设置窗 | `electron/windows/settings.ts` | 设置窗口（订阅 / 流水 / 其他 三分区容器，按 tab 参数定位） |
 | 托盘 | `electron/tray.ts` | 系统托盘菜单与悬停 tooltip |
 | 预加载 | `electron/preload.ts` | 安全 IPC 桥接 |
 | 开发态 URL | `src/shared/devServer.ts` | dev server 端口与 URL 的单一来源（5180） |
@@ -328,16 +306,10 @@ flowchart TD
 | 流水日期 | `src/shared/usageFlowDates.ts` | 东八区日期预设与自定义范围 |
 | 流水分页 | `src/shared/usageFlowPagination.ts` | 每页条数选项与默认值 |
 | 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开、概览/用量切换 |
-| 设置 UI 路由 | `src/renderer/pages/SettingsPage.tsx` | 四分区 Tab 路由与 hash 同步（默认智能体） |
+| 设置 UI 路由 | `src/renderer/pages/SettingsPage.tsx` | 三分区 Tab 路由与 hash 同步（默认订阅） |
 | Tab 切换 | `src/renderer/components/TabBar.tsx` | 通用 Tab 切换组件 |
 | 其他分区 UI | `src/renderer/components/SettingsTabContent.tsx` | 数据刷新 / 悬浮球 / 外观 / 核心功能卡 |
 | 核心功能卡 | `src/renderer/components/ProjectFeaturesCard.tsx` | 由 `README.md` 派生功能清单（`?raw`） |
-| 智能体链路 | `src/core/agentTrace/AgentTraceService.ts` | 定位 state.vscdb、解析最近 trace、2s 轮询 watcher、错误分级 |
-| Schema 探测 | `src/core/agentTrace/cursorSchema.ts` | cursorDiskKV 表探测与 key 前缀解析 |
-| Trace 解析 | `src/core/agentTrace/parser.ts` | cursorDiskKV 行归一化为 `AgentTurn[]` |
-| 智能体 UI | `src/renderer/pages/AgentPage.tsx` | 智能体分区：重新探测 / 暂停轮询 / 调试折叠 / 时间线 |
-| 时间线 | `src/renderer/components/AgentTimeline.tsx` | 按 turn 类型配色的折叠卡 |
-| 智能体类型 | `src/shared/agentTrace.ts` | IPC 通道名与 `AgentTrace` 共享类型 |
 | 打包编排 | `scripts/dist.mjs` | 结束残留实例、工作区外打包、发布产物到 `release/` |
 | 订阅 UI | `src/renderer/pages/SubscriptionsPage.tsx` | 订阅分区：提供方切换、刷新、凭据配置 |
 | 订阅面板 | `src/renderer/components/SubscriptionPanels.tsx` | Cursor / Command Code / DeepSeek 展示面板 |
@@ -350,8 +322,6 @@ flowchart TD
 | 指标行 | `src/renderer/components/MetricRow.tsx` | Dashboard metric 明细展示 |
 | Included 列表 | `src/renderer/components/IncludedUsageTable.tsx` | Included Usage 用量明细 |
 | 流水表格 | `src/renderer/components/UsageFlowTable.tsx` | 用量流水五列展示 |
-
-> 注：`electron/windows/flow.ts`、`electron/windows/subscriptions.ts` 及其入口 HTML 仍保留在仓库中，但当前已无引用——流水与订阅均由设置窗口的对应分区承载（见第 9 章）。
 
 ---
 
@@ -367,9 +337,7 @@ cursor_monitor/
 │   ├── iconManager.ts           # 自定义图标管理
 │   └── windows/
 │       ├── floatingBall.ts      # 悬浮球窗口（固定 300 宽）
-│       ├── settings.ts          # 设置窗口（智能体 / 订阅 / 流水 / 其他 四分区容器）
-│       ├── flow.ts              # 流水窗口（保留，当前无引用）
-│       └── subscriptions.ts     # 其他订阅窗口（保留，当前无引用）
+│       └── settings.ts          # 设置窗口（订阅 / 流水 / 其他 三分区容器）
 ├── src/
 │   ├── core/
 │   │   ├── poller.ts            # 轮询与状态机
@@ -388,10 +356,6 @@ cursor_monitor/
 │   │       ├── CursorProvider.ts      # Cursor 周期用量（复用快照）
 │   │       ├── CommandCodeProvider.ts # Command Code 额度看板
 │   │       └── DeepSeekProvider.ts    # DeepSeek 余额 + 按月用量
-│   │   └── agentTrace/
-│   │       ├── AgentTraceService.ts   # state.vscdb 定位 / 2s 轮询 / 错误分级
-│   │       ├── cursorSchema.ts        # cursorDiskKV 表探测与 key 前缀解析
-│   │       └── parser.ts              # cursorDiskKV 行 → AgentTurn[]
 │   ├── settings/
 │   │   └── SettingsStore.ts     # 本地配置
 │   ├── security/
@@ -399,7 +363,6 @@ cursor_monitor/
 │   ├── shared/
 │   │   ├── types.ts             # 类型定义
 │   │   ├── subscriptionTypes.ts # 订阅相关类型
-│   │   ├── agentTrace.ts        # 智能体链路 IPC 通道与共享类型
 │   │   ├── format.ts            # 展示格式化 / 托盘 tooltip
 │   │   ├── usageFlowDates.ts    # 流水日期范围
 │   │   ├── usageFlowFormat.ts   # 流水字段映射
@@ -411,18 +374,14 @@ cursor_monitor/
 │       ├── App.tsx              # 悬浮球
 │       ├── main.tsx             # 悬浮球入口
 │       ├── settings-main.tsx    # 设置窗入口
-│       ├── flow-main.tsx        # 流水窗入口（保留）
-│       ├── subscriptions-main.tsx # 其他订阅窗入口（保留）
 │       ├── pages/
-│       │   ├── SettingsPage.tsx      # 四分区 Tab 路由（默认智能体）
-│       │   ├── AgentPage.tsx         # 智能体链路
+│       │   ├── SettingsPage.tsx      # 三分区 Tab 路由（默认订阅）
 │       │   ├── FlowPage.tsx          # 流水
 │       │   └── SubscriptionsPage.tsx # 订阅
 │       └── components/
 │           ├── TabBar.tsx
 │           ├── SettingsTabContent.tsx   # 其他分区四张卡片
 │           ├── ProjectFeaturesCard.tsx  # 核心功能（读 README）
-│           ├── AgentTimeline.tsx        # 智能体时间线折叠卡
 │           ├── ProviderSwitcher.tsx
 │           ├── SubscriptionPanels.tsx
 │           ├── SubscriptionUtils.ts
@@ -439,21 +398,17 @@ cursor_monitor/
 ├── scripts/
 │   ├── dist.mjs                 # 打包编排（结束残留实例 / 工作区外打包 / 发布产物）
 │   ├── create-icon.ps1          # 生成 build/icon.ico
-│   ├── verify-agent-trace.ts    # 智能体 trace 解析验收脚本（内存库 mock）
-│   └── inspect-*.ts             # Cursor state.vscdb schema 只读探测脚本
+│   ├── verify-*.ts              # 主链路 / 订阅 / 流水验收脚本（内存 mock）
 ├── .cursor/rules/               # 项目级规则（变更归档等）
 ├── .cursorignore                # 编辑器索引排除（构建产物）
 ├── .vscode/settings.json        # 编辑器 search / watcher 排除
 ├── index.html                   # 悬浮球入口
-├── settings.html                # 设置窗口入口（承载四分区）
-├── flow.html                    # 流水入口（保留，当前无引用）
-├── subscriptions.html           # 其他订阅入口（保留，当前无引用）
+├── settings.html                # 设置窗口入口（承载三分区）
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tsconfig.electron.json
 ├── electron-builder.yml
 ├── package.json
-├── requirements.md              # 原始需求说明书（已合并至本文档）
 └── release/                     # 打包产物
 ```
 
@@ -567,39 +522,6 @@ cursor_monitor/
 | Tokens | 有用量用「万」等格式；零/空显示 `-` |
 | Cost | Included / Free 显示文案本身；Usage-based 等显示金额 |
 
-### AgentTrace（智能体链路）
-
-```json
-{
-  "meta": {
-    "dbPath": "C:\\Users\\me\\AppData\\Roaming\\Cursor\\User\\globalStorage\\state.vscdb",
-    "dbKind": "global",
-    "workspaceUri": null,
-    "fetchedAtMs": 1758880000000,
-    "schemaTableNames": ["cursorDiskKV"],
-    "error": null
-  },
-  "turns": [
-    { "index": 0, "type": "user", "text": "帮我实现冒泡排序", "timestampMs": 1758879000000 },
-    { "index": 1, "type": "thinking", "text": "先看现有代码……", "timestampMs": 1758879001000 },
-    { "index": 2, "type": "tool_call", "text": "read_file file:///…/foo.ts", "payload": "{…}", "timestampMs": null },
-    { "index": 3, "type": "tool_result", "text": "// existing file", "payload": "{…}", "timestampMs": null },
-    { "index": 4, "type": "assistant", "text": "```ts …```", "timestampMs": 1758879002000 }
-  ]
-}
-```
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| meta.dbPath / dbKind | string | 命中的 `state.vscdb` 路径与类型（global / workspace） |
-| meta.workspaceUri | `string \| null` | workspace 库对应的工作区 URI |
-| meta.fetchedAtMs | number | 本次解析时间（毫秒） |
-| meta.schemaTableNames | string[] | 命中的原始表名（调试用） |
-| meta.parseWarning | `string?` | 解析告警（字段缺失等） |
-| meta.error | `{ code, message }?` | 错误分级（NOT_INSTALLED / LOCKED / SCHEMA_UNKNOWN / NO_DATA / INTERNAL） |
-| turns[].type | `AgentTurnType` | thinking / tool_call / tool_result / assistant / user |
-| turns[].payload | `string?` | 工具调用参数 / 工具结果对象（字符串化，避免 IPC 复杂类型） |
-
 ### 异常处理规则
 
 - 单字段缺失 → 该字段为 `null`，不影响其他字段
@@ -665,7 +587,6 @@ OfficialProvider 请求
 | 配置文件 | 仅存非敏感项（刷新间隔、端点 URL），不含 Cookie / API Key |
 | 日志脱敏 | `logger.ts` 对 cookie / authorization / session 等字段打码 |
 | 用户提示 | 设置窗口订阅分区说明凭据仅用于本人账号查询 |
-| 智能体本地读取 | 仅以 `readonly` 打开 Cursor `state.vscdb`，只读取本机数据并在内存渲染，不发起网络回传；「复制诊断信息」只含路径与字段名 |
 | 清除凭据 | 一键删除，之后不再发起对应平台的请求 |
 
 ---
@@ -691,16 +612,9 @@ OfficialProvider 请求
 
 视觉细节：弹窗 header 左侧为「三色状态灯 + Cursor监控」品牌行——三色灯为纯装饰循环动画（红→黄→绿，2.7s 错相位），与健康状态 / 用量数据完全解耦；`prefers-reduced-motion: reduce` 下三灯静态显示熄灭态。悬浮球本体与概览/用量卡片叠加动态玻璃质感（缓慢扫过的光泽带 + 描边高光，各卡片错相位），减少动态效果时关闭扫光但保留玻璃质感。
 
-### 设置窗口（四分区）
+### 设置窗口（三分区）
 
-窗口 1120×720（最小 800×480），顶部 Tab：**智能体 / 订阅 / 流水 / 其他**，默认智能体，`#agent` / `#subscriptions` / `#flow` / `#settings` 定位；窗口标题显示「设置」。
-
-**智能体**（默认分区）
-
-- header：左侧显示命中的数据库来源（workspace URI 或「（全局）」），右侧显示 `更新于 <时间> · <2s 轮询 | 已暂停>`；操作按钮为「暂停轮询 / 继续轮询」「重新探测」
-- 时间线：最近一次 Composer 的 turn 列表，按类型配色（思考 / 工具调用 / 工具结果 / 回复 / 用户）；工具调用的参数与工具结果的 JSON 可折叠，长文本提供「展开全文」
-- 错误分级提示走 `ErrorHint`（蓝 info / 黄 warn / 红 error），黄灯场景轮询不中断
-- 调试折叠：数据库路径、类型、命中表、最近 turn 时间 + 「复制诊断信息」
+窗口 1120×720（最小 800×480），顶部 Tab：**订阅 / 流水 / 其他**，默认订阅，`#subscriptions` / `#flow` / `#settings` 定位；窗口标题显示「设置」。
 
 **订阅**
 
@@ -794,7 +708,7 @@ npm run dist
 等价于 `npm run typecheck && npm run build && node scripts/dist.mjs`：
 
 1. **typecheck** — `tsc --noEmit` 类型检查，不生成冗余 JS
-2. **build** — Vite 编译 `dist/`（渲染层）与 `dist-electron/main.js`、`preload.js`（主/预加载进程）；`better-sqlite3` / `keytar` 作为原生模块保持 external，由 electron-builder 随生产依赖一并打包
+2. **build** — Vite 编译 `dist/`（渲染层）与 `dist-electron/main.js`、`preload.js`（主/预加载进程）；`keytar` 作为原生模块保持 external，由 electron-builder 随生产依赖一并打包
 3. **dist.mjs** — 先结束残留的应用实例，再由 `electron-builder` 打包 NSIS 安装包与 portable 便携版，最后把产物发布到 `release/`
 
 产物位于 `release/`：
@@ -862,9 +776,7 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 - [ ] 快照缓存在启动/失败时可展示 stale 数据（状态 pill 标识）
 - [ ] 托盘悬停显示多行概览用量（模型名列对齐），随刷新更新
 - [ ] 托盘右键含设置、复位、退出；左键点击弹出同一菜单
-- [ ] 设置窗口四分区（智能体 / 订阅 / 流水 / 其他）可切换，默认智能体且 hash 定位有效
-- [ ] 智能体分区显示最近一次 Composer 时间线；在 Cursor 中发起新对话后 ≤4s 自动追加
-- [ ] 智能体分区「暂停轮询 / 重新探测」生效；未安装 / 无数据 / 数据库被占用时给出对应分级提示
+- [ ] 设置窗口三分区（订阅 / 流水 / 其他）可切换，默认订阅且 hash 定位有效
 - [ ] 调试折叠可展示数据库路径与命中表，并可复制诊断信息
 - [ ] 订阅分区三个提供方可切换，未配置时给出引导并显示灰色健康点
 - [ ] 订阅分区「刷新」覆盖全部已配置提供方；重新进入分区立即显示缓存
@@ -898,13 +810,6 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 3. **`src/core/subscriptions/CursorProvider.ts`** — Cursor 看板字段映射（数据来自主链路快照）
 4. **`src/core/subscriptions/SubscriptionCache.ts`** — 结果结构变化时同步提升 `CACHE_VERSION`（版本不符会丢弃旧缓存）
 5. **`src/renderer/components/SubscriptionPanels.tsx`** — 展示字段与排版
-
-**智能体链路（Cursor state.vscdb）**——Cursor 内部 schema 变动时的收敛点：
-
-1. **`src/core/agentTrace/cursorSchema.ts`** — 表探测与 key 前缀（`composerData:` / `bubbleId:` / `ofsContent:` / `codeBlockPartialInlineDiffFates:`）解析
-2. **`src/core/agentTrace/parser.ts`** — cursorDiskKV 行 → `AgentTurn[]`（bubble type、thinking、工具关联）
-3. **`src/core/agentTrace/AgentTraceService.ts`** — 数据库定位、轮询周期、错误分级、signature 去重
-4. **`scripts/inspect-*.ts`** — 排查 schema 的只读探测脚本；**`scripts/verify-agent-trace.ts`** — 内存库 mock 验收（`npx tsx scripts/verify-agent-trace.ts`）
 
 ### 新增 Provider
 
@@ -940,16 +845,11 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 | set-orb-mode-async | invoke | 设置悬浮球模式（异步版） |
 | get-cursor-in-window | invoke | 光标是否在窗口内及相对坐标 |
 | get-icon-preview / select-custom-icon / clear-custom-icon | invoke | 图标预览 / 选择 / 恢复默认 |
-| agent-get-latest-trace | invoke | 拉取最近一次智能体 trace（不启动轮询） |
-| agent-start-watch / agent-stop-watch | invoke | 启动 / 停止 2s 轮询 watcher |
-| agent-trace-updated | event | 智能体 trace 更新推送（仅设置窗口，signature 变化时） |
 | snapshot-updated | event | 快照更新推送（仅悬浮球） |
 | poller-state | event | 轮询状态推送（仅悬浮球） |
 | dock-state-changed | event | 贴边状态变更（edge 或 null，仅悬浮球） |
 | settings-changed | event | 配置变更推送（广播到所有窗口） |
 | open-settings | send | 打开设置窗口（默认分区） |
-| open-flow | send | 打开设置窗口的流水分区 |
-| open-subscriptions | send | 打开设置窗口的订阅分区 |
 | set-orb-mode | send | 设置悬浮球窗口模式（collapsed / hover / expanded） |
 | set-expanded | send | 空实现，仅保留向后兼容 |
 | set-expanded-panel-layout | send | 切换展开面板布局（概览 / 用量） |
@@ -971,8 +871,6 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 | Command Code 报「API Key 无效或已过期」 | 检查手动录入的 Key；清除手动 Key 后会回退到环境变量 / `~/.commandcode/auth.json` |
 | DeepSeek 有余额但没有月度用量 | 需要单独配置「用量 Token」（与 API Key 不同） |
 | 订阅页自动刷新不生效 | 检查「其他」分区的自动刷新开关与刷新间隔 |
-| 智能体 Tab 一直空白 | 确认 Cursor 已安装且有过 Composer 对话；展开调试折叠看命中表；schema 变动时对照 `cursorSchema.ts` |
-| 智能体 Tab 显示「数据库被占用」 | Cursor 正在写入，属正常；稍后自动重试，必要时关闭 Cursor 后再试 |
 | dev server 报端口 5180 被占用 | `strictPort` 下会直接报错退出；释放端口或调整 `src/shared/devServer.ts` 的 `DEV_SERVER_PORT` |
 | keytar 安装失败 | 使用 safeStorage 回退；或安装 Windows Build Tools |
 | 打包时报 `Access is denied` | 已打包的应用正在运行，关闭后重试（托盘 → 退出，或用 `Stop-Process` 强制关闭） |
@@ -990,7 +888,6 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 - 接口无公开文档，字段映射需持续维护
 - Command Code alpha 接口为内部接口（与 `cmd` CLI 的 `/usage` 同源），无公开承诺，路径或响应结构可能变动
 - DeepSeek 的按月用量接口依赖浏览器侧凭据与 UA，平台策略调整会导致用量不可用（余额不受影响）
-- Cursor 内部 `state.vscdb` schema 无公开承诺，`cursorDiskKV` 的 key 前缀或 bubble 字段可能变动 → 智能体 Tab 解析失效（错误分级为 SCHEMA_UNKNOWN / NO_DATA，不影响其它功能）
 - 打包默认图标存在文件名隐患：`iconManager` 读取 `build/icon.png`，而 electron-builder 的 `files` 仅收录 `build/icon.ico`
 
 ### 假设
@@ -1002,7 +899,7 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、设置窗口四分区（智能体 / 订阅 / 流水 / 其他）、本地智能体链路观测（Composer trace 时间线）、订阅额度与按月用量（Cursor / Command Code / DeepSeek）、流水按平台查询、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
+| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、设置窗口三分区（订阅 / 流水 / 其他）、订阅额度与按月用量（Cursor / Command Code / DeepSeek）、流水按平台查询、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 

@@ -18,7 +18,6 @@ import type {
   SubscriptionUsageQuery,
   SubscriptionUsageResult,
 } from '../src/shared/subscriptionTypes';
-import type { AgentTrace } from '../src/shared/agentTrace';
 
 export interface ElectronAPI {
   getSnapshot: () => Promise<TokenSnapshot | null>;
@@ -36,8 +35,6 @@ export interface ElectronAPI {
   onSettingsChanged: (callback: (settings: AppSettings) => void) => () => void;
   onDockStateChanged: (callback: (edge: DockEdge | null) => void) => () => void;
   openSettings: () => void;
-  openFlow: () => void;
-  openSubscriptions: () => void;
   listSubscriptionProviders: () => Promise<SubscriptionProviderMeta[]>;
   getCachedSubscriptions: () => Promise<SubscriptionCacheSnapshot>;
   saveSubscriptionKey: (
@@ -68,10 +65,6 @@ export interface ElectronAPI {
   getIconPreview: () => Promise<string | null>;
   selectCustomIcon: () => Promise<{ success: boolean; message?: string; preview?: string | null }>;
   clearCustomIcon: () => Promise<{ success: boolean; preview?: string | null }>;
-  agentGetLatestTrace: () => Promise<AgentTrace>;
-  agentStartWatch: () => Promise<boolean>;
-  agentStopWatch: () => Promise<boolean>;
-  onAgentTraceUpdated: (callback: (trace: AgentTrace) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -107,8 +100,6 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener('dock-state-changed', handler);
   },
   openSettings: () => ipcRenderer.send('open-settings'),
-  openFlow: () => ipcRenderer.send('open-flow'),
-  openSubscriptions: () => ipcRenderer.send('open-subscriptions'),
   listSubscriptionProviders: () => ipcRenderer.invoke('subscription-list-providers'),
   getCachedSubscriptions: () => ipcRenderer.invoke('subscription-get-cached'),
   saveSubscriptionKey: (providerId, key, kind) =>
@@ -134,15 +125,6 @@ const api: ElectronAPI = {
   getIconPreview: () => ipcRenderer.invoke('get-icon-preview'),
   selectCustomIcon: () => ipcRenderer.invoke('select-custom-icon'),
   clearCustomIcon: () => ipcRenderer.invoke('clear-custom-icon'),
-  agentGetLatestTrace: () => ipcRenderer.invoke('agent-get-latest-trace'),
-  agentStartWatch: () => ipcRenderer.invoke('agent-start-watch'),
-  agentStopWatch: () => ipcRenderer.invoke('agent-stop-watch'),
-  onAgentTraceUpdated: (callback) => {
-    const handler = (_: Electron.IpcRendererEvent, trace: AgentTrace) =>
-      callback(trace);
-    ipcRenderer.on('agent-trace-updated', handler);
-    return () => ipcRenderer.removeListener('agent-trace-updated', handler);
-  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

@@ -18,7 +18,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['better-sqlite3', 'keytar', 'electron'],
+              external: ['keytar', 'electron'],
             },
           },
         },
@@ -44,8 +44,6 @@ export default defineConfig({
       input: {
         index: path.resolve(__dirname, 'index.html'),
         settings: path.resolve(__dirname, 'settings.html'),
-        flow: path.resolve(__dirname, 'flow.html'),
-        subscriptions: path.resolve(__dirname, 'subscriptions.html'),
       },
     },
   },
