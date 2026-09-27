@@ -1,0 +1,8 @@
+# 编辑器索引/监控排除项。
+# 构建产物里的 app.asar 是 Electron 归档，编辑器打开后会一直持有文件句柄，
+# 导致 electron-builder 无法删除旧产物（The process cannot access the file ...）。
+release/
+release-build/
+dist/
+dist-electron/
+*.asar

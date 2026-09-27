@@ -2,9 +2,16 @@ node_modules/
 dist/
 dist-electron/
 release/
+release-build/
 .tmp-verify/
 *.log
 .env
 .env.*
 .DS_Store
 Thumbs.db
+
+# 本地工具数据与缓存（不纳入版本控制）
+.commandcode/
+.electron-cache/
+# 本地布局验证页（临时）
+verify*.html

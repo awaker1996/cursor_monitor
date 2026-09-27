@@ -13,20 +13,22 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "electron .",
-    "dist": "npm run typecheck && npm run build && electron-builder",
+    "dist": "npm run typecheck && npm run build && node scripts/dist.mjs",
     "typecheck": "tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "better-sqlite3": "^11.3.0",
     "keytar": "^7.9.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^28.3.3",
     "electron-builder": "^24.13.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.3.3",
     "vite": "^4.5.5",
     "vite-plugin-electron": "^0.28.8",

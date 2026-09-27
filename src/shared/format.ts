@@ -154,7 +154,9 @@ function formatIncludedUsageDateRange(
     if (!iso) return null;
     const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return null;
-    return date.toLocaleDateString('en-US', opts);
+    const datePart = date.toLocaleDateString('en-US', opts);
+    if (!hasTimeComponent(iso)) return datePart;
+    return `${datePart} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
   };
   const startLabel = formatOne(start);
   const endLabel = formatOne(end);

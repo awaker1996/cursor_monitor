@@ -1,0 +1,14 @@
+{
+  "search.exclude": {
+    "release": true,
+    "release-build": true,
+    "dist": true,
+    "dist-electron": true
+  },
+  "files.watcherExclude": {
+    "**/release/**": true,
+    "**/release-build/**": true,
+    "**/dist/**": true,
+    "**/dist-electron/**": true
+  }
+}

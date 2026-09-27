@@ -14,7 +14,7 @@ import {
   getFloatingBallWindow,
   sendToFloatingBall,
 } from './windows/floatingBall';
-import { createSettingsWindow } from './windows/settings';
+import { createSettingsWindow, getSettingsWindow } from './windows/settings';
 import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip, type SettingsTab } from './tray';
 import {
   clearDockState,
@@ -44,6 +44,8 @@ import type {
 } from '../src/shared/subscriptionTypes';
 import { createLogger } from '../src/utils/logger';
 import { formatTrayTooltip } from '../src/shared/format';
+import { AgentTraceService } from '../src/core/agentTrace/AgentTraceService';
+import { AGENT_TRACE_CHANNELS } from '../src/shared/agentTrace';
 
 const log = createLogger('Main');
 const isDev = !app.isPackaged;
@@ -52,6 +54,7 @@ let settingsStore: SettingsStore;
 let providerManager: ProviderManager;
 let subscriptionManager: SubscriptionManager;
 let poller: Poller;
+let agentTraceService: AgentTraceService;
 let isPaused = false;
 
 function isDirectoryWritable(dirPath: string): boolean {
@@ -521,6 +524,29 @@ function setupPollerEvents(): void {
   });
 }
 
+function setupAgentMonitorIpc(): void {
+  // 拉取最新一次 trace（不启动轮询）。
+  ipcMain.handle(AGENT_TRACE_CHANNELS.FETCH, () => agentTraceService.fetchLatest());
+
+  // 启动/停止 2s 轮询 watcher。
+  ipcMain.handle(AGENT_TRACE_CHANNELS.START_WATCH, () => {
+    agentTraceService.startWatch();
+    return true;
+  });
+  ipcMain.handle(AGENT_TRACE_CHANNELS.STOP_WATCH, () => {
+    agentTraceService.stopWatch();
+    return true;
+  });
+
+  // 主进程 → 渲染层：每轮 tick 后推送一次 trace。renderer 自己决定
+  // 是否订阅；不在 Tab 时也会推但渲染层忽略。
+  agentTraceService.subscribe((trace) => {
+    const win = getSettingsWindow();
+    if (!win || win.isDestroyed()) return;
+    win.webContents.send(AGENT_TRACE_CHANNELS.UPDATED, trace);
+  });
+}
+
 app.whenReady().then(async () => {
   credentialVault.setFallbackPath(app.getPath('userData'));
   settingsStore = new SettingsStore();
@@ -532,9 +558,13 @@ app.whenReady().then(async () => {
     () => providerManager.getLastSnapshot(),
   );
   poller = new Poller(providerManager, settingsStore);
+  agentTraceService = new AgentTraceService({
+    appDataDir: app.getPath('appData'),
+  });
 
   setupIpc();
   setupPollerEvents();
+  setupAgentMonitorIpc();
 
   createFloatingBallWindow(isDev);
   broadcastSnapshot();
@@ -563,6 +593,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   poller.destroy();
   providerManager.destroy();
+  agentTraceService.dispose();
   destroyTray();
 });
 

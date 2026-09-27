@@ -19,6 +19,7 @@ import type {
   SubscriptionUsageQuery,
   SubscriptionUsageResult,
 } from '../shared/subscriptionTypes';
+import type { AgentTrace } from '../shared/agentTrace';
 
 export interface ElectronAPI {
   getSnapshot: () => Promise<TokenSnapshot | null>;
@@ -68,6 +69,10 @@ export interface ElectronAPI {
   getIconPreview: () => Promise<string | null>;
   selectCustomIcon: () => Promise<{ success: boolean; message?: string; preview?: string | null }>;
   clearCustomIcon: () => Promise<{ success: boolean; preview?: string | null }>;
+  agentGetLatestTrace: () => Promise<AgentTrace>;
+  agentStartWatch: () => Promise<boolean>;
+  agentStopWatch: () => Promise<boolean>;
+  onAgentTraceUpdated: (callback: (trace: AgentTrace) => void) => () => void;
 }
 
 declare global {

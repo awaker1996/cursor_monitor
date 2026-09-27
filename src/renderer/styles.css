@@ -143,21 +143,74 @@ body.page-flow #root {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  /* 动态玻璃：底层渐变 + 球面高光（静态部分） */
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.05) 30%,
+      transparent 55%
+    ),
+    linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 2px solid rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
   position: relative;
+  overflow: hidden;
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  /* 单投影留给 orbBreathe keyframes 控制呼吸 */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  overflow: visible;
   --orb-ring-color: #60a5fa;
   --orb-glow-color: rgba(96, 165, 250, 0.45);
   --orb-ring-width: 3px;
   --orb-glow-opacity: 0.45;
+  /* 仅保留 breathe（投影呼吸），玻璃光斑由 ::before 承载 */
   animation: orbBreathe 3.2s ease-in-out infinite;
+}
+
+/* 动态彩色光斑：蓝色 + 绿色径向光斑缓慢漂移 */
+.floating-ball__orb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 75% 30%,
+      rgba(96, 165, 250, 0.45) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 25% 80%,
+      rgba(74, 222, 128, 0.28) 0%,
+      transparent 45%
+    );
+  background-size: 200% 200%, 200% 200%;
+  background-position: 0% 0%, 100% 100%;
+  pointer-events: none;
+  z-index: 0;
+  animation: orbGlassDrift 7s ease-in-out infinite;
+}
+
+/* 让 svg 进度环浮在 ::before 之上 */
+.floating-ball__orb-ring {
+  z-index: 1;
+}
+
+/* 让核心浮在最上层 */
+.floating-ball__orb-core {
+  z-index: 2;
+}
+
+@keyframes orbGlassDrift {
+  0%, 100% {
+    background-position: 0% 0%, 100% 100%;
+  }
+  50% {
+    background-position: 100% 100%, 0% 0%;
+  }
 }
 
 .floating-ball__orb--health-green {
@@ -336,6 +389,13 @@ body.page-flow #root {
 @media (prefers-reduced-motion: reduce) {
   .floating-ball__orb {
     animation: none;
+  }
+
+  /* 关闭玻璃光斑漂移，但保留玻璃质感本身 */
+  .floating-ball__orb::before {
+    animation: none;
+    /* 静态光斑停留在默认位置 */
+    background-position: 50% 50%, 50% 50%;
   }
 
   .floating-ball__orb-ring-progress {
@@ -610,7 +670,7 @@ body.page-flow #root {
 }
 
 .floating-ball__panel--included .included-usage__title {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .floating-ball__panel--included .included-usage__body {
@@ -649,16 +709,32 @@ body.page-flow #root {
   padding: 5px;
   border-radius: 10px;
   border: 1px solid transparent;
+  /* 动态玻璃：流动光泽需要伪元素承载 */
+  position: relative;
+  overflow: hidden;
 }
 
 .floating-ball__panel--included .included-usage__block--api {
   background: rgba(16, 185, 129, 0.08);
   border-color: rgba(52, 211, 153, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .floating-ball__panel--included .included-usage__block--auto {
   background: rgba(59, 130, 246, 0.08);
   border-color: rgba(96, 165, 250, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* 让 included-usage__block 内的内容浮在光泽之上 */
+.floating-ball__panel--included .included-usage__block > .included-usage__section-head,
+.floating-ball__panel--included .included-usage__block > .included-usage__models {
+  position: relative;
+  z-index: 1;
 }
 
 .floating-ball__panel--included .included-usage__section-head {
@@ -667,6 +743,9 @@ body.page-flow #root {
   gap: 6px;
   padding: 5px 6px;
   border-radius: 7px;
+  /* 流动光泽需要伪元素承载 */
+  position: relative;
+  overflow: hidden;
 }
 
 .floating-ball__panel--included .included-usage__block--api .included-usage__section-head {
@@ -677,11 +756,17 @@ body.page-flow #root {
   background: rgba(59, 130, 246, 0.16);
 }
 
+/* 让 section-head 内的子元素浮在光泽之上 */
+.floating-ball__panel--included .included-usage__section-head > * {
+  position: relative;
+  z-index: 1;
+}
+
 .floating-ball__panel--included .included-usage__badge {
   flex-shrink: 0;
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1.2;
@@ -733,10 +818,19 @@ body.page-flow #root {
   background: rgba(0, 0, 0, 0.18);
   border-left: 2px solid transparent;
   transition: background 120ms ease;
+  /* 流动光泽需要伪元素承载 */
+  position: relative;
+  overflow: hidden;
 }
 
 .floating-ball__panel--included .included-usage__entry:hover {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* 让 entry 内的文本浮在光泽之上 */
+.floating-ball__panel--included .included-usage__entry > * {
+  position: relative;
+  z-index: 1;
 }
 
 .floating-ball__panel--included .included-usage__block--api .included-usage__entry {
@@ -759,16 +853,16 @@ body.page-flow #root {
 .floating-ball__panel--included .included-usage__entry-tokens {
   color: #9ca3af;
   font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .floating-ball__panel--included .included-usage__entry-usage {
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.1;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -785,7 +879,7 @@ body.page-flow #root {
 
 .floating-ball__panel--included .included-usage__section-stats .included-usage__entry-tokens {
   color: #d1d5db;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -958,11 +1052,173 @@ body.page-flow #root {
   margin-bottom: 10px;
 }
 
+.traffic-lights {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  /* 灯箱外壳已去除：不再有 background / border / box-shadow / padding，
+     仅保留三灯自身的横向排布容器。 */
+}
+
+.traffic-light {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  /* 默认灯罩：与面板背景同色系的深蓝紫色，未通电时呈现的熄灭态 */
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.04) 35%,
+      transparent 60%
+    ),
+    #16162b;
+  /* 多层 box-shadow 构造立体灯位：
+     - 细黑色灯位环（真实红绿灯的金属灯圈）
+     - 玻璃球顶部凹陷
+     - 玻璃球底部反光
+     - 玻璃黑色边 */
+  box-shadow:
+    /* 灯位金属环：随灯本体等比缩放，保持金属圈视觉一致 */
+    0 0 0 1.2px rgba(0, 0, 0, 0.6),
+    /* 玻璃顶部凹陷（深色） */
+    inset 0 1px 2px rgba(0, 0, 0, 0.7),
+    /* 玻璃底部反光（浅色） */
+    inset 0 -1px 1px rgba(255, 255, 255, 0.08),
+    /* 玻璃罩黑色边 */
+    inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  position: relative;
+  /* 总周期 2.7s：每盏灯独自做一次完整呼吸，三盏通过 delay 错相位，
+     形成「红 → 黄 → 绿 → 红 → ...」依次轮播的循环动画。 */
+  animation-duration: 2.7s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+/* 错相位：每盏灯在自己那一拍亮起 */
+.traffic-light--red    { animation-name: trafficLightCycleRed;    animation-delay: 0s; }
+.traffic-light--yellow { animation-name: trafficLightCycleYellow; animation-delay: 0.9s; }
+.traffic-light--green  { animation-name: trafficLightCycleGreen;  animation-delay: 1.8s; }
+
+@keyframes trafficLightCycleRed {
+  0%, 100% {
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 35%, transparent 60%),
+      #16162b;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      inset 0 1px 2px rgba(0, 0, 0, 0.7),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.08),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+    transform: scale(0.95);
+  }
+  10% { transform: scale(0.98); }
+  18% {
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.2) 35%, transparent 65%),
+      #ef4444;
+    box-shadow:
+      /* 灯位金属环保留（物理边缘不会因通电消失） */
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      /* 外发光：比上一版弱一些，与面板整体协调 */
+      0 0 5px rgba(239, 68, 68, 0.65),
+      0 0 12px rgba(239, 68, 68, 0.35),
+      /* 玻璃罩：通电后顶部深色减弱、高光增强 */
+      inset 0 1px 2px rgba(0, 0, 0, 0.4),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.5),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+    transform: scale(1.05);
+  }
+  28% { transform: scale(0.98); }
+}
+
+@keyframes trafficLightCycleYellow {
+  0%, 100% {
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 35%, transparent 60%),
+      #16162b;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      inset 0 1px 2px rgba(0, 0, 0, 0.7),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.08),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+    transform: scale(0.95);
+  }
+  10% { transform: scale(0.98); }
+  18% {
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.2) 35%, transparent 65%),
+      #f59e0b;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      0 0 5px rgba(245, 158, 11, 0.65),
+      0 0 12px rgba(245, 158, 11, 0.35),
+      inset 0 1px 2px rgba(0, 0, 0, 0.4),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.5),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+    transform: scale(1.05);
+  }
+  28% { transform: scale(0.98); }
+}
+
+@keyframes trafficLightCycleGreen {
+  0%, 100% {
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 35%, transparent 60%),
+      #16162b;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      inset 0 1px 2px rgba(0, 0, 0, 0.7),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.08),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+    transform: scale(0.95);
+  }
+  10% { transform: scale(0.98); }
+  18% {
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.2) 35%, transparent 65%),
+      #22c55e;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      0 0 5px rgba(34, 197, 94, 0.65),
+      0 0 12px rgba(34, 197, 94, 0.35),
+      inset 0 1px 2px rgba(0, 0, 0, 0.4),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.5),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+    transform: scale(1.05);
+  }
+  28% { transform: scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .traffic-light {
+    animation: none !important;
+    /* 静态三灯：均显示灯罩深蓝紫底，与面板背景融合 */
+    background: #16162b;
+    transform: scale(1);
+  }
+}
+
 .floating-ball__header-actions {
   display: flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+
+.floating-ball__brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.floating-ball__brand {
+  font-size: 12px;
+  font-weight: 500;
+  color: #cbd5e1;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 .floating-ball__drag-handle {
@@ -1029,9 +1285,64 @@ body.page-flow #root {
 .dashboard-summary {
   padding: 10px 12px;
   border-radius: 10px;
+  /* 动态玻璃：浅灰白半透明 + 顶部细高光 + 边缘细描边 */
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* 流动光泽需要伪元素溢出隐藏 */
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.18);
   margin-bottom: 10px;
+}
+
+/* 共享动态光泽：伪元素承载扫光动画，正文不受影响 */
+.dashboard-summary::before,
+.metric-card::before,
+.included-usage__block::before,
+.included-usage__entry::before,
+.included-usage__section-head::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* 105° 倾斜的玻璃高光带：从透明到亮再到透明 */
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 不同卡片用不同的光泽延迟，避免同步闪 */
+.dashboard-summary::before               { animation: glassShine 6.5s ease-in-out 0s    infinite; }
+.metric-card::before                   { animation: glassShine 7s    ease-in-out 0.6s  infinite; }
+.included-usage__block::before         { animation: glassShine 8s    ease-in-out 1.2s  infinite; }
+.included-usage__section-head::before  { animation: glassShine 7.5s  ease-in-out 1.8s  infinite; }
+.included-usage__entry::before         { animation: glassShine 6s    ease-in-out 2.4s  infinite; }
+
+@keyframes glassShine {
+  0%, 100% { transform: translateX(-100%); }
+  45%      { transform: translateX(100%); }
+  55%      { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 关闭概览/用量卡片的流动光泽，保留玻璃质感本身 */
+  .dashboard-summary::before,
+  .metric-card::before,
+  .included-usage__block::before,
+  .included-usage__section-head::before,
+  .included-usage__entry::before {
+    animation: none;
+    transform: translateX(-100%);
+  }
 }
 
 .dashboard-summary__main {
@@ -1382,7 +1693,7 @@ body.page-flow #root {
 .included-usage__date-range {
   margin: 3px 0 0;
   color: #6b7280;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.3;
 }
 
@@ -1580,7 +1891,22 @@ body.page-flow #root {
   padding: 8px 10px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-left: 3px solid transparent;
+  /* 动态玻璃：流动光泽需要伪元素承载 */
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* metric-card 内的内容（标签/百分比/track/detail）需要在光泽之上 */
+.metric-card__main,
+.metric-card__track,
+.metric-card__detail {
+  position: relative;
+  z-index: 1;
 }
 
 .metric-card--total { border-left-color: #818cf8; }
@@ -3068,9 +3394,7 @@ color: #475569;
   overflow: auto;
 }
 
-.settings-page__body:has(.page-shell--settings) {
-  overflow: hidden;
-}
+/* 下方「其他」Tab 单独覆盖 body 滚动为 auto；保留此处的兜底解释见 styles.css 末段。 */
 
 .settings-page__body .page-shell {
   padding: 20px 32px 32px;
@@ -3083,26 +3407,35 @@ color: #475569;
 }
 
 .page-shell--settings {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: auto minmax(0, 1fr);
-  align-items: stretch;
+  /* 横向 flex + wrap：默认宽窗一行排 3 张 tile，宽行卡自己占满整行；
+     窗口缩窄到不够 3 张时 tile 自动换行，再缩窄 tile 也跟着换行。
+     取消了 1fr 行与 .project-features 的卡内滚动，让整页 body 接管滚动，
+     不再出现「核心功能卡里塞个小滚动条、内容看不全」的问题。
+
+     必须显式声明 flex-direction:row：基类 .page-shell 设的是 column，
+     不重置的话子元素仍然竖排，无法横向 wrap。 */
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 16px;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100%;
   box-sizing: border-box;
 }
 
 .page-shell--settings .settings-section--tile {
+  /* flex-basis 280px：tile 最小宽度；flex 1 1 280px 在放得下时均分剩余空间，
+     放不下时被压缩到 280px 触发换行；min-width:0 防止内部 input/grid 把卡撑爆 */
+  flex: 1 1 280px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
 .page-shell--settings .settings-section__body {
   flex: 1;
-  min-height: 0;
+  /* 让 body 拒绝缩到内容高度以下，杜绝内容与底部脚注互相叠压。 */
+  min-height: max-content;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3114,6 +3447,7 @@ color: #475569;
   padding-top: 12px;
   border-top: 1px solid #f1f5f9;
   line-height: 1.55;
+  flex-shrink: 0;
 }
 
 .page-shell--settings .settings-toggles {
@@ -3136,11 +3470,11 @@ color: #475569;
 }
 
 .page-shell--settings .settings-section--wide {
-  grid-column: 1 / -1;
+  /* 宽卡始终独占一行：basis 100% + no shrink */
+  flex: 1 0 100%;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  min-width: 0;
 }
 
 .page-shell--settings .settings-section--wide > h2 {
@@ -3148,9 +3482,7 @@ color: #475569;
 }
 
 .project-features {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  /* 不再卡内滚动：内容超出时由外层 body 的 overflow:auto 接管 */
   padding-right: 4px;
 }
 
@@ -3207,20 +3539,211 @@ color: #475569;
   }
 }
 
-@media (max-width: 940px) {
-  .page-shell--settings {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: auto auto minmax(0, 1fr);
-  }
-
-  .settings-page__body:has(.page-shell--settings) {
-    overflow: auto;
-  }
+/* 设置页默认就让 body 可滚动：卡片总高常常超过容器高度（核心功能卡内容多），
+   旧版用 1fr + 卡内滚动条会导致内容被裁；现在用 flex-wrap 让卡片自然排列、
+   内容超出时由整页 body 滚动接管。窄宽屏的 tile 自动换行，无需单独断点。 */
+.settings-page__body:has(.page-shell--settings) {
+  overflow: auto;
 }
 
-@media (max-width: 720px) {
-  .page-shell--settings {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(3, auto) minmax(0, 1fr);
-  }
+/* ── Agent Tab ── */
+
+.page-shell--agent {
+  height: 100%;
+  gap: 16px;
+}
+
+.agent-debug {
+  flex-shrink: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.agent-debug__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-debug__toggle:hover {
+  background: #f1f5f9;
+}
+
+.agent-debug__chevron {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.agent-debug__body {
+  padding: 4px 16px 14px;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.agent-debug__row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: start;
+  font-size: 12px;
+}
+
+.agent-debug__label {
+  color: #64748b;
+}
+
+.agent-debug__value {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: #1e293b;
+  background: #f8fafc;
+  padding: 4px 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.agent-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-timeline__item {
+  list-style: none;
+}
+
+.agent-timeline__empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.agent-turn {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-turn--thinking {
+  border-left: 3px solid #a78bfa;
+  background: #faf5ff;
+}
+
+.agent-turn--tool_call {
+  border-left: 3px solid #60a5fa;
+  background: #eff6ff;
+}
+
+.agent-turn--tool_result {
+  border-left: 3px solid #34d399;
+  background: #ecfdf5;
+}
+
+.agent-turn--assistant {
+  border-left: 3px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.agent-turn--user {
+  border-left: 3px solid #fbbf24;
+  background: #fffbeb;
+}
+
+.agent-turn__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-turn__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.7);
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+}
+
+.agent-turn__time {
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+.agent-turn__text {
+  margin: 0;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #1e293b;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.agent-turn__payload {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.agent-turn__payload summary {
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+}
+
+.agent-turn__payload-body {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.agent-turn__expand {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 11px;
+  color: #475569;
+  cursor: pointer;
+}
+
+.agent-turn__expand:hover {
+  background: #f1f5f9;
 }

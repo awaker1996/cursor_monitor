@@ -79,6 +79,17 @@ function healthLabel(
   return '正常';
 }
 
+function TrafficLights() {
+  // 纯装饰性动画，与健康状态无关：红/黄/绿三灯依次循环切换
+  return (
+    <div className="traffic-lights" role="status" aria-label="状态指示灯">
+      <span className="traffic-light traffic-light--red" aria-hidden />
+      <span className="traffic-light traffic-light--yellow" aria-hidden />
+      <span className="traffic-light traffic-light--green" aria-hidden />
+    </div>
+  );
+}
+
 type PanelView = 'overview' | 'included';
 type PanelPhase = 'hidden' | 'entering' | 'shown' | 'leaving';
 
@@ -507,7 +518,10 @@ export default function App() {
               className="floating-ball__panel-header floating-ball__drag-handle"
               onMouseDown={(e) => startDrag(e, false)}
             >
-              <span>Cursor 用量监控</span>
+              <div className="floating-ball__brand-row">
+                <TrafficLights />
+                <span className="floating-ball__brand">Cursor监控</span>
+              </div>
               <div className="floating-ball__header-actions no-drag">
                 <button
                   type="button"
