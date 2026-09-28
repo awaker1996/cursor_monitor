@@ -143,16 +143,22 @@ body.page-flow #root {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  /* 动态玻璃：底层渐变 + 球面高光（静态部分） */
+  /* 现代液态玻璃：紧致镜面高光 + 右下暗部 + 深色基底。
+     高光收小是为了去掉「整球泛白」的糊感，暗部负责球体体积。 */
   background:
     radial-gradient(
-      circle at 32% 28%,
-      rgba(255, 255, 255, 0.22) 0%,
-      rgba(255, 255, 255, 0.05) 30%,
-      transparent 55%
+      circle at 32% 26%,
+      rgba(255, 255, 255, 0.34) 0%,
+      rgba(255, 255, 255, 0.08) 14%,
+      transparent 34%
     ),
-    linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 2px solid rgba(255, 255, 255, 0.18);
+    radial-gradient(
+      circle at 68% 76%,
+      rgba(0, 0, 0, 0.5) 0%,
+      transparent 52%
+    ),
+    linear-gradient(155deg, #1b2038 0%, #111629 54%, #080d1c 100%);
+  border: 2px solid rgba(255, 255, 255, 0.24);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -160,82 +166,192 @@ body.page-flow #root {
   position: relative;
   overflow: hidden;
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-  /* 单投影留给 orbBreathe keyframes 控制呼吸 */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  --orb-ring-color: #60a5fa;
-  --orb-glow-color: rgba(96, 165, 250, 0.45);
+  /* 整条投影栈收敛为变量，供 orbBreathe keyframes 复用，避免每帧重复书写。
+     inset 0 0 0 1px 是锐利内环（硬边玻璃的关键），外发光半径刻意压小。 */
+  --orb-shadow-a:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 1px 3px rgba(0, 0, 0, 0.6),
+    0 0 calc(4px + var(--orb-percent, 50) * 0.05px) var(--orb-glow-color);
+  --orb-shadow-b:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.62),
+    0 0 calc(8px + var(--orb-percent, 50) * 0.06px) var(--orb-glow-color);
+  box-shadow: var(--orb-shadow-a);
+  --orb-ring-color: #38bdf8;
+  --orb-glow-color: rgba(56, 189, 248, 0.34);
+  --orb-glow-color-hi: rgba(125, 211, 252, 0.52);
   --orb-ring-width: 3px;
   --orb-glow-opacity: 0.45;
-  /* 仅保留 breathe（投影呼吸），玻璃光斑由 ::before 承载 */
+  /* 玻璃层调色板（各健康态覆盖）+ 流速倍率（1 = 基准，越大越慢） */
+  --glass-1: rgba(56, 189, 248, 0.42);
+  --glass-2: rgba(99, 102, 241, 0.28);
+  --glass-3: rgba(165, 243, 252, 0.18);
+  --glass-speed: 1;
+  /* 仅保留 breathe（投影呼吸），玻璃动效由 ::before / ::after 承载 */
   animation: orbBreathe 3.2s ease-in-out infinite;
 }
 
-/* 动态彩色光斑：蓝色 + 绿色径向光斑缓慢漂移 */
+/* 彩色玻璃光斑层：三片径向光斑，各自沿独立路径漂移。
+   柔化完全交给渐变自身的 falloff，不使用 filter: blur()（避免每帧重绘，
+   也避开透明窗口上 filter 的历史坑）。 */
 .floating-ball__orb::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: -2px;
   border-radius: 50%;
   background:
     radial-gradient(
-      circle at 75% 30%,
-      rgba(96, 165, 250, 0.45) 0%,
-      transparent 45%
+      circle at 22% 26%,
+      var(--glass-1) 0%,
+      transparent 36%
     ),
     radial-gradient(
-      circle at 25% 80%,
-      rgba(74, 222, 128, 0.28) 0%,
-      transparent 45%
+      circle at 82% 34%,
+      var(--glass-2) 0%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 50% 88%,
+      var(--glass-3) 0%,
+      transparent 32%
     );
-  background-size: 200% 200%, 200% 200%;
-  background-position: 0% 0%, 100% 100%;
+  background-size: 150% 150%, 160% 160%, 140% 140%;
+  background-position: 8% 12%, 92% 18%, 50% 86%;
   pointer-events: none;
   z-index: 0;
-  animation: orbGlassDrift 7s ease-in-out infinite;
+  animation: orbBlobDrift calc(16s * var(--glass-speed)) ease-in-out infinite;
 }
 
-/* 让 svg 进度环浮在 ::before 之上 */
+/* 高光扫掠层：斜向亮带故意超出球体，由 orb 的 overflow:hidden 裁成圆形。
+   视觉语言与弹窗卡片的 glassShine 一致，全应用玻璃语汇统一。
+   带宽压到 12%、峰值降到 .22 —— 过宽过亮就是「糊成一团奶白」的主因。 */
+.floating-ball__orb::after {
+  content: '';
+  position: absolute;
+  inset: -45%;
+  background: linear-gradient(
+    100deg,
+    transparent 44%,
+    rgba(255, 255, 255, 0.04) 47.5%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.04) 52.5%,
+    transparent 56%
+  );
+  pointer-events: none;
+  z-index: 0;
+  animation: orbSheenSweep calc(7s * var(--glass-speed))
+    cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+/* 层级：光斑/扫掠 0 → 进度环 1 → 数字底座 2
+   （底座的权威声明在下方 .floating-ball__orb-core，此处不再重复） */
 .floating-ball__orb-ring {
   z-index: 1;
 }
 
-/* 让核心浮在最上层 */
-.floating-ball__orb-core {
-  z-index: 2;
-}
-
-@keyframes orbGlassDrift {
-  0%, 100% {
-    background-position: 0% 0%, 100% 100%;
+@keyframes orbBlobDrift {
+  0%,
+  100% {
+    background-position: 8% 12%, 92% 18%, 50% 86%;
   }
+
+  25% {
+    background-position: 40% 70%, 62% 88%, 18% 30%;
+  }
+
   50% {
-    background-position: 100% 100%, 0% 0%;
+    background-position: 88% 46%, 12% 60%, 78% 20%;
+  }
+
+  75% {
+    background-position: 30% 90%, 78% 12%, 62% 72%;
   }
 }
 
+@keyframes orbSheenSweep {
+  0%,
+  100% {
+    transform: translateX(-28%) rotate(6deg);
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  50% {
+    transform: translateX(28%) rotate(6deg);
+    opacity: 1;
+  }
+
+  62% {
+    opacity: 0;
+  }
+}
+
+/* 健康态 = 进度环色 + 外发光 + 玻璃层配色，三者同源。
+   配色规则：每态只用「主色 + 同色系辅色 + 同族高光」，色相跨度控制在 45° 以内，
+   避免跨色系跳跃（原绿配天蓝、黄配暖白）造成的杂乱感。
+   玻璃强度只在这里调（--glass-1/2/3、--orb-glow-color-hi）。 */
+
+/* 绿 · 余量充足：翠绿 → 青 → 薄荷（hue 158°–174°） */
 .floating-ball__orb--health-green {
-  --orb-ring-color: #4ade80;
-  --orb-glow-color: rgba(74, 222, 128, 0.45);
+  --orb-ring-color: #34d399;
+  --orb-glow-color: rgba(52, 211, 153, 0.4);
+  --orb-glow-color-hi: rgba(110, 231, 183, 0.6);
+  --glass-1: rgba(52, 211, 153, 0.44);
+  --glass-2: rgba(45, 212, 191, 0.3);
+  --glass-3: rgba(153, 246, 228, 0.2);
 }
 
+/* 黄 · 数据陈旧 / backoff：琥珀 → 橙 → 浅金（hue 27°–45°） */
 .floating-ball__orb--health-yellow {
-  --orb-ring-color: #fbbf24;
-  --orb-glow-color: rgba(251, 191, 36, 0.35);
+  --orb-ring-color: #f59e0b;
+  --orb-glow-color: rgba(245, 158, 11, 0.34);
+  --orb-glow-color-hi: rgba(252, 211, 77, 0.52);
+  --glass-1: rgba(245, 158, 11, 0.42);
+  --glass-2: rgba(251, 146, 60, 0.28);
+  --glass-3: rgba(253, 230, 138, 0.18);
 }
 
+/* 蓝 · 刷新中 / 已暂停：青 → 天蓝 → 靛（hue 189°–239°） */
 .floating-ball__orb--health-blue {
-  --orb-ring-color: #60a5fa;
-  --orb-glow-color: rgba(96, 165, 250, 0.3);
+  --orb-ring-color: #38bdf8;
+  --orb-glow-color: rgba(56, 189, 248, 0.3);
+  --orb-glow-color-hi: rgba(125, 211, 252, 0.5);
+  --glass-1: rgba(56, 189, 248, 0.42);
+  --glass-2: rgba(99, 102, 241, 0.28);
+  --glass-3: rgba(165, 243, 252, 0.18);
 }
 
+/* 灰 · 无数据：石板 → 银，整体低彩度并压暗，视觉上明确后退 */
 .floating-ball__orb--health-gray {
-  --orb-ring-color: #9ca3af;
-  --orb-glow-color: rgba(156, 163, 175, 0.25);
+  --orb-ring-color: #94a3b8;
+  --orb-glow-color: rgba(100, 116, 139, 0.26);
+  --orb-glow-color-hi: rgba(203, 213, 225, 0.4);
+  --glass-1: rgba(100, 116, 139, 0.3);
+  --glass-2: rgba(148, 163, 184, 0.2);
+  --glass-3: rgba(203, 213, 225, 0.12);
 }
 
 .floating-ball__orb--motion-muted {
   animation-duration: 5.5s;
   --orb-glow-color: color-mix(in srgb, var(--orb-glow-color) 55%, transparent);
+  /* 玻璃层减速：数据静默时动效退居次要 */
+  --glass-speed: 2.4;
+}
+
+/* 光斑层整体压暗。opacity 未被 orbBlobDrift 占用，可安全覆盖。
+   （不能用 color-mix 压暗 --glass-1 —— 自引用属循环依赖，声明会被丢弃） */
+.floating-ball__orb--motion-muted::before {
+  opacity: 0.6;
+}
+
+/* 面板展开时玻璃层减速，把注意力让给读数 */
+.floating-ball--expanded .floating-ball__orb {
+  --glass-speed: 1.8;
 }
 
 .floating-ball__orb--motion-muted .floating-ball__orb-ring-glow,
@@ -264,17 +380,20 @@ body.page-flow #root {
 
 .floating-ball__orb-ring-track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.14);
+  stroke: rgba(255, 255, 255, 0.18);
   stroke-width: 3.5;
 }
 
 .floating-ball__orb-ring-glow {
   fill: none;
   stroke: var(--orb-ring-color);
-  stroke-width: calc(var(--orb-ring-width, 3.5px) + 5px);
+  stroke-width: calc(var(--orb-ring-width, 3.5px) + 2.5px);
   stroke-linecap: round;
   opacity: var(--orb-glow-opacity, 0.55);
-  filter: blur(3px) drop-shadow(0 0 10px var(--orb-ring-color)) drop-shadow(0 0 18px var(--orb-ring-color));
+  filter:
+    blur(1.5px)
+    drop-shadow(0 0 4px var(--orb-ring-color))
+    drop-shadow(0 0 7px var(--orb-ring-color));
   transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
   animation: orbGlowPulse var(--orb-flow-duration, 3s) ease-in-out infinite alternate;
 }
@@ -297,9 +416,8 @@ body.page-flow #root {
   stroke-linecap: round;
   transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
   filter:
-    drop-shadow(0 0 5px color-mix(in srgb, var(--orb-ring-color) 85%, transparent))
-    drop-shadow(0 0 14px color-mix(in srgb, var(--orb-ring-color) 60%, transparent))
-    drop-shadow(0 0 22px color-mix(in srgb, var(--orb-ring-color) 35%, transparent));
+    drop-shadow(0 0 2px color-mix(in srgb, var(--orb-ring-color) 70%, transparent))
+    drop-shadow(0 0 5px color-mix(in srgb, var(--orb-ring-color) 38%, transparent));
 }
 
 .floating-ball__orb-ring-flow {
@@ -309,19 +427,18 @@ body.page-flow #root {
   stroke-linecap: round;
   opacity: 1;
   filter:
-    drop-shadow(0 0 4px #fff)
-    drop-shadow(0 0 8px var(--orb-ring-color))
-    drop-shadow(0 0 14px var(--orb-ring-color));
+    drop-shadow(0 0 2px #fff)
+    drop-shadow(0 0 4px var(--orb-ring-color));
   animation: orbRingFlowTravel var(--orb-flow-duration, 3s) linear infinite alternate;
 }
 
 .floating-ball__orb-ring-flow-trail {
   fill: none;
   stroke: var(--orb-ring-color);
-  stroke-width: calc(var(--orb-ring-width, 3.5px) + 2px);
+  stroke-width: calc(var(--orb-ring-width, 3.5px) + 1.2px);
   stroke-linecap: round;
-  opacity: 0.45;
-  filter: blur(1px) drop-shadow(0 0 6px var(--orb-ring-color));
+  opacity: 0.4;
+  filter: blur(0.5px) drop-shadow(0 0 3px var(--orb-ring-color));
   animation: orbRingFlowTravel var(--orb-flow-duration, 3s) linear infinite alternate;
   animation-delay: var(--orb-flow-trail-delay, 0.8s);
 }
@@ -342,9 +459,8 @@ body.page-flow #root {
   stroke-width: 1.25;
   transition: cx 0.6s ease, cy 0.6s ease, r 0.6s ease, fill 0.3s ease, stroke 0.3s ease;
   filter:
-    drop-shadow(0 0 4px #fff)
-    drop-shadow(0 0 8px var(--orb-ring-color))
-    drop-shadow(0 0 14px var(--orb-ring-color));
+    drop-shadow(0 0 2px #fff)
+    drop-shadow(0 0 4px var(--orb-ring-color));
   animation: orbCapPulse var(--orb-flow-duration, 3s) ease-in-out infinite alternate;
 }
 
@@ -358,14 +474,25 @@ body.page-flow #root {
   }
 }
 
+/* 数字底座：半透明玻璃，让下方光斑透上来。
+   尺寸保持 44px，不挤压 r=24 的进度环可视区。 */
 .floating-ball__orb-core {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(
+      circle at 34% 26%,
+      rgba(255, 255, 255, 0.13) 0%,
+      transparent 48%
+    ),
+    rgba(7, 10, 20, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -373,29 +500,35 @@ body.page-flow #root {
   overflow: hidden;
 }
 
+/* 投影栈（--orb-shadow-a / -b 定义在 .floating-ball__orb 上）
+   呼吸只做「外发光 + 边缘光」的强弱起伏，玻璃层动效不参与。 */
 @keyframes orbBreathe {
-  0%, 100% {
-    box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.45),
-      0 0 calc(6px + var(--orb-percent, 50) * 0.08px) var(--orb-glow-color);
+  0%,
+  100% {
+    box-shadow: var(--orb-shadow-a);
   }
+
   50% {
-    box-shadow:
-      0 2px 10px rgba(0, 0, 0, 0.5),
-      0 0 calc(14px + var(--orb-percent, 50) * 0.1px) var(--orb-glow-color);
+    box-shadow: var(--orb-shadow-b);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .floating-ball__orb {
     animation: none;
+    box-shadow: var(--orb-shadow-a);
   }
 
-  /* 关闭玻璃光斑漂移，但保留玻璃质感本身 */
+  /* 关闭玻璃动效，但保留玻璃质感本身：
+     光斑停在 50% 位置的静态构图（比 0% 更饱满），扫掠带隐藏，
+     高光 / 描边 / 半透明底座构成的玻璃材质完整保留。 */
   .floating-ball__orb::before {
     animation: none;
-    /* 静态光斑停留在默认位置 */
-    background-position: 50% 50%, 50% 50%;
+    background-position: 88% 46%, 12% 60%, 78% 20%;
+  }
+
+  .floating-ball__orb::after {
+    display: none;
   }
 
   .floating-ball__orb-ring-progress {
@@ -419,14 +552,19 @@ body.page-flow #root {
   }
 }
 
-.floating-ball__orb:active {
-  cursor: grabbing;
+/* 悬停：放大 + 描边提亮 + 外发光切到加亮档。
+   外发光通过改 --orb-glow-color 传入 orbBreathe（keyframes 内引用同元素
+   自定义属性），因此不新增第二条 animation —— 否则会踩到
+   --motion-muted 单值 animation-duration 覆盖全部动画的坑。 */
+.floating-ball__orb:hover {
+  transform: scale(1.06);
+  border-color: rgba(255, 255, 255, 0.32);
+  --orb-glow-color: var(--orb-glow-color-hi);
 }
 
-.floating-ball__orb:hover {
-  transform: scale(1.05);
-  border-color: rgba(96, 165, 250, 0.55);
-  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.35);
+.floating-ball__orb:active {
+  cursor: grabbing;
+  transform: scale(0.98);
 }
 
 .floating-ball__tooltip {
@@ -462,17 +600,22 @@ body.page-flow #root {
   line-height: 1.1;
 }
 
+/* 底座变为半透明玻璃后，小字必须补对比度 */
 .floating-ball__total-label {
-  color: #9ca3af;
+  color: #aeb9c9;
   font-size: 9px;
   font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .floating-ball__total-value {
-  color: #e0e0e0;
+  color: #f2f6fb;
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 8px rgba(0, 0, 0, 0.45);
   animation: orbValuePulse 0.45s ease;
 }
 
@@ -1575,6 +1718,25 @@ body.page-flow #root {
 .floating-ball--docked-top .floating-ball__orb,
 .floating-ball--docked-bottom .floating-ball__orb {
   animation: none;
+  box-shadow: var(--orb-shadow-a);
+}
+
+/* 伪元素玻璃层同样停摆：半隐状态下肉眼几乎看不见，却仍在每帧重绘。
+   过去只命中元素本身、漏掉了伪元素，这里一并关闭。 */
+.floating-ball--docked-right .floating-ball__orb::before,
+.floating-ball--docked-left .floating-ball__orb::before,
+.floating-ball--docked-top .floating-ball__orb::before,
+.floating-ball--docked-bottom .floating-ball__orb::before {
+  animation: none;
+  background-position: 88% 46%, 12% 60%, 78% 20%;
+}
+
+.floating-ball--docked-right .floating-ball__orb::after,
+.floating-ball--docked-left .floating-ball__orb::after,
+.floating-ball--docked-top .floating-ball__orb::after,
+.floating-ball--docked-bottom .floating-ball__orb::after {
+  animation: none;
+  display: none;
 }
 
 .floating-ball--docked-right .floating-ball__orb:hover,
