@@ -26,7 +26,6 @@ export default function SubscriptionsPage() {
   const [keyInput, setKeyInput] = useState('');
   const [cookieInput, setCookieInput] = useState('');
   const [usageTokenInput, setUsageTokenInput] = useState('');
-  const [sessionInput, setSessionInput] = useState('');
   const [usageMonth, setUsageMonth] = useState(currentMonthValue());
   const [refreshing, setRefreshing] = useState(false);
   const [cache, setCache] = useState<Partial<Record<SubscriptionProviderId, ProviderCacheEntry>>>({});
@@ -130,9 +129,7 @@ export default function SubscriptionsPage() {
       const list = await refreshProviders();
       const first = list.find((p) => p.configured) ?? list[0];
       setConfigOpen(
-        !first?.configured ||
-          (Boolean(first?.usageSupported) && !first?.usageConfigured) ||
-          (Boolean(first?.sessionSupported) && !first?.sessionConfigured),
+        !first?.configured || (Boolean(first?.usageSupported) && !first?.usageConfigured),
       );
       await refreshAll(list, currentMonthValue());
     })();
@@ -163,13 +160,10 @@ export default function SubscriptionsPage() {
     setKeyInput('');
     setCookieInput('');
     setUsageTokenInput('');
-    setSessionInput('');
     setTestResult(null);
     const meta = providers.find((p) => p.id === id);
     setConfigOpen(
-      !meta?.configured ||
-        (Boolean(meta?.usageSupported) && !meta?.usageConfigured) ||
-        (Boolean(meta?.sessionSupported) && !meta?.sessionConfigured),
+      !meta?.configured || (Boolean(meta?.usageSupported) && !meta?.usageConfigured),
     );
   };
 
@@ -276,33 +270,6 @@ export default function SubscriptionsPage() {
     }
   };
 
-  const handleSaveSession = async () => {
-    if (!sessionInput.trim()) {
-      showToast('流水会话凭据不能为空');
-      return;
-    }
-    try {
-      await window.electronAPI.saveSubscriptionKey(activeId, sessionInput.trim(), 'sessionToken');
-      setSessionInput('');
-      const list = await refreshProviders();
-      showToast('流水会话凭据已安全保存');
-      await refreshAll(list, usageMonth);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const handleClearSession = async () => {
-    try {
-      await window.electronAPI.clearSubscriptionKey(activeId, 'sessionToken');
-      const list = await refreshProviders();
-      showToast('流水会话凭据已清除');
-      await refreshAll(list, usageMonth);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
-    }
-  };
-
   const activeEntry = cache[activeId] ?? EMPTY_PROVIDER_ENTRY;
   const lastFetchedAt = activeEntry.info?.fetchedAt ?? activeEntry.usage?.fetchedAt;
   const isCursor = activeId === 'cursor';
@@ -377,8 +344,6 @@ export default function SubscriptionsPage() {
               : `API Key ${active?.configured ? '已配置' : '未配置'}`}
             {!isCursor && active?.usageSupported &&
               ` · 用量 Token ${active.usageConfigured ? '已配置' : '未配置'}`}
-            {!isCursor && active?.sessionSupported &&
-              ` · 流水凭据 ${active.sessionConfigured ? '已配置' : '未配置'}`}
             <span className="sub-config-toggle__chevron">{configOpen ? '▴' : '▾'}</span>
           </span>
         </button>
@@ -500,37 +465,6 @@ export default function SubscriptionsPage() {
               </div>
             )}
 
-            {!isCursor && active?.sessionSupported && (
-              <div className="sub-config-group">
-                <div className="form-group">
-                  <label htmlFor="subscription-session">流水凭据（网页会话）</label>
-                  <input
-                    id="subscription-session"
-                    type="password"
-                    value={sessionInput}
-                    placeholder="登录 commandcode.ai 后的 Cookie 或会话 Token"
-                    onChange={(e) => setSessionInput(e.target.value)}
-                  />
-                  <p className="field-hint">
-                    逐条流水仅浏览器会话可访问（API Key 会返回 401）。登录 commandcode.ai 后，
-                    从开发者工具 Network 复制请求的 Cookie，或粘贴浏览器存储中的会话 Token。
-                  </p>
-                </div>
-                <div className="btn-row">
-                  <button type="button" className="btn-primary" onClick={handleSaveSession}>
-                    保存凭据
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={handleClearSession}
-                    disabled={!active.sessionConfigured}
-                  >
-                    清除凭据
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </section>

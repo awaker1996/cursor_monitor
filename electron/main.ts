@@ -34,8 +34,6 @@ import {
   REFRESH_INTERVAL_MIN,
   type AppSettings,
   type TestConnectionResult,
-  type UsageFlowFetchResult,
-  type UsageFlowQuery,
 } from '../src/shared/types';
 import type {
   SubscriptionCredentialKind,
@@ -248,7 +246,6 @@ function setupIpc(): void {
     const settings = settingsStore.update(partial);
     poller.applySettingsChange();
     if (partial.includeGrokBotUsage !== undefined) {
-      providerManager.clearUsageFlowCache('cursor');
       void poller.manualRefresh().then(() => {
         broadcastSnapshot();
         broadcastPollerState();
@@ -368,33 +365,6 @@ function setupIpc(): void {
       return subscriptionManager.fetchUsage(providerId, { month, year });
     },
   );
-
-  ipcMain.handle(
-    'fetch-usage-flow',
-    async (_event, query: UsageFlowQuery, dateRangeLabel?: string): Promise<UsageFlowFetchResult> => {
-      if (!query || !Number.isFinite(query.startDateMs) || !Number.isFinite(query.endDateMs)) {
-        return { success: false, hasCookie: false, message: '无效的日期范围' };
-      }
-      const page = Number.isFinite(query.page) && query.page >= 1 ? Math.floor(query.page) : 1;
-      const pageSize =
-        Number.isFinite(query.pageSize) && query.pageSize! >= 1
-          ? Math.min(Math.floor(query.pageSize!), 100)
-          : 100;
-      return providerManager.fetchUsageFlow(
-        {
-          startDateMs: query.startDateMs,
-          endDateMs: query.endDateMs,
-          page,
-          pageSize,
-          platform: query.platform,
-          preset: query.preset,
-        },
-        dateRangeLabel,
-      );
-    },
-  );
-
-  ipcMain.handle('flow-get-cached', () => providerManager.getCachedUsageFlow());
 
   ipcMain.on('set-orb-mode', (_event, mode: 'collapsed' | 'hover' | 'expanded') => {
     applyOrbMode(mode);

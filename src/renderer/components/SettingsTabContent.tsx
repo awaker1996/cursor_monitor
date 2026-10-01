@@ -180,7 +180,7 @@ export default function SettingsTabContent() {
           </div>
         </div>
         <p className="settings-section__footnote field-hint">
-          按间隔拉取用量；关闭 Grok Bot 时今日统计与流水不含 Bot 调用，周期账单占比仍以官方为准。
+          按间隔拉取用量；关闭 Grok Bot 时今日统计不含 Bot 调用，周期账单占比仍以官方为准。
         </p>
       </section>
 

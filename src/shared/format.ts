@@ -7,32 +7,6 @@ export function formatIncludedUsageTokens(value: number | null | undefined): str
   return String(Math.round(value));
 }
 
-export function formatUsageFlowDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '--';
-  const parts = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
-
-  const pick = (type: Intl.DateTimeFormatPartTypes): string =>
-    parts.find((part) => part.type === type)?.value ?? '';
-
-  const year = pick('year');
-  const month = pick('month');
-  const day = pick('day');
-  const hour = pick('hour');
-  const minute = pick('minute');
-
-  if (!year || !month || !day) return '--';
-  return `${year}/${month}/${day} ${hour}:${minute}`;
-}
-
 export function formatBillingPeriodLabel(
   start: string | null | undefined,
   end: string | null | undefined,
@@ -277,11 +251,17 @@ export function buildMetricItems(metrics: UsageMetrics | undefined): MetricDispl
     buildMetricItem(
       'autoToday',
       `今日 ${CURSOR_MODELS_LABEL}`,
-      m.autoTodayUsedPercent,
+      m.autoTodayUsedPercent ?? 0,
       m.autoTodayTokens,
       'auto',
     ),
-    buildMetricItem('apiToday', `今日 ${OTHER_MODELS_LABEL}`, m.apiTodayUsedPercent, m.apiTodayTokens, 'api'),
+    buildMetricItem(
+      'apiToday',
+      `今日 ${OTHER_MODELS_LABEL}`,
+      m.apiTodayUsedPercent ?? 0,
+      m.apiTodayTokens,
+      'api',
+    ),
     buildMetricItem(
       'auto',
       `周期 ${CURSOR_MODELS_LABEL}`,

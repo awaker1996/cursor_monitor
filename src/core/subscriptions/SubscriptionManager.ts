@@ -54,12 +54,6 @@ export class SubscriptionManager {
       }
       return provider.usageCredentialAccount;
     }
-    if (kind === 'sessionToken') {
-      if (!provider.sessionCredentialAccount) {
-        throw new Error(`${provider.label} 不支持流水会话凭据`);
-      }
-      return provider.sessionCredentialAccount;
-    }
     return provider.credentialAccount;
   }
 
@@ -67,7 +61,6 @@ export class SubscriptionManager {
     const metas: SubscriptionProviderMeta[] = [];
     for (const provider of this.providers.values()) {
       const usageSupported = typeof provider.fetchUsage === 'function';
-      const sessionSupported = Boolean(provider.sessionCredentialAccount);
       metas.push({
         id: provider.id,
         label: provider.label,
@@ -76,11 +69,6 @@ export class SubscriptionManager {
         usageConfigured:
           usageSupported && provider.usageCredentialAccount
             ? await credentialVault.hasSecret(provider.usageCredentialAccount)
-            : false,
-        sessionSupported,
-        sessionConfigured:
-          sessionSupported && provider.sessionCredentialAccount
-            ? await credentialVault.hasSecret(provider.sessionCredentialAccount)
             : false,
       });
     }

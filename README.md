@@ -1,6 +1,6 @@
 # Cursor Token Monitor — 项目参考文档
 
-> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口内按 **订阅 / 流水 / 其他** 三个分区承载订阅额度查询、用量流水与其他配置。  
+> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口内按 **订阅 / 其他** 两个分区承载订阅额度查询与其他配置。  
 > 本文档整合需求说明、架构设计、实现细节、使用与维护指南，便于后续查阅。
 
 ---
@@ -37,7 +37,7 @@
 ### 背景与目标
 
 - **背景**：需要在桌面实时查看 Cursor 账号 token 余量，避免频繁打开网页或控制台。
-- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 Cursor Models 与 Other Models 用量概览、周期明细及余量；并在设置窗口内集中提供订阅额度查询（Cursor / Command Code / DeepSeek）与用量流水查询。
+- **目标**：提供轻量、常驻、可配置自动刷新的悬浮球，展示 Cursor Models 与 Other Models 用量概览、周期明细及余量；并在设置窗口内集中提供订阅额度查询（Cursor / Command Code / DeepSeek）。
 - **数据策略**：官方接口优先（`OfficialProvider`），连续失败后自动回退到 Dashboard Cookie 接口（`CookieProvider`）。Cookie 方案优先读取 `usage-summary` 汇总数据；`get-aggregated-usage-events` 用于 Included Usage 周期模型明细；`get-filtered-usage-events` 作为今日/周期 token 与回退补充，避免明细接口不稳定时影响主数据展示。订阅数据独立于该链路，由 `SubscriptionManager` 按提供方各自查询（见第 4 章）。
 
 ### 范围
@@ -45,15 +45,14 @@
 **范围内：**
 - Windows 悬浮球（拖拽、置顶、贴边半隐收起、托盘）
 - Cursor Models / Other Models 余量与 Dashboard 用量指标展示（概览 / 用量切换）
-- 设置窗口三分区 Tab：订阅 / 流水 / 其他（URL hash 定位，默认订阅）
+- 设置窗口两分区 Tab：订阅 / 其他（URL hash 定位，默认订阅）
 - 订阅额度与用量查询：Cursor 周期用量、Command Code 额度与 5 小时/每周/每月限额、DeepSeek 余额与按月模型用量
-- 用量流水按平台查询（Cursor / Command Code / DeepSeek）：日期预设与自定义范围、分页、字段对齐控制台；结果按平台驻留内存缓存
-- Grok Bot 用量可选计入：默认从今日%、模型明细、流水剔除 `grok-bot-*` 模型，可在「其他」分区开关；周期官方占比不变
+- Grok Bot 用量可选计入：默认从今日%、模型明细剔除 `grok-bot-*` 模型，可在「其他」分区开关；周期官方占比不变
 - 系统托盘悬停展示概览用量摘要；右键提供设置 / 复位 / 退出
 - 自动刷新与间隔配置（订阅页自动刷新共用同一份配置）
 - 双 Provider 故障切换（Official ⇄ Cookie）
 - Dashboard API 多端点候选与局部降级
-- 凭据手动配置与连通性测试（Cursor Cookie、各订阅平台 API Key / 用量 Token / 流水会话）
+- 凭据手动配置与连通性测试（Cursor Cookie、各订阅平台 API Key / 用量 Token）
 - 订阅结果与快照本地缓存（打开即有数据，查询失败保留上次成功结果）
 - 自定义应用图标（托盘/设置窗即时生效）
 
@@ -104,7 +103,7 @@ npm run dist
 ### 首次使用
 
 1. 启动应用，屏幕右下角出现悬浮球
-2. 右键系统托盘 → **应用设置** 或 **查看流水**
+2. 右键系统托盘 → **应用设置**
 3. 在浏览器 DevTools 中复制 `WorkosCursorSessionToken` 的值，或复制包含该字段的完整 `cursor.com` Cookie，粘贴并保存
 4. 点击 **测试连接** 验证
 5. 悬浮球按设定间隔自动刷新，展示 Cursor Models / Other Models 余量及数据来源
@@ -171,7 +170,7 @@ npm run dist
 ### FR-06 托盘与生命周期
 
 - 托盘右键菜单：**设置**、**复位**、**退出**（左键点击弹出同一菜单）。设置会打开设置窗口的默认分区；复位把悬浮球恢复到主屏右下角默认位置并恢复可见
-- 不再提供查看流水 / 立即刷新 / 暂停恢复菜单项——这些能力分别位于设置窗口的流水分区与悬浮球面板内
+- 不再提供立即刷新 / 暂停恢复菜单项——这些能力位于悬浮球面板内
 - 悬停托盘图标：多行概览用量摘要（总消耗、今日/周期 Cursor Models 与 Other Models 分项；模型名按较长标签补齐对齐，末行合并「来源 + 更新时间」），随快照刷新更新，无快照时显示「暂无数据」
 - 托盘图标：自定义图标优先（`userData/custom-icon.png`，居中裁剪为正方形后按 64×64 加载以覆盖各 DPI），否则使用 `build/icon.png` 默认图标
 - 关闭悬浮窗后驻留托盘，不强制退出
@@ -193,35 +192,21 @@ npm run dist
 - 成功刷新后将 `TokenSnapshot` 持久化到 `%APPDATA%/cursor-token-monitor/snapshot-cache.json`
 - 启动时或请求失败时展示缓存数据，标记 `stale = true` 并提示用户
 
-### FR-10 用量流水
-
-- 位于设置窗口「流水」分区的 Tab 页（不再单独开窗），通过 `fetch-usage-flow` IPC 拉取
-- **默认最近 1 天**：进入页面时若主进程内存缓存有该平台上次成功结果则直接回填展示（不重复请求）；无缓存则自动请求最近 1 天
-- 内存缓存按平台保存「查询条件 + 上次成功结果」（不落盘，应用重启后清空）；点「刷新」，或切换筛选 / 分页 / 每页条数时更新
-- 平台筛选：Cursor、Command Code、DeepSeek（命中该平台缓存则回填，否则重置为最近 1 天并自动请求）
-- 日期快捷筛选：1d / 7d / 30d / MTD / Last month，以及自定义日期范围（按东八区日历日）
-- 服务端分页：每页可选 10 / 20 / 50 / 100，默认 20；提供首页 / 上一页 / 下一页 / 末页
-- 列表五列对齐控制台：Date (UTC+8)、Type、Model、Tokens、Cost；Token 统一按万 / 亿格式，缺字段显示 `-`
-- 字段映射：`default`→`auto`；`maxMode` 显示蓝色 MAX 徽标；Included / Free / Usage-based 等 Type/Cost 与控制台一致（映射见 `src/shared/usageFlowFormat.ts`）
-- 数据来源：Cursor 走 `get-filtered-usage-events`（与控制台同源，小窗口拉全量后本地分页）；DeepSeek 走 `/api/v0/usage/amount`；Command Code 走 `/internal/usage`（仅浏览器会话可访问，需在订阅页配置「流水凭据」）
-- Cursor 流水默认剔除 `grok-bot-automation` / `grok-bot-default`（与「其他」分区「计入 Grok Bot 用量」开关联动）
-- 无凭据时提示需配置 Cookie / 平台凭据
-
-### FR-11 订阅额度与用量查询
+### FR-10 订阅额度与用量查询
 
 - 位于设置窗口「订阅」分区（默认分区），按提供方 Tab 切换，**注册顺序即 Tab 顺序：Cursor → Command Code → DeepSeek**
 - 三个提供方数据形态不同：
   - **Cursor**：周期用量看板，复用主链路的 `TokenSnapshot`（本身不发独立请求）
   - **Command Code**：额度看板——剩余额度（月度 / 购买 / 赠送）、当期消耗 / 请求数 / Tokens、套餐与续期日期，以及 5 小时 / 每周 / 每月三段限额计量条
   - **DeepSeek**：各币种余额，且支持按月查询模型用量明细（当前仅 DeepSeek 提供「用量」）
-- 凭据区按提供方切换：Cursor 用 `WorkosCursorSessionToken`（Cookie，支持测试连接并展示结构化结果）；其余用 API Key；支持按月用量的提供方另有独立的「用量 Token」；Command Code 另有独立的「流水凭据（网页会话）」（逐条流水仅浏览器会话可访问，API Key 返回 401）
+- 凭据区按提供方切换：Cursor 用 `WorkosCursorSessionToken`（Cookie，支持测试连接并展示结构化结果）；其余用 API Key；支持按月用量的提供方另有独立的「用量 Token」
 - 刷新策略：进入订阅分区会刷新全部已配置提供方；页内切换提供方只读缓存、不发请求；自动刷新读取「其他」分区的 `autoRefreshEnabled` / `refreshIntervalSec`
 - 结果落盘到 `userData/subscription-cache.json`（含版本号，12 小时有效期）：打开即有数据；查询失败保留上次成功结果并给出黄色提示，不破坏缓存
 - 提示分级：未配置 / 无记录为蓝色 info，最近一次查询失败为黄色 warn，查询报错为红色 error
 
-### FR-12 设置窗口结构
+### FR-11 设置窗口结构
 
-- 设置窗口 1120×720（最小 800×480），顶部 Tab 切换三个分区：**订阅、流水、其他**（默认订阅，`#subscriptions` / `#flow` / `#settings` 定位）；窗口标题简化为「设置」
+- 设置窗口 1120×720（最小 800×480），顶部 Tab 切换两个分区：**订阅、其他**（默认订阅，`#subscriptions` / `#settings` 定位）；窗口标题简化为「设置」
 - 「其他」分区四张卡片：顶行三列等高（数据刷新 / 悬浮球 / 外观），底行「核心功能」跨列占满剩余高度
   - **数据刷新**：自动刷新、计入 Grok Bot 用量（默认关闭）、刷新间隔（30–3600 秒，防抖自动保存）
   - **悬浮球**：贴边缘自动收起开关
@@ -247,7 +232,7 @@ npm run dist
 flowchart TD
     trayMenu[TrayMenu] --> mainProcess[MainProcess]
     floatingBall[FloatingBallWindow] --> mainProcess
-    settingsWindow[SettingsWindow 订阅/流水/其他] --> mainProcess
+    settingsWindow[SettingsWindow 订阅/其他] --> mainProcess
     mainProcess --> pollerCore[PollerCore]
     pollerCore --> providerManager[ProviderManager]
     providerManager --> officialProvider[OfficialProvider]
@@ -282,31 +267,27 @@ flowchart TD
 | 边缘吸附 | `electron/floatingBallDock.ts` | 贴边半隐、悬停滑入、窗口 undock |
 | 图标管理 | `electron/iconManager.ts` | 自定义图标读写与预览 |
 | 悬浮窗 | `electron/windows/floatingBall.ts` | 无边框置顶窗口 |
-| 设置窗 | `electron/windows/settings.ts` | 设置窗口（订阅 / 流水 / 其他 三分区容器，按 tab 参数定位） |
+| 设置窗 | `electron/windows/settings.ts` | 设置窗口（订阅 / 其他 两分区容器，按 tab 参数定位） |
 | 托盘 | `electron/tray.ts` | 系统托盘菜单与悬停 tooltip |
 | 预加载 | `electron/preload.ts` | 安全 IPC 桥接 |
 | 开发态 URL | `src/shared/devServer.ts` | dev server 端口与 URL 的单一来源（5180） |
 | 轮询器 | `src/core/poller.ts` | 定时刷新、退避、状态机 |
 | 快照缓存 | `src/core/SnapshotCache.ts` | 本地快照持久化与加载 |
-| 流水缓存 | `src/core/UsageFlowCache.ts` | 流水视图内存缓存（按平台，进程内、不落盘） |
-| Provider 管理 | `src/core/providers/ProviderManager.ts` | 优先级切换、故障转移、流水拉取 |
+| Provider 管理 | `src/core/providers/ProviderManager.ts` | 优先级切换、故障转移 |
 | 官方数据源 | `src/core/providers/OfficialProvider.ts` | 无 Cookie 请求 |
-| Cookie 数据源 | `src/core/providers/CookieProvider.ts` | 带 Cookie 请求（含流水分页） |
-| 标准化 | `src/core/normalizer.ts` | 统一字段映射、流水页构建 |
+| Cookie 数据源 | `src/core/providers/CookieProvider.ts` | 带 Cookie 请求 |
+| 标准化 | `src/core/normalizer.ts` | 统一字段映射 |
 | 订阅管理 | `src/core/subscriptions/SubscriptionManager.ts` | 订阅提供方注册、分发查询与凭据管理 |
 | 订阅缓存 | `src/core/subscriptions/SubscriptionCache.ts` | 订阅结果落盘（版本号 + 12h 有效期 + 失败保留） |
 | Cursor 订阅源 | `src/core/subscriptions/CursorProvider.ts` | 复用主链路快照构建周期用量 |
-| Command Code 订阅源 | `src/core/subscriptions/CommandCodeProvider.ts` | alpha 接口额度 / 套餐 / 三段限额；会话凭据拉逐条流水 |
+| Command Code 订阅源 | `src/core/subscriptions/CommandCodeProvider.ts` | alpha 接口额度 / 套餐 / 三段限额 |
 | DeepSeek 订阅源 | `src/core/subscriptions/DeepSeekProvider.ts` | 余额 + 按月模型用量 |
 | 设置存储 | `src/settings/SettingsStore.ts` | JSON 持久化 |
 | 凭据库 | `src/security/CredentialVault.ts` | keytar / safeStorage |
 | 日志 | `src/utils/logger.ts` | 敏感信息脱敏 |
 | 格式化 | `src/shared/format.ts` | 展示格式化、托盘 tooltip、概览/用量构建 |
-| 流水格式化 | `src/shared/usageFlowFormat.ts` | Type/Model/Tokens/Cost 对齐控制台 |
-| 流水日期 | `src/shared/usageFlowDates.ts` | 东八区日期预设与自定义范围 |
-| 流水分页 | `src/shared/usageFlowPagination.ts` | 每页条数选项与默认值 |
 | 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开、概览/用量切换 |
-| 设置 UI 路由 | `src/renderer/pages/SettingsPage.tsx` | 三分区 Tab 路由与 hash 同步（默认订阅） |
+| 设置 UI 路由 | `src/renderer/pages/SettingsPage.tsx` | 两分区 Tab 路由与 hash 同步（默认订阅） |
 | Tab 切换 | `src/renderer/components/TabBar.tsx` | 通用 Tab 切换组件 |
 | 其他分区 UI | `src/renderer/components/SettingsTabContent.tsx` | 数据刷新 / 悬浮球 / 外观 / 核心功能卡 |
 | 核心功能卡 | `src/renderer/components/ProjectFeaturesCard.tsx` | 由 `README.md` 派生功能清单（`?raw`） |
@@ -315,13 +296,10 @@ flowchart TD
 | 订阅面板 | `src/renderer/components/SubscriptionPanels.tsx` | Cursor / Command Code / DeepSeek 展示面板 |
 | 订阅工具 | `src/renderer/components/SubscriptionUtils.ts` | 订阅页工具函数 |
 | 提供方切换 | `src/renderer/components/ProviderSwitcher.tsx` | 订阅提供方 Tab 与健康点 |
-| 流水 UI | `src/renderer/pages/FlowPage.tsx` | 平台筛选、分页、手动刷新 |
-| 流水筛选 / 分页 | `src/renderer/components/UsageFlowFilters.tsx`、`UsageFlowPagination.tsx` | 日期范围与分页控件 |
 | 提示条 | `src/renderer/components/ErrorHint.tsx` | 分级提示（info / warn / error） |
 | 连接测试面板 | `src/renderer/components/TestConnectionResultPanel.tsx` | 测试连接结构化结果 |
 | 指标行 | `src/renderer/components/MetricRow.tsx` | Dashboard metric 明细展示 |
 | Included 列表 | `src/renderer/components/IncludedUsageTable.tsx` | Included Usage 用量明细 |
-| 流水表格 | `src/renderer/components/UsageFlowTable.tsx` | 用量流水五列展示 |
 
 ---
 
@@ -337,13 +315,12 @@ cursor_monitor/
 │   ├── iconManager.ts           # 自定义图标管理
 │   └── windows/
 │       ├── floatingBall.ts      # 悬浮球窗口（固定 300 宽）
-│       └── settings.ts          # 设置窗口（订阅 / 流水 / 其他 三分区容器）
+│       └── settings.ts          # 设置窗口（订阅 / 其他 两分区容器）
 ├── src/
 │   ├── core/
 │   │   ├── poller.ts            # 轮询与状态机
 │   │   ├── SnapshotCache.ts     # 快照本地缓存
-│   │   ├── UsageFlowCache.ts    # 流水视图内存缓存（按平台，不落盘）
-│   │   ├── normalizer.ts        # 字段标准化 / 流水页构建
+│   │   ├── normalizer.ts        # 字段标准化
 │   │   ├── snapshotMerge.ts     # 快照合并
 │   │   ├── providers/
 │   │   │   ├── OfficialProvider.ts
@@ -364,9 +341,6 @@ cursor_monitor/
 │   │   ├── types.ts             # 类型定义
 │   │   ├── subscriptionTypes.ts # 订阅相关类型
 │   │   ├── format.ts            # 展示格式化 / 托盘 tooltip
-│   │   ├── usageFlowDates.ts    # 流水日期范围
-│   │   ├── usageFlowFormat.ts   # 流水字段映射
-│   │   ├── usageFlowPagination.ts # 流水分页常量
 │   │   └── devServer.ts         # 开发态 dev server 端口与 URL
 │   ├── utils/
 │   │   └── logger.ts            # 脱敏日志
@@ -375,8 +349,7 @@ cursor_monitor/
 │       ├── main.tsx             # 悬浮球入口
 │       ├── settings-main.tsx    # 设置窗入口
 │       ├── pages/
-│       │   ├── SettingsPage.tsx      # 三分区 Tab 路由（默认订阅）
-│       │   ├── FlowPage.tsx          # 流水
+│       │   ├── SettingsPage.tsx      # 两分区 Tab 路由（默认订阅）
 │       │   └── SubscriptionsPage.tsx # 订阅
 │       └── components/
 │           ├── TabBar.tsx
@@ -385,9 +358,6 @@ cursor_monitor/
 │           ├── ProviderSwitcher.tsx
 │           ├── SubscriptionPanels.tsx
 │           ├── SubscriptionUtils.ts
-│           ├── UsageFlowTable.tsx
-│           ├── UsageFlowFilters.tsx
-│           ├── UsageFlowPagination.tsx
 │           ├── IncludedUsageTable.tsx
 │           ├── TestConnectionResultPanel.tsx
 │           ├── ErrorHint.tsx
@@ -398,12 +368,12 @@ cursor_monitor/
 ├── scripts/
 │   ├── dist.mjs                 # 打包编排（结束残留实例 / 工作区外打包 / 发布产物）
 │   ├── create-icon.ps1          # 生成 build/icon.ico
-│   ├── verify-*.ts              # 主链路 / 订阅 / 流水验收脚本（内存 mock）
+│   ├── verify-*.ts              # 主链路 / 订阅验收脚本（内存 mock）
 ├── .cursor/rules/               # 项目级规则（变更归档等）
 ├── .cursorignore                # 编辑器索引排除（构建产物）
 ├── .vscode/settings.json        # 编辑器 search / watcher 排除
 ├── index.html                   # 悬浮球入口
-├── settings.html                # 设置窗口入口（承载三分区）
+├── settings.html                # 设置窗口入口（承载两分区）
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tsconfig.electron.json
@@ -512,16 +482,6 @@ cursor_monitor/
 
 `get-filtered-usage-events` 用于补充周期内 token 总量和今日 token/消耗，并在聚合接口不可用时回退构建 Included Usage。该端点依赖 `WorkosCursorSessionToken` 中的 `userId`，应用会从 `userId::jwt`、URL 编码格式或 JWT `sub` 中提取。若事件接口失败、超时或无法提取 `userId`，应用仍会展示 `usage-summary` 的汇总百分比，并将 token 明细保持为 `null`。
 
-用量流水窗口通过同一 `get-filtered-usage-events` 端点**独立分页拉取**（不写入 `TokenSnapshot`，避免快照缓存膨胀）。展示映射见 `src/shared/usageFlowFormat.ts`：
-
-| 控制台列 | 规则 |
-|---|---|
-| Date | `timestamp` 毫秒字符串先转 number，格式化为东八区 |
-| Type | 显式 `kind` 优先（Included / Free / Usage-based 等）；无 token 且非 Usage-based 时默认 Free |
-| Model | `default` → `auto`；`maxMode: true` 时附加蓝色 MAX 徽标 |
-| Tokens | 有用量用「万」等格式；零/空显示 `-` |
-| Cost | Included / Free 显示文案本身；Usage-based 等显示金额 |
-
 ### 异常处理规则
 
 - 单字段缺失 → 该字段为 `null`，不影响其他字段
@@ -612,9 +572,9 @@ OfficialProvider 请求
 
 视觉细节：弹窗 header 左侧为「三色状态灯 + Cursor监控」品牌行——三色灯为纯装饰循环动画（红→黄→绿，2.7s 错相位），与健康状态 / 用量数据完全解耦；`prefers-reduced-motion: reduce` 下三灯静态显示熄灭态。悬浮球本体与概览/用量卡片叠加动态玻璃质感（缓慢扫过的光泽带 + 描边高光，各卡片错相位），减少动态效果时关闭扫光但保留玻璃质感。
 
-### 设置窗口（三分区）
+### 设置窗口（两分区）
 
-窗口 1120×720（最小 800×480），顶部 Tab：**订阅 / 流水 / 其他**，默认订阅，`#subscriptions` / `#flow` / `#settings` 定位；窗口标题显示「设置」。
+窗口 1120×720（最小 800×480），顶部 Tab：**订阅 / 其他**，默认订阅，`#subscriptions` / `#settings` 定位；窗口标题显示「设置」。
 
 **订阅**
 
@@ -626,15 +586,6 @@ OfficialProvider 请求
   - DeepSeek：各币种余额 + 按月模型用量表
 - 凭据配置区可折叠：Cursor 填 `WorkosCursorSessionToken` 并可测试连接（结构化结果）；其余平台填 API Key；支持按月用量的平台另有独立的「用量 Token」
 - 进入分区即有缓存数据；查询失败保留上次成功结果并给出黄色提示
-
-**流水**
-
-- 平台切换：Cursor / Command Code / DeepSeek
-- 日期快捷：1d / 7d / 30d / MTD / Last month + 自定义范围
-- 进入分区优先回填内存缓存；无缓存时自动请求最近 1 天
-- 表格：Date (UTC+8)、Type、Model（含 MAX 徽标）、Tokens、Cost
-- 分页：每页 10 / 20 / 50 / 100（默认 20），首页 / 上一页 / 下一页 / 末页
-- Cursor 流水默认剔除 Grok Bot 模型行（可在「其他」分区开启计入）
 
 **其他**
 
@@ -678,7 +629,7 @@ OfficialProvider 请求
 | cookieEndpoint | `https://cursor.com/api/usage-summary` | 用户自定义 Cookie 汇总接口候选 |
 | failureThreshold | 3 | 切换 Provider 的失败次数阈值 |
 | edgeAutoDockEnabled | true | 贴边缘自动收起 |
-| includeGrokBotUsage | false | 是否将 Grok Bot 计入今日%、模型明细与流水 |
+| includeGrokBotUsage | false | 是否将 Grok Bot 计入今日% 与模型明细 |
 | customIconPath | null | 自定义图标路径（null 为默认） |
 
 修改端点或映射逻辑见 [维护与扩展](#13-维护与扩展)。
@@ -776,16 +727,15 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 - [ ] 快照缓存在启动/失败时可展示 stale 数据（状态 pill 标识）
 - [ ] 托盘悬停显示多行概览用量（模型名列对齐），随刷新更新
 - [ ] 托盘右键含设置、复位、退出；左键点击弹出同一菜单
-- [ ] 设置窗口三分区（订阅 / 流水 / 其他）可切换，默认订阅且 hash 定位有效
+- [ ] 设置窗口两分区（订阅 / 其他）可切换，默认订阅且 hash 定位有效
 - [ ] 调试折叠可展示数据库路径与命中表，并可复制诊断信息
 - [ ] 订阅分区三个提供方可切换，未配置时给出引导并显示灰色健康点
 - [ ] 订阅分区「刷新」覆盖全部已配置提供方；重新进入分区立即显示缓存
 - [ ] Command Code 展示额度与 5 小时/每周/每月限额；DeepSeek 可按月查询模型用量
 - [ ] 订阅查询失败时保留上次成功结果并给出黄色提示，不显示空白
-- [ ] 流水分区可按平台与日期筛选、可改每页条数；Cursor 默认不含 Grok Bot 行
 - [ ] 「其他」分区改刷新间隔后，订阅页自动刷新同步生效
 - [ ] 「其他」分区顶行三卡等高，窄窗自动换行、无卡内滚动；核心功能卡内容与 README「范围内」清单一致
-- [ ] 「计入 Grok Bot 用量」开关切换后用量与流水立即按新口径刷新
+- [ ] 「计入 Grok Bot 用量」开关切换后用量立即按新口径刷新
 - [ ] 自定义图标可即时生效于托盘与设置窗
 - [ ] 安装包可在 Windows 环境安装运行
 
@@ -798,10 +748,9 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 **主链路（Cursor 用量）**——接口字段或路径变化时通常只需改以下文件，**无需动 UI**：
 
 1. **`src/core/providers/OfficialProvider.ts`** — 官方请求 URL、Header
-2. **`src/core/providers/CookieProvider.ts`** — Cookie 请求 URL、Header（含流水分页）
-3. **`src/core/normalizer.ts`** — 字段映射规则、流水页构建
-4. **`src/shared/usageFlowFormat.ts`** — 流水 Type/Model/Tokens/Cost 展示映射
-5. **`src/shared/types.ts`** — 如有新原始响应结构，补充类型
+2. **`src/core/providers/CookieProvider.ts`** — Cookie 请求 URL、Header
+3. **`src/core/normalizer.ts`** — 字段映射规则
+4. **`src/shared/types.ts`** — 如有新原始响应结构，补充类型
 
 **订阅平台**——改动同样收敛在对应 Provider 与其展示面板：
 
@@ -840,8 +789,6 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 | subscription-save-key / subscription-clear-key | invoke | 保存 / 清除订阅凭据 |
 | subscription-fetch-info | invoke | 拉取指定提供方账户与额度信息 |
 | subscription-fetch-usage | invoke | 拉取指定提供方按月用量（校验月份 / 年份） |
-| fetch-usage-flow | invoke | 按平台 / 日期范围 / 页码拉取用量流水（成功后写入内存缓存） |
-| flow-get-cached | invoke | 读取流水内存缓存快照（按平台的查询条件 + 上次成功结果） |
 | set-orb-mode-async | invoke | 设置悬浮球模式（异步版） |
 | get-cursor-in-window | invoke | 光标是否在窗口内及相对坐标 |
 | get-icon-preview / select-custom-icon / clear-custom-icon | invoke | 图标预览 / 选择 / 恢复默认 |
@@ -864,9 +811,6 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 | 一直显示 cookie 来源 | 官方接口不可用，属正常回退；确认端点 URL |
 | 数据不完整 | `usage-summary` 字段变化，更新 normalizer 映射 |
 | 有百分比但无 token 明细 | `get-filtered-usage-events` 失败或 Cookie 中无法解析 userId；主汇总数据不受影响 |
-| 流水分区打开后没有数据 | 属预期：进入分区不自动加载，点击「刷新」才请求 |
-| 流水无数据 / Date 为空 | 确认 Cookie；检查 `timestamp` 是否为毫秒数字；对照 `usageFlowFormat.ts` |
-| 流水 Type/Cost 与控制台不一致 | 更新 `resolveUsageFlowType` / `resolveUsageFlowCost`；零 token 默认 Free |
 | 订阅页一直显示缓存时间 | 点「刷新」重新查询；查询失败会保留上次成功结果并给出黄色提示 |
 | Command Code 报「API Key 无效或已过期」 | 检查手动录入的 Key；清除手动 Key 后会回退到环境变量 / `~/.commandcode/auth.json` |
 | DeepSeek 有余额但没有月度用量 | 需要单独配置「用量 Token」（与 API Key 不同） |
@@ -899,10 +843,10 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、设置窗口三分区（订阅 / 流水 / 其他）、订阅额度与按月用量（Cursor / Command Code / DeepSeek）、流水按平台查询、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
+| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、设置窗口两分区（订阅 / 其他）、订阅额度与按月用量（Cursor / Command Code / DeepSeek）、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 
 ---
 
-*文档版本：v1.5 | 最后更新：2026-09-27*
+*文档版本：v1.6 | 最后更新：2026-10-01*

@@ -12,16 +12,10 @@ import type {
   RawUsageEventsResponse,
   TokenQuota,
   TokenSnapshot,
-  UsageFlowDisplay,
-  UsageFlowEntry,
   UsageMetrics,
   UsageNormalizationOptions,
 } from '../shared/types';
-import { CURSOR_MODELS_LABEL, OTHER_MODELS_LABEL, formatUsageFlowDate } from '../shared/format';
-import {
-  extractUsageEventTimestamp,
-  mapUsageFlowEntry,
-} from '../shared/usageFlowFormat';
+import { CURSOR_MODELS_LABEL, OTHER_MODELS_LABEL } from '../shared/format';
 
 export { formatTokenCount, formatPercent, totalRemaining } from '../shared/format';
 
@@ -163,134 +157,6 @@ function eventTokens(event: RawUsageEvent): number {
     (usage.cacheReadTokens ?? 0) +
     (usage.cacheWriteTokens ?? 0)
   );
-}
-
-/** Build per-event usage flow rows from a paginated events response. */
-export function buildUsageFlowPage(
-  eventsResponse: RawUsageEventsResponse | null | undefined,
-  query: { page: number; pageSize: number; dateRangeLabel?: string },
-  options?: UsageNormalizationOptions,
-): UsageFlowDisplay {
-  const rawEvents = eventsResponse?.usageEventsDisplay ?? [];
-  const events = filterExcludedGrokBotUsageEvents(rawEvents, options);
-  const reportedTotal = resolveUsageFlowTotalCount(eventsResponse, rawEvents.length);
-  const excludedOnPage = rawEvents.length - events.length;
-  const totalCount = Math.max(0, reportedTotal - excludedOnPage);
-  const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
-  const page = clampUsageFlowPage(query.page, totalPages);
-
-  if (events.length === 0) {
-    return {
-      available: false,
-      incomplete: eventsResponse?.eventsComplete === false,
-      totalCount,
-      page,
-      pageSize: query.pageSize,
-      totalPages,
-      dateRangeLabel: query.dateRangeLabel,
-      entries: [],
-    };
-  }
-
-  const entries = mapAndSortUsageFlowEntries(events);
-
-  return {
-    available: true,
-    incomplete: eventsResponse?.eventsComplete === false,
-    totalCount,
-    page,
-    pageSize: query.pageSize,
-    totalPages,
-    dateRangeLabel: query.dateRangeLabel,
-    entries,
-  };
-}
-
-/** Client-side slice after fetching full event list (avoids server page boundary gaps). */
-export function buildUsageFlowPageFromEvents(
-  allEvents: RawUsageEvent[],
-  query: { page: number; pageSize: number; dateRangeLabel?: string },
-  reportedTotal?: number,
-  options?: UsageNormalizationOptions,
-): UsageFlowDisplay {
-  const deduped = dedupeUsageFlowEvents(allEvents);
-  const prepared = filterExcludedGrokBotUsageEvents(deduped, options);
-  const totalCount = prepared.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
-  const page = clampUsageFlowPage(query.page, totalPages);
-  const start = (page - 1) * query.pageSize;
-  const allEntries = mapAndSortUsageFlowEntries(prepared);
-  const entries = allEntries.slice(start, start + query.pageSize);
-
-  return {
-    available: totalCount > 0,
-    incomplete:
-      reportedTotal && reportedTotal > 0 && deduped.length < reportedTotal ? true : undefined,
-    totalCount,
-    page,
-    pageSize: query.pageSize,
-    totalPages,
-    dateRangeLabel: query.dateRangeLabel,
-    entries,
-  };
-}
-
-export function resolveUsageFlowTotalCount(
-  eventsResponse: RawUsageEventsResponse | null | undefined,
-  fallbackLength = 0,
-): number {
-  const reported = eventsResponse?.totalUsageEventsCount;
-  if (typeof reported === 'number' && Number.isFinite(reported) && reported > 0) {
-    return Math.floor(reported);
-  }
-  return fallbackLength;
-}
-
-function clampUsageFlowPage(page: number, totalPages: number): number {
-  if (!Number.isFinite(page) || page < 1) return 1;
-  return Math.min(Math.floor(page), totalPages);
-}
-
-function usageFlowEventKey(event: RawUsageEvent): string {
-  const ts = extractUsageEventTimestamp(event) ?? '';
-  const tokens = eventTokens(event);
-  const kind = event.kind ?? '';
-  const model = event.model ?? '';
-  return `${ts}|${model}|${kind}|${tokens}`;
-}
-
-function dedupeUsageFlowEvents(events: RawUsageEvent[]): RawUsageEvent[] {
-  const seen = new Set<string>();
-  const out: RawUsageEvent[] = [];
-  for (const event of events) {
-    const key = usageFlowEventKey(event);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(event);
-  }
-  return out;
-}
-
-function filterExcludedGrokBotUsageEvents(
-  events: RawUsageEvent[],
-  options?: UsageNormalizationOptions,
-): RawUsageEvent[] {
-  return events.filter((event) => !isExcludedGrokBotModel(event.model, options));
-}
-
-function mapAndSortUsageFlowEntries(events: RawUsageEvent[]): UsageFlowEntry[] {
-  const entries: UsageFlowEntry[] = events.map((event) =>
-    mapUsageFlowEntry(event, eventTokens(event), eventCostCents(event), formatUsageFlowDate),
-  );
-
-  entries.sort((a, b) => {
-    if (!a.timestamp && !b.timestamp) return 0;
-    if (!a.timestamp) return 1;
-    if (!b.timestamp) return -1;
-    return b.timestamp.localeCompare(a.timestamp);
-  });
-
-  return entries;
 }
 
 /** Clamp a 0..1 share; guards bad denominators and partial aggregates. */

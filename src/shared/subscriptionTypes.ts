@@ -1,8 +1,8 @@
 /** 订阅提供方标识，后续新增订阅源时在此扩展联合类型。 */
 export type SubscriptionProviderId = 'cursor' | 'deepseek' | 'commandcode';
 
-/** 凭据种类：apiKey 查余额，usageToken（网页登录 Token）查用量，sessionToken 查流水。 */
-export type SubscriptionCredentialKind = 'apiKey' | 'usageToken' | 'sessionToken';
+/** 凭据种类：apiKey 查余额，usageToken（网页登录 Token）查用量。 */
+export type SubscriptionCredentialKind = 'apiKey' | 'usageToken';
 
 export interface SubscriptionProviderMeta {
   id: SubscriptionProviderId;
@@ -10,9 +10,6 @@ export interface SubscriptionProviderMeta {
   configured: boolean;
   usageSupported: boolean;
   usageConfigured: boolean;
-  /** 是否需要（且已配置）独立的流水会话凭据。 */
-  sessionSupported: boolean;
-  sessionConfigured: boolean;
 }
 
 /** DeepSeek 开放平台 `GET /user/balance` 的单币种余额。 */

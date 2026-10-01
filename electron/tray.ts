@@ -2,7 +2,7 @@ import { Menu, Tray, nativeImage } from 'electron';
 
 let tray: Tray | null = null;
 
-export type SettingsTab = 'flow' | 'subscriptions' | 'settings';
+export type SettingsTab = 'subscriptions' | 'settings';
 
 export interface TrayCallbacks {
   getIcon: () => Electron.NativeImage;

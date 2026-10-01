@@ -4,9 +4,6 @@ import type {
   DockEdge,
   PollerState,
   TestConnectionResult,
-  UsageFlowCacheSnapshot,
-  UsageFlowFetchResult,
-  UsageFlowQuery,
   TokenSnapshot,
 } from '../src/shared/types';
 import type {
@@ -51,8 +48,6 @@ export interface ElectronAPI {
     providerId: SubscriptionProviderId,
     query: SubscriptionUsageQuery,
   ) => Promise<SubscriptionUsageResult>;
-  fetchUsageFlow: (query: UsageFlowQuery, dateRangeLabel?: string) => Promise<UsageFlowFetchResult>;
-  getCachedUsageFlow: () => Promise<UsageFlowCacheSnapshot>;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;
@@ -110,9 +105,6 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('subscription-fetch-info', providerId),
   fetchSubscriptionUsage: (providerId, query) =>
     ipcRenderer.invoke('subscription-fetch-usage', providerId, query),
-  fetchUsageFlow: (query, dateRangeLabel) =>
-    ipcRenderer.invoke('fetch-usage-flow', query, dateRangeLabel),
-  getCachedUsageFlow: () => ipcRenderer.invoke('flow-get-cached'),
   setOrbMode: (mode) => ipcRenderer.send('set-orb-mode', mode),
   setOrbModeAsync: (mode) => ipcRenderer.invoke('set-orb-mode-async', mode),
   setExpanded: (expanded) => ipcRenderer.send('set-expanded', expanded),

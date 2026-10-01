@@ -5,9 +5,6 @@ import type {
   DockEdge,
   PollerState,
   TestConnectionResult,
-  UsageFlowCacheSnapshot,
-  UsageFlowFetchResult,
-  UsageFlowQuery,
   TokenSnapshot,
 } from '../shared/types';
 import type {
@@ -52,8 +49,6 @@ export interface ElectronAPI {
     providerId: SubscriptionProviderId,
     query: SubscriptionUsageQuery,
   ) => Promise<SubscriptionUsageResult>;
-  fetchUsageFlow: (query: UsageFlowQuery, dateRangeLabel?: string) => Promise<UsageFlowFetchResult>;
-  getCachedUsageFlow: () => Promise<UsageFlowCacheSnapshot>;
   setOrbMode: (mode: 'collapsed' | 'hover' | 'expanded') => void;
   setOrbModeAsync: (mode: 'collapsed' | 'hover' | 'expanded') => Promise<void>;
   setExpanded: (expanded: boolean) => void;
