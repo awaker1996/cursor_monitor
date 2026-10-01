@@ -132,12 +132,12 @@ npm run dist
 **概览视图：**
 
 - 顶部 dashboard：总消耗百分比、进度条、周期 token 汇总、状态 pill、来源、上次刷新时间
-- 四张 metric 卡片纵向排列：今日 Cursor Models、今日 Other Models、周期 Cursor Models、周期 Other Models（百分比 + token 明细）
+- 四张 metric 卡片纵向排列：今日 Cursor Models、今日 Other Models、周期 Cursor Models、周期 Other Models（百分比 + token 明细）；卡片采用无左色带的玻璃层级样式，今日与周期通过明暗背景和组间分隔线区分
 - 退避 / 暂停 / 无数据等状态提示
 
 **用量视图（有 Included Usage 数据时可用）：**
 
-- 按模型聚合的 Included Usage 列表（Cursor Models / Other Models 分区，账单周期、tokens、占比）
+- 按模型聚合的 Included Usage 列表（Cursor Models / Other Models 分区，账单周期、tokens、占比）；模型明细卡片采用统一玻璃描边样式，不使用左侧色带
 - 列表区域独立滚动，概览视图无纵向滚动条
 
 **通用：**
@@ -559,8 +559,8 @@ OfficialProvider 请求
 |---|---|
 | 折叠 | 圆形球体、余量百分比、圆环进度、健康点（绿/黄/蓝/灰） |
 | 贴边收起 | 半隐圆球（闲置约半隐 + opacity 0.4；悬停滑入变实），点击展开或拖出恢复 |
-| 展开 · 概览 | 总消耗 dashboard、4 张纵向 metric 卡片、状态/来源/时间、刷新/设置/收起；面板进出场动画 |
-| 展开 · 用量 | Included Usage 分区列表（有数据时底部分段「概览 / 用量」），长模型名自动换行 |
+| 展开 · 概览 | 总消耗 dashboard、4 张纵向 metric 卡片、状态/来源/时间、刷新/设置/收起；卡片采用无左色带玻璃样式并区分今日/周期；面板进出场动画 |
+| 展开 · 用量 | Included Usage 分区列表（有数据时底部分段「概览 / 用量」），长模型名自动换行；模型明细卡片采用无左色带玻璃样式 |
 
 健康点含义：
 - **绿**：数据正常

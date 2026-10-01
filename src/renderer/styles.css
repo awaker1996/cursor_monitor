@@ -944,32 +944,30 @@ body.page-settings-tab #root {
   grid-template-columns: minmax(0, 1fr) auto auto;
   column-gap: 6px;
   align-items: baseline;
-  padding: 4px 8px 4px 10px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.18);
-  border-left: 2px solid transparent;
-  transition: background 120ms ease;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018) 62%, rgba(0, 0, 0, 0.08)),
+    rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  transition: background 120ms ease, border-color 120ms ease;
   /* 流动光泽需要伪元素承载 */
   position: relative;
   overflow: hidden;
 }
 
 .floating-ball__panel--included .included-usage__entry:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035) 62%, rgba(0, 0, 0, 0.04)),
+    rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* 让 entry 内的文本浮在光泽之上 */
 .floating-ball__panel--included .included-usage__entry > * {
   position: relative;
   z-index: 1;
-}
-
-.floating-ball__panel--included .included-usage__block--api .included-usage__entry {
-  border-left-color: #34d399;
-}
-
-.floating-ball__panel--included .included-usage__block--auto .included-usage__entry {
-  border-left-color: #60a5fa;
 }
 
 .floating-ball__panel--included .included-usage__entry-name {
@@ -2039,16 +2037,54 @@ body.page-settings-tab #root {
 
 .metric-card {
   padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-left: 3px solid transparent;
+  border-radius: 11px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035) 58%, rgba(15, 23, 42, 0.16)),
+    rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.105);
   /* 动态玻璃：流动光泽需要伪元素承载 */
   position: relative;
   overflow: hidden;
   box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 3px 8px rgba(0, 0, 0, 0.16);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+/* 用时间维度区分卡片，颜色仍只用于表达用量状态。 */
+.metric-card--today {
+  background:
+    linear-gradient(135deg, rgba(96, 165, 250, 0.105), rgba(255, 255, 255, 0.045) 58%, rgba(15, 23, 42, 0.12)),
+    rgba(255, 255, 255, 0.04);
+  border-color: rgba(147, 197, 253, 0.2);
+  border-top-color: rgba(147, 197, 253, 0.48);
+}
+
+.metric-card--period {
+  /* 不再用外部 margin 分组，避免固定高度窗口被最后一张卡片挤出。 */
+  margin-top: 0;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.24), rgba(255, 255, 255, 0.04) 58%, rgba(15, 23, 42, 0.2)),
+    rgba(255, 255, 255, 0.028);
+  border-color: rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(148, 163, 184, 0.3);
+  box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 1px 2px rgba(0, 0, 0, 0.12);
+    inset 0 -1px 0 rgba(0, 0, 0, 0.24),
+    0 3px 8px rgba(0, 0, 0, 0.18);
+}
+
+/* 周期组从第二张今日卡片后开始，用一条低对比度分界线表达层级。 */
+.metric-card--today + .metric-card--period {
+  border-top-color: rgba(148, 163, 184, 0.42);
+}
+
+.metric-card:hover {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.045) 58%, rgba(15, 23, 42, 0.12)),
+    rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.17);
 }
 
 /* metric-card 内的内容（标签/百分比/track/detail）需要在光泽之上 */
@@ -2058,11 +2094,6 @@ body.page-settings-tab #root {
   position: relative;
   z-index: 1;
 }
-
-.metric-card--total { border-left-color: #818cf8; }
-.metric-card--api { border-left-color: #34d399; }
-.metric-card--auto { border-left-color: #60a5fa; }
-.metric-card--neutral { border-left-color: #6b7280; }
 
 .metric-card__main {
   display: flex;
