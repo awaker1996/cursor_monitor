@@ -22,6 +22,43 @@ export const EMPTY_PROVIDER_ENTRY: ProviderCacheEntry = {
   usageError: null,
 };
 
+/** CommandCode 收起态限额摘要：5 小时与每周限额百分比，无数据时返回空数组。 */
+export function commandCodeCollapsedLimits(
+  id: SubscriptionProviderId,
+  entry: ProviderCacheEntry | undefined,
+): Array<{ key: 'fiveHour' | 'weekly'; label: string; percent: number }> {
+  if (id !== 'commandcode') return [];
+  const data = entry?.info?.data ?? null;
+  if (!data || data.providerId !== 'commandcode') return [];
+  const result: Array<{ key: 'fiveHour' | 'weekly'; label: string; percent: number }> = [];
+  for (const key of ['fiveHour', 'weekly'] as const) {
+    const limit = data.limits.find((item) => item.key === key);
+    if (!limit) continue;
+    result.push({
+      key,
+      label: key === 'fiveHour' ? '5h' : '周',
+      percent: limitPercent(limit),
+    });
+  }
+  return result;
+}
+
+/** 收起态套餐标签：有真实套餐数据时返回展示文案，否则返回 null（不展示、不写死）。 */
+export function providerPlanLabel(
+  id: SubscriptionProviderId,
+  entry: ProviderCacheEntry | undefined,
+): string | null {
+  const data = entry?.info?.data ?? null;
+  if (!data || data.providerId !== id) return null;
+  if (data.providerId === 'commandcode') {
+    return formatPlanLabel(data.plan?.planId ?? null);
+  }
+  if (data.providerId === 'cursor') {
+    return formatCursorPlanLabel(data.membershipType);
+  }
+  return null;
+}
+
 /** provider 卡片上的一行摘要：取该平台最有信息量的一项数值。 */
 export function providerSummaryLine(
   id: SubscriptionProviderId,
@@ -99,6 +136,23 @@ export function formatPlanLabel(planId: string | null): string {
   const key = planId.trim().toLowerCase();
   const scoped = key.replace(/^(individual|personal|team|org)-/, '');
   return PLAN_LABELS[key] ?? PLAN_LABELS[scoped] ?? planId.replace(/[_-]+/g, ' ').trim();
+}
+
+/** Cursor 套餐文案：usage-summary 的 membershipType（如 pro → Pro），未知值首字母大写。 */
+export function formatCursorPlanLabel(membershipType: string | null | undefined): string | null {
+  if (!membershipType || membershipType.trim().length === 0) return null;
+  const key = membershipType.trim().toLowerCase();
+  const known: Record<string, string> = {
+    pro: 'Pro',
+    business: 'Business',
+    team: 'Team',
+    enterprise: 'Enterprise',
+    free: 'Free',
+    hobby: 'Hobby',
+    trial: 'Trial',
+  };
+  if (known[key]) return known[key];
+  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 export function parseTimestamp(value: string | null): Date | null {

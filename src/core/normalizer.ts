@@ -960,6 +960,7 @@ export function normalizeOfficial(raw: unknown, fetchedAt: string): TokenSnapsho
     includedUsage: { available: false, categories: [] },
     billingCycleStart: null,
     billingCycleEnd,
+    membershipType: null,
     fetchedAt,
     stale,
     rawVersion: 'official:v1',
@@ -1037,6 +1038,10 @@ export function normalizeCookie(
     includedUsage,
     billingCycleStart,
     billingCycleEnd,
+    membershipType:
+      typeof data.membershipType === 'string' && data.membershipType.trim().length > 0
+        ? data.membershipType.trim()
+        : null,
     fetchedAt,
     stale,
     rawVersion: 'cookie:usage-summary',

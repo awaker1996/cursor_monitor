@@ -3,6 +3,7 @@ import ErrorHint from './ErrorHint';
 import {
   formatUsd,
   formatCount,
+  formatCursorPlanLabel,
   formatPlanLabel,
   formatPeriodEnd,
   parseMonthValue,
@@ -235,6 +236,7 @@ function CursorSections({ data }: { data: CursorSubscriptionData }) {
       <Block title="周期与账户">
         <KeyValueRows
           rows={[
+            { label: '订阅套餐', value: formatCursorPlanLabel(data.membershipType) ?? '-' },
             { label: '计费周期', value: cycleLabel ?? '-' },
             { label: '数据来源', value: data.source === 'official' ? '官方接口' : 'Dashboard Cookie' },
             { label: '凭据状态', value: data.hasCookie ? '已配置 Cookie' : '未配置 Cookie' },

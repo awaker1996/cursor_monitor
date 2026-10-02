@@ -57,6 +57,8 @@ export interface TokenSnapshot {
   includedUsage?: IncludedUsageBreakdown | null;
   billingCycleStart?: string | null;
   billingCycleEnd?: string | null;
+  /** Cursor 订阅套餐（usage-summary 的 membershipType，如 pro），官方链路无此字段。 */
+  membershipType?: string | null;
   fetchedAt: string;
   stale: boolean;
   rawVersion: string;
@@ -210,6 +212,8 @@ export interface RawCookiePlanUsage {
 export interface RawCookieResponse {
   billingCycleStart?: string | null;
   billingCycleEnd?: string | null;
+  /** 订阅套餐类型（如 pro），仅 usage-summary 返回。 */
+  membershipType?: string | null;
   individualUsage?: {
     plan?: RawCookiePlanUsage;
     /** Enterprise/team individual allocation when `plan` is absent. */

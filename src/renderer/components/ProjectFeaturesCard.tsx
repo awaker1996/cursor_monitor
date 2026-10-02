@@ -53,8 +53,8 @@ export default function ProjectFeaturesCard() {
   if (!INTRO && FEATURES.length === 0) return null;
 
   return (
-    <section className="settings-section settings-section--wide">
-      <h2>核心功能</h2>
+    <details className="settings-section settings-section--wide project-features-card">
+      <summary>关于与功能说明</summary>
       <div className="project-features">
         {INTRO && <p className="project-features__intro">{renderInline(INTRO)}</p>}
         <ul className="project-features__list">
@@ -63,6 +63,6 @@ export default function ProjectFeaturesCard() {
           ))}
         </ul>
       </div>
-    </section>
+    </details>
   );
 }

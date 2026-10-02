@@ -92,6 +92,7 @@ export class CursorProvider implements SubscriptionProvider {
       otherModels,
       source: snapshot.source,
       hasCookie,
+      membershipType: snapshot.membershipType ?? null,
     };
   }
 }

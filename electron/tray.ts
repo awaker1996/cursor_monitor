@@ -2,11 +2,9 @@ import { Menu, Tray, nativeImage } from 'electron';
 
 let tray: Tray | null = null;
 
-export type SettingsTab = 'subscriptions' | 'settings';
-
 export interface TrayCallbacks {
   getIcon: () => Electron.NativeImage;
-  onOpenSettings: (tab?: SettingsTab) => void;
+  onOpenSettings: () => void;
   onResetFloatingBall: () => void;
   onQuit: () => void;
 }

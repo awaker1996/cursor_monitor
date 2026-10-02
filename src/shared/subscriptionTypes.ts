@@ -129,6 +129,8 @@ export interface CursorSubscriptionData {
   source: string;
   /** 是否已配置 Cookie */
   hasCookie: boolean;
+  /** 订阅套餐类型（usage-summary 的 membershipType，如 pro），无数据时为 null。 */
+  membershipType: string | null;
 }
 
 export interface CursorModelItem {

@@ -15,7 +15,7 @@ import {
   sendToFloatingBall,
 } from './windows/floatingBall';
 import { createSettingsWindow } from './windows/settings';
-import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip, type SettingsTab } from './tray';
+import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip } from './tray';
 import {
   clearDockState,
   getDockState,
@@ -503,7 +503,7 @@ app.whenReady().then(async () => {
 
   createTray({
     getIcon: () => loadTrayIcon(settingsStore.get()),
-    onOpenSettings: (tab?: SettingsTab) => createSettingsWindow(isDev, settingsStore.get(), tab),
+    onOpenSettings: () => createSettingsWindow(isDev, settingsStore.get()),
     onResetFloatingBall: () => resetFloatingBallVisibility(),
     onQuit: () => app.quit(),
   });

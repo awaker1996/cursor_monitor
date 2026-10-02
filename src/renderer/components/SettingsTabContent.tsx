@@ -136,18 +136,18 @@ export default function SettingsTabContent() {
 
   if (!settings) {
     return (
-      <div className="page-shell page-shell--settings">
+      <div className="preference-grid">
         <p>加载中...</p>
       </div>
     );
   }
 
   return (
-    <div className="page-shell page-shell--settings">
-      <section className="settings-section settings-section--primary settings-section--tile">
-        <h2>数据刷新</h2>
-        <div className="settings-section__body">
-          <div className="settings-toggles">
+    <div className="preference-groups">
+      <div className="preference-grid">
+        <section className="settings-section settings-section--primary">
+          <h2>数据刷新</h2>
+          <div className="settings-section__body">
             <label className="toggle-row">
               <input
                 type="checkbox"
@@ -156,7 +156,29 @@ export default function SettingsTabContent() {
               />
               <span>启用自动刷新</span>
             </label>
-            <label className="toggle-row">
+            <div className="form-group form-group--flush">
+              <label htmlFor="interval">刷新间隔（秒）</label>
+              <input
+                id="interval"
+                type="number"
+                min={REFRESH_INTERVAL_MIN}
+                max={REFRESH_INTERVAL_MAX}
+                value={intervalInput}
+                onChange={(e) => handleIntervalChange(e.target.value)}
+                onBlur={handleIntervalBlur}
+              />
+              {intervalError && <p className="field-error">{intervalError}</p>}
+            </div>
+          </div>
+          <p className="settings-section__footnote field-hint">
+            按间隔拉取订阅与用量；关闭后仍可手动刷新。
+          </p>
+        </section>
+
+        <section className="settings-section">
+          <h2>用量统计</h2>
+          <div className="settings-section__body">
+            <label className="toggle-row toggle-row--solo">
               <input
                 type="checkbox"
                 checked={settings.includeGrokBotUsage}
@@ -165,72 +187,59 @@ export default function SettingsTabContent() {
               <span>计入 Grok Bot 用量</span>
             </label>
           </div>
-          <div className="form-group form-group--flush">
-            <label htmlFor="interval">刷新间隔（秒）</label>
-            <input
-              id="interval"
-              type="number"
-              min={REFRESH_INTERVAL_MIN}
-              max={REFRESH_INTERVAL_MAX}
-              value={intervalInput}
-              onChange={(e) => handleIntervalChange(e.target.value)}
-              onBlur={handleIntervalBlur}
-            />
-            {intervalError && <p className="field-error">{intervalError}</p>}
+          <p className="settings-section__footnote field-hint">
+            关闭时今日统计不含 Bot 调用，周期账单占比仍以官方为准。
+          </p>
+        </section>
+
+        <section className="settings-section">
+          <h2>悬浮球行为</h2>
+          <div className="settings-section__body">
+            <label className="toggle-row toggle-row--solo">
+              <input
+                type="checkbox"
+                checked={settings.edgeAutoDockEnabled}
+                onChange={handleToggleEdgeDock}
+              />
+              <span>贴边缘自动收起</span>
+            </label>
           </div>
-        </div>
-        <p className="settings-section__footnote field-hint">
-          按间隔拉取用量；关闭 Grok Bot 时今日统计不含 Bot 调用，周期账单占比仍以官方为准。
-        </p>
-      </section>
+          <p className="settings-section__footnote field-hint">
+            拖至屏幕边缘松手后收起为细条，向外拖出即可恢复完整显示。
+          </p>
+        </section>
 
-      <section className="settings-section settings-section--tile">
-        <h2>悬浮球</h2>
-        <div className="settings-section__body">
-          <label className="toggle-row toggle-row--solo">
-            <input
-              type="checkbox"
-              checked={settings.edgeAutoDockEnabled}
-              onChange={handleToggleEdgeDock}
-            />
-            <span>贴边缘自动收起</span>
-          </label>
-        </div>
-        <p className="settings-section__footnote field-hint">
-          拖至屏幕边缘松手后收起为细条，向外拖出即可恢复完整显示。
-        </p>
-      </section>
-
-      <section className="settings-section settings-section--tile">
-        <h2>外观</h2>
-        <div className="settings-section__body">
-          <div className="icon-picker">
-            <div className="icon-picker__preview">
-              {iconPreview ? (
-                <img src={iconPreview} alt="当前图标" className="icon-picker__image" />
-              ) : (
-                <div className="icon-picker__placeholder">无图标</div>
-              )}
-            </div>
-            <div className="icon-picker__actions">
-              <button type="button" className="btn-secondary" onClick={handleSelectIcon}>
-                选择图标
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={handleClearIcon}
-                disabled={!settings.customIconPath}
-              >
-                恢复默认
-              </button>
+        <section className="settings-section">
+          <h2>应用图标</h2>
+          <div className="settings-section__body">
+            <div className="icon-picker">
+              <div className="icon-picker__preview">
+                {iconPreview ? (
+                  <img src={iconPreview} alt="当前图标" className="icon-picker__image" />
+                ) : (
+                  <div className="icon-picker__placeholder">无图标</div>
+                )}
+              </div>
+              <div className="icon-picker__actions">
+                <button type="button" className="btn-secondary" onClick={handleSelectIcon}>
+                  选择图标
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleClearIcon}
+                  disabled={!settings.customIconPath}
+                >
+                  恢复默认
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        <p className="settings-section__footnote field-hint">
-          即时更新托盘与设置窗口图标；建议 256×256 正方形 PNG。任务栏图标需重新安装后生效。
-        </p>
-      </section>
+          <p className="settings-section__footnote field-hint">
+            即时更新托盘与设置窗口图标；建议 256×256 正方形 PNG。任务栏图标需重新安装后生效。
+          </p>
+        </section>
+      </div>
 
       <ProjectFeaturesCard />
 
