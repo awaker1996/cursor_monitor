@@ -13,5 +13,6 @@ Thumbs.db
 # 本地工具数据与缓存（不纳入版本控制）
 .commandcode/
 .electron-cache/
+.openchamber/
 # 本地布局验证页（临时）
 verify*.html

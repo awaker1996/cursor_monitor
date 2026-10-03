@@ -246,7 +246,7 @@ function CursorSections({ data }: { data: CursorSubscriptionData }) {
 
       <Block title="用量明细">
         {modelCount === 0 ? (
-          <EmptyBlock text="本期无模型明细" />
+          <EmptyBlock text="本计费周期内没有模型调用记录" />
         ) : (
           <>
             {data.cursorModels.length > 0 && (
@@ -383,7 +383,8 @@ function CommandCodeSections({ data }: { data: CommandCodeSubscriptionData }) {
         />
         {unavailable.length > 0 && (
           <p className="field-hint">
-            部分数据不可用：{unavailable.map((section) => QUOTA_SECTION_LABELS[section]).join('、')}
+            以下数据本次未能获取，稍后刷新可能恢复：
+            {unavailable.map((section) => QUOTA_SECTION_LABELS[section]).join('、')}
           </p>
         )}
       </Block>
@@ -393,12 +394,13 @@ function CommandCodeSections({ data }: { data: CommandCodeSubscriptionData }) {
           {limits.map((limit) => (
             <UsageLimitRow key={limit.key} limit={limit} />
           ))}
+          <p className="field-hint">限额按美元计价，用满后需等待周期重置。</p>
         </Block>
       )}
 
       <Block title="用量明细">
         {!summary ? (
-          <EmptyBlock text="用量汇总不可用（alpha 接口可能已变动）" />
+          <EmptyBlock text="用量汇总暂时无法获取，可能是 alpha 接口已变动，稍后刷新再试" />
         ) : (
           <table className="sub-table">
             <thead>
@@ -530,32 +532,33 @@ function DeepSeekSections({
     usageBody = (
       <ErrorHint
         tone="info"
-        message="尚未配置用量 Token"
-        action="展开下方「凭据配置」配置后即可按模型查询用量（数据来自平台控制台内部接口）"
+        message="尚未配置用量 Token，无法按模型查询用量"
+        action="在下方「凭据配置」中填写用量 Token 并保存后即可查询（数据来自 DeepSeek 平台控制台接口）"
       />
     );
   } else if (cached && !matchesSelected) {
     usageBody = (
       <ErrorHint
         tone="info"
-        message={`当前显示 ${cached.year} 年 ${cached.month} 月缓存，点击「刷新」查询所选月份`}
+        message={`当前显示的是 ${cached.year} 年 ${cached.month} 月的缓存数据`}
+        action="点击上方「刷新」查询所选月份"
       />
     );
   } else if (usageError && !current) {
     usageBody = <ErrorHint tone="error" message={usageError} />;
   } else if (!current) {
     usageBody = (
-      <ErrorHint tone="info" message={refreshing ? '正在查询…' : '暂无该月份用量记录'} />
+      <ErrorHint tone="info" message={refreshing ? '正在查询该月份用量…' : '所选月份暂无用量记录'} />
     );
   } else if (current.models.length === 0) {
-    usageBody = <ErrorHint tone="info" message="该月份无用量记录" />;
+    usageBody = <ErrorHint tone="info" message="该月份没有模型调用记录" />;
   } else {
     usageBody = (
       <>
         <DeepSeekModelRows usage={current} />
         {current.zeroUsageModelCount > 0 && (
           <p className="field-hint">
-            另有 {current.zeroUsageModelCount} 个模型本期无用量，未在表中列出
+            另有 {current.zeroUsageModelCount} 个模型当月调用为 0，未在表中列出
           </p>
         )}
       </>
@@ -571,10 +574,10 @@ function DeepSeekSections({
         detail={
           balance ? (
             <>
-              充值 {balance.toppedUpBalance} · 赠送 {balance.grantedBalance}
+              充值余额 {balance.toppedUpBalance} · 赠送余额 {balance.grantedBalance}
             </>
           ) : (
-            '接口未返回余额明细'
+            '平台未返回余额明细'
           )
         }
       />
@@ -588,7 +591,10 @@ function DeepSeekSections({
                 value: formatIncludedUsageTokens(current.totalTokens),
               },
               { label: `${current.month} 月请求`, value: formatCount(current.totalRequests) },
-              { label: '缓存命中率', value: formatPercent1(current.cacheHitRatePercent) },
+              {
+              label: '缓存命中率',
+              value: formatPercent1(current.cacheHitRatePercent),
+            },
             ]}
           />
         </Block>
@@ -657,15 +663,15 @@ export default function SubscriptionPanel({
     body = (
       <ErrorHint
         tone="info"
-        message={meta.id === 'cursor' ? '尚未配置 Cookie' : '尚未配置 API Key'}
-        action="展开下方「凭据配置」完成配置后再次查询"
+        message={meta.id === 'cursor' ? '尚未配置 Cookie，无法查询该账户' : '尚未配置 API Key，无法查询该账户'}
+        action="在下方「凭据配置」中完成配置，保存后自动开始查询"
       />
     );
   } else if (!data) {
     body = infoError ? (
       <ErrorHint tone="error" message={infoError} />
     ) : (
-      <ErrorHint tone="info" message={refreshing ? '正在查询…' : '暂无数据，点击「刷新」查询'} />
+      <ErrorHint tone="info" message={refreshing ? '正在查询，请稍候…' : '暂无数据，点击右上角「刷新」立即查询'} />
     );
   } else if (data.providerId === 'cursor') {
     body = <CursorSections data={data} />;

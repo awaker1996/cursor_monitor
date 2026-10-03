@@ -320,14 +320,14 @@ export default function SubscriptionsPage() {
     .sort()
     .pop();
   const autoRefreshLabel = autoRefreshEnabled
-    ? `每 ${Math.round(refreshIntervalSec / 60)} 分钟自动刷新`
-    : '自动刷新已暂停';
+    ? `每 ${Math.max(1, Math.round(refreshIntervalSec / 60))} 分钟自动刷新`
+    : '自动刷新已暂停（可在「数据刷新」中开启）';
 
   return (
     <div className="sub-accounts">
       <div className="sub-accounts__toolbar">
         <div className="sub-accounts__meta">
-          <span>{latestFetchedAt ? `查询于 ${formatFetchedAt(latestFetchedAt)}` : '尚未查询'}</span>
+          <span>{latestFetchedAt ? `上次查询 ${formatFetchedAt(latestFetchedAt)}` : '尚未查询，点击右侧按钮开始'}</span>
           <span aria-hidden>·</span>
           <span>{autoRefreshLabel}</span>
         </div>
@@ -337,7 +337,7 @@ export default function SubscriptionsPage() {
           onClick={handleRefreshAll}
           disabled={refreshing}
         >
-          {refreshing ? '正在查询' : '刷新全部'}
+          {refreshing ? '正在查询…' : '刷新全部'}
         </button>
       </div>
 
@@ -414,8 +414,8 @@ export default function SubscriptionsPage() {
                   <div className="account-card__toolbar">
                     <span className="field-hint">
                       {entry.info?.fetchedAt || entry.usage?.fetchedAt
-                        ? `查询于 ${formatFetchedAt((entry.info?.fetchedAt ?? entry.usage?.fetchedAt) as string)}`
-                        : '尚未查询'}
+                        ? `上次查询 ${formatFetchedAt((entry.info?.fetchedAt ?? entry.usage?.fetchedAt) as string)}`
+                        : '尚未查询，点击右侧「刷新」开始'}
                     </span>
                     <button
                       type="button"
@@ -455,8 +455,8 @@ export default function SubscriptionsPage() {
                       <span>{meta.label} 凭据配置</span>
                       <span className="sub-config-toggle__meta">
                         {isCursor
-                          ? `Cookie ${meta.configured ? '已配置' : '未配置'}`
-                          : `API Key ${meta.configured ? '已配置' : '未配置'}`}
+                          ? `Cookie ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`
+                          : `API Key ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`}
                         {!isCursor && meta.usageSupported &&
                           ` · 用量 Token ${meta.usageConfigured ? '已配置' : '未配置'}`}
                         <span className="sub-config-toggle__chevron">{isConfigOpen ? '▴' : '▾'}</span>
@@ -473,8 +473,9 @@ export default function SubscriptionsPage() {
                               {meta.configured ? '✓ 已配置 Cookie' : '未配置 Cookie'}
                             </div>
                             <p className="field-hint">
-                              打开 cursor.com/dashboard/usage 后，从浏览器开发者工具复制 WorkosCursorSessionToken
-                              的值。也可以粘贴包含该字段的完整 Cookie 字符串。
+                              登录 cursor.com/dashboard/usage 后，按 F12 打开开发者工具，在 Application
+                              → Cookies 中复制 WorkosCursorSessionToken 的值粘贴到下方；也可以直接粘贴包含该字段的完整
+                              Cookie 字符串，应用会自动提取。
                             </p>
                             <div className="form-group">
                               <label htmlFor="subscription-cookie">WorkosCursorSessionToken</label>
@@ -526,11 +527,13 @@ export default function SubscriptionsPage() {
                               />
                               {meta.id === 'commandcode' ? (
                                 <p className="field-hint">
-                                  留空即自动读取 cmd login 写入的 ~/.commandcode/auth.json；手动保存可覆盖该凭据，
-                                  清除后回退自动读取。
+                                  留空时自动读取 cmd login 写入的 ~/.commandcode/auth.json；手动保存的
+                                  Key 优先级更高，清除后回退为自动读取。
                                 </p>
                               ) : (
-                                <p className="field-hint">用于查询账户余额，出于安全考虑已保存的 Key 不回显</p>
+                                <p className="field-hint">
+                                  仅用于查询账户余额；凭据加密保存在本机，保存后不再回显
+                                </p>
                               )}
                             </div>
                             <div className="btn-row">
@@ -565,9 +568,10 @@ export default function SubscriptionsPage() {
                                 }
                               />
                               <p className="field-hint">
-                                获取方式：浏览器登录 platform.deepseek.com 后按 F12 打开控制台，执行
-                                JSON.parse(localStorage.userToken).value 并复制结果。Token 会过期，查询提示
-                                401 时需重新获取。
+                                与 API Key 不同，用于按模型查询用量。获取方式：登录
+                                platform.deepseek.com 后按 F12，在控制台执行
+                                JSON.parse(localStorage.userToken).value 并复制结果。Token
+                                由平台签发、会定期过期——用量查询报 401 时回到这里重新获取即可。
                               </p>
                             </div>
                             <div className="btn-row">

@@ -1,37 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import {
   REFRESH_INTERVAL_MAX,
   REFRESH_INTERVAL_MIN,
   type AppSettings,
 } from '../../shared/types';
-import ProjectFeaturesCard from './ProjectFeaturesCard';
-
-export default function SettingsTabContent() {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+import { SettingsRow, SliderInput, Switch } from './SettingsControls';
+/**
+ * 数据刷新与统计偏好。由 SettingsPage 挂在「数据刷新」分区下。
+ * 保存逻辑与原实现一致：滑杆/输入 600ms 防抖后写盘。
+ */
+export function DataRefreshPrefs({
+  settings,
+  onToast,
+}: {
+  settings: AppSettings;
+  onToast: (message: string) => void;
+}) {
   const [intervalInput, setIntervalInput] = useState('30');
   const [intervalError, setIntervalError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [iconPreview, setIconPreview] = useState<string | null>(null);
   const intervalSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = useCallback((message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+  const lastSavedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    window.electronAPI.getSettings().then((s) => {
-      setSettings(s);
-      setIntervalInput(String(s.refreshIntervalSec));
-    });
-    window.electronAPI.getIconPreview().then(setIconPreview);
-
-    const unsub = window.electronAPI.onSettingsChanged((s) => {
-      setSettings(s);
-      setIntervalInput(String(s.refreshIntervalSec));
-    });
-    return unsub;
-  }, []);
+    setIntervalInput(String(settings.refreshIntervalSec));
+  }, [settings.refreshIntervalSec]);
 
   useEffect(() => {
     return () => {
@@ -39,37 +31,35 @@ export default function SettingsTabContent() {
     };
   }, []);
 
-  const validateInterval = useCallback((value: string): string | null => {
+  const validateInterval = (value: string): string | null => {
     const num = Number(value);
     if (!Number.isInteger(num)) return '刷新间隔必须是整数';
     if (num < REFRESH_INTERVAL_MIN || num > REFRESH_INTERVAL_MAX) {
-      return `刷新间隔必须在 ${REFRESH_INTERVAL_MIN}-${REFRESH_INTERVAL_MAX} 秒之间`;
+      return `刷新间隔必须是 ${REFRESH_INTERVAL_MIN} 的整数倍，且不超过 ${REFRESH_INTERVAL_MAX} 秒`;
     }
     return null;
-  }, []);
+  };
 
-  const saveInterval = useCallback(
-    async (value: string) => {
-      const err = validateInterval(value);
-      if (err) {
-        setIntervalError(err);
-        return;
-      }
-      setIntervalError(null);
-      try {
-        const updated = await window.electronAPI.updateSettings({
-          refreshIntervalSec: Number(value),
-        });
-        setSettings(updated);
-        showToast('刷新间隔已保存');
-      } catch (e) {
-        setIntervalError(e instanceof Error ? e.message : String(e));
-      }
-    },
-    [showToast, validateInterval],
-  );
+  const saveInterval = async (value: string) => {
+    const err = validateInterval(value);
+    if (err) {
+      setIntervalError(err);
+      return;
+    }
+    if (lastSavedRef.current === value) return;
+    setIntervalError(null);
+    try {
+      await window.electronAPI.updateSettings({
+        refreshIntervalSec: Number(value),
+      });
+      lastSavedRef.current = value;
+      onToast('刷新间隔已保存');
+    } catch (e) {
+      setIntervalError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
-  const handleIntervalChange = (value: string) => {
+  const handleIntervalInput = (value: string) => {
     setIntervalInput(value);
     const err = validateInterval(value);
     setIntervalError(err);
@@ -81,169 +71,178 @@ export default function SettingsTabContent() {
     }
   };
 
-  const handleIntervalBlur = () => {
+  const commitInterval = (value: string) => {
     if (intervalSaveTimer.current) {
       clearTimeout(intervalSaveTimer.current);
       intervalSaveTimer.current = null;
     }
-    if (!intervalError) {
-      void saveInterval(intervalInput);
-    }
+    void saveInterval(value);
   };
-
-  const handleToggleAutoRefresh = async () => {
-    if (!settings) return;
-    const updated = await window.electronAPI.updateSettings({
-      autoRefreshEnabled: !settings.autoRefreshEnabled,
-    });
-    setSettings(updated);
-    showToast(updated.autoRefreshEnabled ? '已启用自动刷新' : '已暂停自动刷新');
-  };
-
-  const handleToggleIncludeGrokBot = async () => {
-    if (!settings) return;
-    const updated = await window.electronAPI.updateSettings({
-      includeGrokBotUsage: !settings.includeGrokBotUsage,
-    });
-    setSettings(updated);
-    showToast(
-      updated.includeGrokBotUsage
-        ? '已计入 Grok Bot 用量'
-        : '已剔除 Grok Bot 用量',
-    );
-  };
-
-  const handleToggleEdgeDock = async () => {
-    if (!settings) return;
-    const updated = await window.electronAPI.updateSettings({
-      edgeAutoDockEnabled: !settings.edgeAutoDockEnabled,
-    });
-    setSettings(updated);
-    showToast(updated.edgeAutoDockEnabled ? '已启用贴边收起' : '已关闭贴边收起');
-  };
-
-  const handleSelectIcon = async () => {
-    const result = await window.electronAPI.selectCustomIcon();
-    if (result.preview) setIconPreview(result.preview);
-    if (result.message) showToast(result.message);
-  };
-
-  const handleClearIcon = async () => {
-    const result = await window.electronAPI.clearCustomIcon();
-    setIconPreview(result.preview ?? null);
-    showToast('已恢复默认图标');
-  };
-
-  if (!settings) {
-    return (
-      <div className="preference-grid">
-        <p>加载中...</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="preference-groups">
-      <div className="preference-grid">
-        <section className="settings-section settings-section--primary">
-          <h2>数据刷新</h2>
-          <div className="settings-section__body">
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={settings.autoRefreshEnabled}
-                onChange={handleToggleAutoRefresh}
-              />
-              <span>启用自动刷新</span>
-            </label>
-            <div className="form-group form-group--flush">
-              <label htmlFor="interval">刷新间隔（秒）</label>
-              <input
-                id="interval"
-                type="number"
-                min={REFRESH_INTERVAL_MIN}
-                max={REFRESH_INTERVAL_MAX}
-                value={intervalInput}
-                onChange={(e) => handleIntervalChange(e.target.value)}
-                onBlur={handleIntervalBlur}
-              />
-              {intervalError && <p className="field-error">{intervalError}</p>}
-            </div>
-          </div>
-          <p className="settings-section__footnote field-hint">
-            按间隔拉取订阅与用量；关闭后仍可手动刷新。
-          </p>
-        </section>
-
-        <section className="settings-section">
-          <h2>用量统计</h2>
-          <div className="settings-section__body">
-            <label className="toggle-row toggle-row--solo">
-              <input
-                type="checkbox"
-                checked={settings.includeGrokBotUsage}
-                onChange={handleToggleIncludeGrokBot}
-              />
-              <span>计入 Grok Bot 用量</span>
-            </label>
-          </div>
-          <p className="settings-section__footnote field-hint">
-            关闭时今日统计不含 Bot 调用，周期账单占比仍以官方为准。
-          </p>
-        </section>
-
-        <section className="settings-section">
-          <h2>悬浮球行为</h2>
-          <div className="settings-section__body">
-            <label className="toggle-row toggle-row--solo">
-              <input
-                type="checkbox"
-                checked={settings.edgeAutoDockEnabled}
-                onChange={handleToggleEdgeDock}
-              />
-              <span>贴边缘自动收起</span>
-            </label>
-          </div>
-          <p className="settings-section__footnote field-hint">
-            拖至屏幕边缘松手后收起为细条，向外拖出即可恢复完整显示。
-          </p>
-        </section>
-
-        <section className="settings-section">
-          <h2>应用图标</h2>
-          <div className="settings-section__body">
-            <div className="icon-picker">
-              <div className="icon-picker__preview">
-                {iconPreview ? (
-                  <img src={iconPreview} alt="当前图标" className="icon-picker__image" />
-                ) : (
-                  <div className="icon-picker__placeholder">无图标</div>
-                )}
-              </div>
-              <div className="icon-picker__actions">
-                <button type="button" className="btn-secondary" onClick={handleSelectIcon}>
-                  选择图标
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleClearIcon}
-                  disabled={!settings.customIconPath}
-                >
-                  恢复默认
-                </button>
-              </div>
-            </div>
-          </div>
-          <p className="settings-section__footnote field-hint">
-            即时更新托盘与设置窗口图标；建议 256×256 正方形 PNG。任务栏图标需重新安装后生效。
-          </p>
-        </section>
+    <div className="set-card">
+      <div className="set-card__body">
+        <SettingsRow
+          title="自动刷新"
+          description="开启后按下方间隔在后台拉取全部账户数据；关闭仅暂停自动查询，手动「刷新」不受影响"
+        >
+          <Switch
+            checked={settings.autoRefreshEnabled}
+            onChange={(next) => {
+              void window.electronAPI
+                .updateSettings({ autoRefreshEnabled: next })
+                .then(() => onToast(next ? '已启用自动刷新' : '已暂停自动刷新'));
+            }}
+            label="自动刷新"
+          />
+        </SettingsRow>
+        <SettingsRow
+          title="刷新间隔"
+          description={`当前每 ${Math.max(1, Math.round(settings.refreshIntervalSec / 60))} 分钟同步一次；间隔越短数据越及时，请求也越频繁`}
+          htmlFor="refresh-interval"
+        >
+          <SliderInput
+            id="refresh-interval"
+            min={REFRESH_INTERVAL_MIN}
+            max={REFRESH_INTERVAL_MAX}
+            step={30}
+            value={Number(intervalInput) || REFRESH_INTERVAL_MIN}
+            unit="秒"
+            presets={[30, 60, 300, 600, 1800]}
+            onInput={(n) => handleIntervalInput(String(n))}
+            onCommit={(n) => commitInterval(String(n))}
+          />
+        </SettingsRow>
+        {intervalError && <p className="set-row__error">{intervalError}</p>}
+        <SettingsRow
+          title="计入 Grok Bot 用量"
+          description="开启后 grok-bot-* 模型的调用计入今日用量百分比与模型明细；账户订阅的官方周期占比始终不受影响"
+        >
+          <Switch
+            checked={settings.includeGrokBotUsage}
+            onChange={(next) => {
+              void window.electronAPI
+                .updateSettings({ includeGrokBotUsage: next })
+                .then(() =>
+                  onToast(next ? '已计入 Grok Bot 用量' : '已剔除 Grok Bot 用量'),
+                );
+            }}
+            label="计入 Grok Bot 用量"
+          />
+        </SettingsRow>
       </div>
+    </div>
+  );
+}
 
-      <ProjectFeaturesCard />
+/** 悬浮球行为偏好。 */
+export function BallPrefs({
+  settings,
+  onToast,
+}: {
+  settings: AppSettings;
+  onToast: (message: string) => void;
+}) {
+  return (
+    <div className="set-card">
+      <div className="set-card__body">
+        <SettingsRow
+          title="贴边自动收起"
+          description="拖动悬浮球到屏幕边缘松手后，自动收起为贴边细条避免遮挡；将细条拖离边缘即可恢复"
+        >
+          <Switch
+            checked={settings.edgeAutoDockEnabled}
+            onChange={(next) => {
+              void window.electronAPI
+                .updateSettings({ edgeAutoDockEnabled: next })
+                .then(() =>
+                  onToast(next ? '已启用贴边收起' : '已关闭贴边收起'),
+                );
+            }}
+            label="贴边自动收起"
+          />
+        </SettingsRow>
+      </div>
+    </div>
+  );
+}
 
-      {toast && <p className="settings-toast">{toast}</p>}
+/** 托盘 / 窗口图标偏好：即时选择或恢复默认。 */
+export function IconPrefs({
+  onToast,
+}: {
+  onToast: (message: string) => void;
+}) {
+  const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [hasCustom, setHasCustom] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    void window.electronAPI.getIconPreview().then((preview) => {
+      if (mounted) setIconPreview(preview);
+    });
+    void window.electronAPI.getSettings().then((s) => {
+      if (mounted) setHasCustom(Boolean(s.customIconPath));
+    });
+    const unsub = window.electronAPI.onSettingsChanged((s) => {
+      if (mounted) setHasCustom(Boolean(s.customIconPath));
+    });
+    return () => {
+      mounted = false;
+      unsub();
+    };
+  }, []);
+
+  const handleSelect = async () => {
+    const result = await window.electronAPI.selectCustomIcon();
+    if (result.preview !== undefined) setIconPreview(result.preview);
+    if (result.message) onToast(result.message);
+  };
+
+  const handleClear = async () => {
+    const result = await window.electronAPI.clearCustomIcon();
+    setIconPreview(result.preview ?? null);
+    onToast('已恢复默认图标');
+  };
+
+  return (
+    <div className="set-card">
+      <div className="set-card__body">
+        <div className="icon-pick">
+          <span className="icon-pick__frame">
+            {iconPreview ? (
+              <img
+                src={iconPreview}
+                alt="当前自定义图标"
+                className="icon-pick__img"
+              />
+            ) : (
+              <span className="icon-pick__empty">默认</span>
+            )}
+          </span>
+          <div className="icon-pick__meta">
+            <span className="icon-pick__name">
+              {hasCustom ? '已使用自定义图标' : '使用内置默认图标'}
+            </span>
+            <span className="icon-pick__hint">
+              选择 PNG 后立即应用到系统托盘和设置窗口，建议 256×256 正方形；任务栏图标由系统缓存，需重新安装应用后才会更新
+            </span>
+          </div>
+          <div className="icon-pick__actions">
+            <button type="button" className="btn-ghost" onClick={() => void handleSelect()}>
+              更换图标
+            </button>
+            <button
+              type="button"
+              className="btn-ghost btn-ghost--danger"
+              onClick={() => void handleClear()}
+              disabled={!hasCustom}
+            >
+              恢复默认
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
