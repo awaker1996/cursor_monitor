@@ -8,8 +8,10 @@
   "include": [
     "scripts/verify-included-usage.ts",
     "scripts/verify-cookie-summary.ts",
+    "scripts/verify-collapsed-usage.ts",
     "scripts/verify-today-percent.ts",
     "src/core/**/*",
+    "src/renderer/components/SubscriptionUtils.ts",
     "src/shared/**/*"
   ]
 }

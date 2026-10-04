@@ -115,6 +115,10 @@ export interface CursorSubscriptionData {
   cursorModelsUsedPercent: number | null;
   /** Other Models（api）周期用量百分比 */
   otherModelsUsedPercent: number | null;
+  /** Cursor Models（auto）今日用量百分比，来自 metrics.autoTodayUsedPercent */
+  cursorModelsTodayUsedPercent: number | null;
+  /** Other Models（api）今日用量百分比，来自 metrics.apiTodayUsedPercent */
+  otherModelsTodayUsedPercent: number | null;
   /** 总用量百分比 */
   totalUsedPercent: number | null;
   /** 计费周期开始 */

@@ -4,11 +4,12 @@ import SubscriptionPanel from '../components/SubscriptionPanels';
 import TestConnectionResultPanel from '../components/TestConnectionResultPanel';
 import {
   EMPTY_PROVIDER_ENTRY,
-  commandCodeCollapsedLimits,
+  collapsedUsageAriaLabel,
   formatFetchedAt,
   currentMonthValue,
   limitTone,
   parseMonthValue,
+  providerCollapsedUsage,
   providerPlanLabel,
   providerSummaryLine,
   type ProviderCacheEntry,
@@ -348,7 +349,7 @@ export default function SubscriptionsPage() {
           const isOpen = expanded[meta.id] ?? false;
           const isConfigOpen = configOpen[meta.id] ?? false;
           const isCursor = meta.id === 'cursor';
-          const collapsedLimits = commandCodeCollapsedLimits(meta.id, entry);
+          const collapsedChips = providerCollapsedUsage(meta.id, entry);
           const planLabel = providerPlanLabel(meta.id, entry);
           return (
             <section
@@ -371,24 +372,24 @@ export default function SubscriptionsPage() {
                         {planLabel}
                       </span>
                     )}
-                    {collapsedLimits.length > 0 && (
-                      <span className="account-card__limits" aria-label="限额摘要">
-                        {collapsedLimits.map((limit) => {
-                          const tone = limitTone(limit.percent);
+                    {collapsedChips.length > 0 && (
+                      <span className="account-card__limits" aria-label={collapsedUsageAriaLabel(meta.id)}>
+                        {collapsedChips.map((chip) => {
+                          const tone = limitTone(chip.percent);
                           return (
                             <span
-                              key={limit.key}
+                              key={chip.key}
                               className={`limit-chip limit-chip--${tone}`}
-                              title={`${limit.label}已用 ${Math.round(limit.percent)}%`}
+                              title={chip.title}
                             >
-                              <span className="limit-chip__label">{limit.label}</span>
+                              <span className="limit-chip__label">{chip.label}</span>
                               <span className="limit-chip__bar" aria-hidden>
                                 <span
                                   className={`limit-chip__fill limit-chip__fill--${tone}`}
-                                  style={{ width: `${Math.min(100, Math.max(0, limit.percent))}%` }}
+                                  style={{ width: `${chip.percent}%` }}
                                 />
                               </span>
-                              <span className="limit-chip__value">{Math.round(limit.percent)}%</span>
+                              <span className="limit-chip__value">{Math.round(chip.percent)}%</span>
                             </span>
                           );
                         })}

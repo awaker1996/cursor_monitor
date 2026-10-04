@@ -79,12 +79,16 @@ export class CursorProvider implements SubscriptionProvider {
       source: snapshot.source,
       cursorModels: cursorModels.length,
       otherModels: otherModels.length,
+      cursorModelsTodayUsedPercent: metrics.autoTodayUsedPercent ?? null,
+      otherModelsTodayUsedPercent: metrics.apiTodayUsedPercent ?? null,
     });
 
     return {
       providerId: this.id,
       cursorModelsUsedPercent: metrics.autoUsedPercent ?? null,
       otherModelsUsedPercent: metrics.apiUsedPercent ?? null,
+      cursorModelsTodayUsedPercent: metrics.autoTodayUsedPercent ?? null,
+      otherModelsTodayUsedPercent: metrics.apiTodayUsedPercent ?? null,
       totalUsedPercent: metrics.totalUsedPercent ?? null,
       billingCycleStart: snapshot.billingCycleStart ?? null,
       billingCycleEnd: snapshot.billingCycleEnd ?? null,

@@ -1,7 +1,13 @@
-import { formatRemainingFromUsedPercent } from '../../shared/format';
+import {
+  CURSOR_MODELS_LABEL,
+  OTHER_MODELS_LABEL,
+  formatRemainingFromUsedPercent,
+} from '../../shared/format';
 import type {
   CommandCodeLimit,
   CommandCodeQuotaSection,
+  CommandCodeSubscriptionData,
+  CursorSubscriptionData,
   SubscriptionInfoResult,
   SubscriptionProviderId,
   SubscriptionUsageResult,
@@ -22,30 +28,83 @@ export const EMPTY_PROVIDER_ENTRY: ProviderCacheEntry = {
   usageError: null,
 };
 
-/** CommandCode 收起态限额摘要：5 小时 / 每周 / 每月限额百分比，无数据时返回空数组。 */
-export function commandCodeCollapsedLimits(
-  id: SubscriptionProviderId,
-  entry: ProviderCacheEntry | undefined,
-): Array<{ key: 'fiveHour' | 'weekly' | 'monthly'; label: string; percent: number }> {
-  if (id !== 'commandcode') return [];
-  const data = entry?.info?.data ?? null;
-  if (!data || data.providerId !== 'commandcode') return [];
-  const result: Array<{
-    key: 'fiveHour' | 'weekly' | 'monthly';
-    label: string;
-    percent: number;
-  }> = [];
-  const labels = { fiveHour: '5h', weekly: '周', monthly: '月' } as const;
+/** 卡片收起态的一根用量小条：短标签 + 进度条 + 百分比，百分比已夹取到 0-100。 */
+export interface CollapsedUsageChip {
+  key: string;
+  label: string;
+  percent: number;
+  /** 悬停提示，展开为完整口径名称。 */
+  title: string;
+}
+
+const COMMAND_CODE_CHIP_LABELS = { fiveHour: '5h', weekly: '周', monthly: '月' } as const;
+
+/** CommandCode 收起态限额摘要：5 小时 / 每周 / 每月限额百分比，缺哪项就不出哪根。 */
+function commandCodeCollapsedChips(data: CommandCodeSubscriptionData): CollapsedUsageChip[] {
+  const chips: CollapsedUsageChip[] = [];
   for (const key of ['fiveHour', 'weekly', 'monthly'] as const) {
     const limit = data.limits.find((item) => item.key === key);
     if (!limit) continue;
-    result.push({
+    const percent = limitPercent(limit);
+    chips.push({
       key,
-      label: labels[key],
-      percent: limitPercent(limit),
+      label: COMMAND_CODE_CHIP_LABELS[key],
+      percent,
+      title: `${LIMIT_LABELS[key]}已用 ${Math.round(percent)}%`,
     });
   }
-  return result;
+  return chips;
+}
+
+/** Cursor 收起态摘要：今日 Cursor / 今日 Other 两个用量池，缺少今日数据的不出小条。 */
+function cursorCollapsedChips(data: CursorSubscriptionData): CollapsedUsageChip[] {
+  const buckets: Array<{ key: string; label: string; full: string; percent: number | null }> = [
+    {
+      key: 'cursorModelsToday',
+      label: '今日 Cursor',
+      full: `今日 ${CURSOR_MODELS_LABEL}`,
+      percent: data.cursorModelsTodayUsedPercent,
+    },
+    {
+      key: 'otherModelsToday',
+      label: '今日 Other',
+      full: `今日 ${OTHER_MODELS_LABEL}`,
+      percent: data.otherModelsTodayUsedPercent,
+    },
+  ];
+
+  const chips: CollapsedUsageChip[] = [];
+  for (const bucket of buckets) {
+    if (bucket.percent == null || !Number.isFinite(bucket.percent)) continue;
+    const percent = clampPercent(bucket.percent);
+    chips.push({
+      key: bucket.key,
+      label: bucket.label,
+      percent,
+      title: `${bucket.full}已用 ${Math.round(percent)}%`,
+    });
+  }
+  return chips;
+}
+
+/**
+ * 收起态小条：按 provider 口径给出需要关注的几项。
+ * CommandCode 为 5 小时 / 每周 / 每月限额，Cursor 为今日两个用量池，DeepSeek 无小条。
+ */
+export function providerCollapsedUsage(
+  id: SubscriptionProviderId,
+  entry: ProviderCacheEntry | undefined,
+): CollapsedUsageChip[] {
+  const data = entry?.info?.data ?? null;
+  if (!data || data.providerId !== id) return [];
+  if (data.providerId === 'commandcode') return commandCodeCollapsedChips(data);
+  if (data.providerId === 'cursor') return cursorCollapsedChips(data);
+  return [];
+}
+
+/** 收起态小条分组的无障碍名称，避免 Cursor 的今日用量被读成限额。 */
+export function collapsedUsageAriaLabel(id: SubscriptionProviderId): string {
+  return id === 'cursor' ? '今日用量摘要' : '限额摘要';
 }
 
 /** 收起态套餐标签：有真实套餐数据时返回展示文案，否则返回 null（不展示、不写死）。 */
@@ -181,9 +240,15 @@ export function formatPeriodEnd(value: string | null): string | null {
   return `${date}（已续期）`;
 }
 
+/** 百分比夹取到 0-100：防止异常口径把进度条撑破或显示负值。 */
+export function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
 export function limitPercent(limit: CommandCodeLimit): number {
   if (limit.cap <= 0) return 0;
-  return Math.min(100, Math.max(0, (limit.used / limit.cap) * 100));
+  return clampPercent((limit.used / limit.cap) * 100);
 }
 
 export function limitTone(percent: number): 'ok' | 'warn' | 'bad' {
