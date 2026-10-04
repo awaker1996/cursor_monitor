@@ -22,21 +22,26 @@ export const EMPTY_PROVIDER_ENTRY: ProviderCacheEntry = {
   usageError: null,
 };
 
-/** CommandCode 收起态限额摘要：5 小时与每周限额百分比，无数据时返回空数组。 */
+/** CommandCode 收起态限额摘要：5 小时 / 每周 / 每月限额百分比，无数据时返回空数组。 */
 export function commandCodeCollapsedLimits(
   id: SubscriptionProviderId,
   entry: ProviderCacheEntry | undefined,
-): Array<{ key: 'fiveHour' | 'weekly'; label: string; percent: number }> {
+): Array<{ key: 'fiveHour' | 'weekly' | 'monthly'; label: string; percent: number }> {
   if (id !== 'commandcode') return [];
   const data = entry?.info?.data ?? null;
   if (!data || data.providerId !== 'commandcode') return [];
-  const result: Array<{ key: 'fiveHour' | 'weekly'; label: string; percent: number }> = [];
-  for (const key of ['fiveHour', 'weekly'] as const) {
+  const result: Array<{
+    key: 'fiveHour' | 'weekly' | 'monthly';
+    label: string;
+    percent: number;
+  }> = [];
+  const labels = { fiveHour: '5h', weekly: '周', monthly: '月' } as const;
+  for (const key of ['fiveHour', 'weekly', 'monthly'] as const) {
     const limit = data.limits.find((item) => item.key === key);
     if (!limit) continue;
     result.push({
       key,
-      label: key === 'fiveHour' ? '5h' : '周',
+      label: labels[key],
       percent: limitPercent(limit),
     });
   }
