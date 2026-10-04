@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron';
+import os from 'os';
 import path from 'path';
 import { loadWindowIcon } from '../iconManager';
 import type { AppSettings } from '../../src/shared/types';
@@ -13,6 +14,9 @@ export function createSettingsWindow(isDev: boolean, settings?: AppSettings): Br
   }
 
   const icon = settings ? loadWindowIcon(settings) : undefined;
+  // Mica 只在 Windows 11 (build 22000+) 可用；失败时静默回退纯色背景。
+  const isWin11 =
+    process.platform === 'win32' && Number(os.release().split('.')[2] ?? 0) >= 22000;
 
   settingsWindow = new BrowserWindow({
     width: 840,
@@ -22,6 +26,8 @@ export function createSettingsWindow(isDev: boolean, settings?: AppSettings): Br
     title: '设置界面',
     resizable: true,
     autoHideMenuBar: true,
+    backgroundColor: '#0b1026',
+    backgroundMaterial: isWin11 ? 'mica' : undefined,
     ...(icon && !icon.isEmpty() ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
