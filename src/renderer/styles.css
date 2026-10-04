@@ -2307,7 +2307,8 @@ body.page-settings-tab * {
   margin-top: 2px;
 }
 
-/* ── Error Hint ── */
+/* ── Error Hint ──
+   Aurora 深色玻璃主题下的三态提示（悬浮球面板沿用同一套，不再需要暗色覆盖）。 */
 
 .error-hint {
   display: flex;
@@ -2315,7 +2316,7 @@ body.page-settings-tab * {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid;
-  background: white;
+  background: rgba(11, 16, 38, 0.5);
 }
 
 .error-hint__icon {
@@ -2340,56 +2341,56 @@ body.page-settings-tab * {
 .error-hint__message {
   font-size: 13px;
   line-height: 1.45;
-  color: #1e293b;
+  color: rgba(210, 222, 248, 0.92);
 }
 
 .error-hint__action {
   margin-top: 4px;
   font-size: 12px;
-  color: #64748b;
+  color: rgba(165, 180, 220, 0.68);
   line-height: 1.45;
 }
 
 .error-hint--info {
-  border-color: #bfdbfe;
-  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(79, 124, 255, 0.4);
+  background: rgba(79, 124, 255, 0.12);
 }
 
 .error-hint--info .error-hint__icon {
-  background: rgba(59, 130, 246, 0.15);
-  color: #1d4ed8;
+  background: rgba(79, 124, 255, 0.28);
+  color: #cfe0ff;
 }
 
 .error-hint--info .error-hint__message {
-  color: #1d4ed8;
+  color: #cfe0ff;
 }
 
 .error-hint--warn {
-  border-color: #fde68a;
-  background: #fffbeb;
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .error-hint--warn .error-hint__icon {
-  background: #fde68a;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.26);
+  color: #fcd34d;
 }
 
 .error-hint--warn .error-hint__message {
-  color: #92400e;
+  color: #fcd34d;
 }
 
 .error-hint--error {
-  border-color: #fecaca;
-  background: #fef2f2;
+  border-color: rgba(239, 68, 68, 0.44);
+  background: rgba(239, 68, 68, 0.11);
 }
 
 .error-hint--error .error-hint__icon {
-  background: #fecaca;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.28);
+  color: #fca5a5;
 }
 
 .error-hint--error .error-hint__message {
-  color: #b91c1c;
+  color: #fca5a5;
 }
 
 /* 浮动球面板(深色背景)沿用原暗色 ErrorHint */
@@ -2485,7 +2486,7 @@ flex-shrink: 0;
 margin: 0 0 8px;
 font-size: 14px;
 font-weight: 600;
-color: #475569;
+color: rgba(200, 214, 245, 0.9);
 }
 
 .page-shell__meta {
@@ -2508,20 +2509,21 @@ color: #475569;
 
 /* ── Settings Page ── */
 
-/* 设置页继承 .page-shell，仅补充 settings-section 卡片样式 */
+/* 账户卡内数据区与凭据配置在 Aurora 主题下的玻璃面板 */
 
 .settings-section {
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(160deg, rgba(24, 33, 66, 0.55), rgba(13, 19, 42, 0.62));
+  border: 1px solid rgba(148, 178, 255, 0.16);
   border-radius: 10px;
   padding: 16px 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .settings-section h2 {
   font-size: 15px;
   font-weight: 600;
   margin: 0 0 12px;
-  color: #1e293b;
+  color: #e8eeff;
 }
 
 .form-group {
@@ -2533,40 +2535,47 @@ color: #475569;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 4px;
-  color: #475569;
+  color: rgba(200, 214, 245, 0.85);
 }
 
 .form-group input,
 .form-group textarea {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid rgba(148, 178, 255, 0.26);
+  border-radius: 8px;
   font-size: 13px;
   font-family: inherit;
+  background: rgba(11, 16, 38, 0.6);
+  color: #e8eeff;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: rgba(165, 180, 220, 0.4);
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: rgba(79, 124, 255, 0.75);
+  box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.2), 0 0 14px rgba(79, 124, 255, 0.2);
 }
 
 .field-error {
-  color: #ef4444;
+  color: #fca5a5;
   font-size: 12px;
   margin-top: 4px;
 }
 
 .field-hint {
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.66);
   font-size: 12px;
   margin-top: 4px;
 }
 
 .field-success {
-  color: #22c55e;
+  color: #6ee7b7;
   font-size: 12px;
   margin-top: 8px;
 }
@@ -2582,31 +2591,54 @@ color: #475569;
 
 .btn-primary {
   padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
+  background: linear-gradient(120deg, #4f7cff, #22d3ee);
+  color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 2px 10px rgba(79, 124, 255, 0.35);
+  transition: all 0.16s var(--set-ease);
 }
 
-.btn-primary:hover {
-  background: #2563eb;
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: 0 4px 16px rgba(79, 124, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.98);
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .btn-secondary {
   padding: 8px 16px;
-  background: white;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  background: rgba(20, 28, 58, 0.65);
+  color: #dbe4f8;
+  border: 1px solid rgba(148, 178, 255, 0.28);
+  border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
+  transition: all 0.16s var(--set-ease);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: rgba(79, 124, 255, 0.75);
+  color: #eaf1ff;
+  background: linear-gradient(120deg, rgba(79, 124, 255, 0.3), rgba(34, 211, 238, 0.18));
+  box-shadow: 0 0 14px rgba(79, 124, 255, 0.28);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .btn-row {
@@ -2622,15 +2654,15 @@ color: #475569;
 }
 
 .test-result--ok {
-  background: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.38);
 }
 
 .test-result--fail {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.42);
 }
 
 .test-result__header {
@@ -2662,11 +2694,11 @@ color: #475569;
   flex-direction: column;
   gap: 12px;
   padding-top: 10px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .test-result--fail .test-result__body {
-  border-top-color: rgba(185, 28, 28, 0.15);
+  border-top-color: rgba(252, 165, 165, 0.25);
 }
 
 .test-result__meta {
@@ -2722,7 +2754,7 @@ color: #475569;
 
 .save-message {
   text-align: center;
-  color: #3b82f6;
+  color: #8fb3ff;
   font-size: 13px;
   padding: 8px;
 }
@@ -2740,11 +2772,11 @@ color: #475569;
 }
 
 .settings-section__status--ok {
-  color: #15803d;
+  color: #6ee7b7;
 }
 
 .settings-section__status--warn {
-  color: #b45309;
+  color: #fcd34d;
 }
 
 .settings-toast {
@@ -2866,7 +2898,7 @@ color: #475569;
 .sub-block + .sub-block {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid rgba(148, 178, 255, 0.12);
 }
 
 .sub-block__head {
@@ -2883,18 +2915,19 @@ color: #475569;
 
 .sub-block__head input[type='month'] {
   padding: 5px 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: white;
-  color: #1e293b;
+  border: 1px solid rgba(148, 178, 255, 0.26);
+  border-radius: 7px;
+  background: rgba(11, 16, 38, 0.6);
+  color: #e8eeff;
   font-family: inherit;
   font-size: 12px;
+  color-scheme: dark;
 }
 
 .sub-block__head input[type='month']:focus-visible {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: rgba(79, 124, 255, 0.75);
+  box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.2);
 }
 
 .sub-table-group + .sub-table-group {
@@ -2905,7 +2938,7 @@ color: #475569;
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: rgba(165, 180, 220, 0.72);
 }
 
 /* 状态徽标：文案与颜色同时表达状态，不依赖颜色单独承载 */
@@ -2918,15 +2951,15 @@ color: #475569;
 }
 
 .sub-badge--ok {
-  background: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.35);
 }
 
 .sub-badge--bad {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.38);
 }
 
 /* 主数值区 */
@@ -2941,7 +2974,8 @@ color: #475569;
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #0f172a;
+  color: #f1f5ff;
+  text-shadow: 0 0 22px rgba(79, 124, 255, 0.4);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2949,14 +2983,14 @@ color: #475569;
   margin-left: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.7);
 }
 
 .sub-hero__detail {
   display: block;
   margin-top: 2px;
   font-size: 12px;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.66);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2977,7 +3011,7 @@ color: #475569;
 .sub-metric__label {
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.66);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -2986,7 +3020,7 @@ color: #475569;
   margin-top: 2px;
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: #e8eeff;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3006,11 +3040,11 @@ color: #475569;
 
 .sub-row__key {
   flex: none;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.66);
 }
 
 .sub-row__value {
-  color: #334155;
+  color: rgba(210, 222, 248, 0.92);
   font-weight: 500;
   text-align: right;
 }
@@ -3033,7 +3067,7 @@ color: #475569;
 .sub-meter__label {
   font-size: 11px;
   font-weight: 700;
-  color: #64748b;
+  color: rgba(165, 180, 220, 0.75);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -3041,7 +3075,7 @@ color: #475569;
 .sub-meter__percent {
   font-size: 13px;
   font-weight: 700;
-  color: #1e293b;
+  color: #e8eeff;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3055,7 +3089,7 @@ color: #475569;
   flex: 1 1 0;
   height: 14px;
   border-radius: 2px;
-  background: #e2e8f0;
+  background: rgba(148, 178, 255, 0.16);
 }
 
 .sub-meter__seg--ok {
@@ -3072,7 +3106,7 @@ color: #475569;
 
 .sub-meter__reset {
   font-size: 12px;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.6);
 }
 
 /* 无边框表格：靠行分隔线分组；固定布局确保窄窗口下收敛而非撑破面板 */
@@ -3086,11 +3120,11 @@ color: #475569;
 
 .sub-table th {
   padding: 0 4px 6px 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid rgba(148, 178, 255, 0.18);
   text-align: left;
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.66);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   white-space: nowrap;
@@ -3098,8 +3132,8 @@ color: #475569;
 
 .sub-table td {
   padding: 7px 4px 7px 0;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
+  border-bottom: 1px solid rgba(148, 178, 255, 0.1);
+  color: rgba(200, 214, 245, 0.88);
 }
 
 .sub-table th:last-child,
@@ -3120,7 +3154,7 @@ color: #475569;
 
 /* 模型名占余下宽度，过长时省略而不是把表格顶出面板 */
 .sub-table__model {
-  color: #1e293b;
+  color: #dbe4f8;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3135,9 +3169,9 @@ color: #475569;
 /* 明细表合计行：与最后一行之间用一条更明显的分隔线 */
 .sub-table__total td {
   padding-top: 9px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid rgba(148, 178, 255, 0.28);
   border-bottom: none;
-  color: #0f172a;
+  color: #f1f5ff;
   font-weight: 600;
 }
 
@@ -3151,7 +3185,7 @@ color: #475569;
   padding: 0;
   border: none;
   background: none;
-  color: #1e293b;
+  color: #e8eeff;
   font-family: inherit;
   font-size: 15px;
   font-weight: 600;
@@ -3167,27 +3201,27 @@ color: #475569;
 .sub-config-toggle__meta {
   font-size: 12px;
   font-weight: 400;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.68);
 }
 
 .sub-config-toggle__chevron {
   margin-left: 6px;
-  color: #64748b;
+  color: rgba(165, 180, 220, 0.6);
 }
 
 .sub-config-body {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid rgba(148, 178, 255, 0.14);
 }
 
 .sub-config-group + .sub-config-group {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid rgba(148, 178, 255, 0.14);
 }
 
-/* ── 账户与订阅：账户卡片列表 ── */
+/* ── 账户与订阅：Aurora 玻璃卡片列表 ── */
 
 .sub-accounts {
   display: flex;
@@ -3201,10 +3235,12 @@ color: #475569;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: white;
-  border: 1px solid #e2e8f0;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(30, 40, 78, 0.66), rgba(14, 20, 46, 0.6));
+  border: 1px solid rgba(148, 178, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px) saturate(1.4);
 }
 
 .sub-accounts__meta {
@@ -3212,7 +3248,7 @@ color: #475569;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.72);
   font-size: 12px;
 }
 
@@ -3223,21 +3259,29 @@ color: #475569;
 }
 
 .account-card {
-  background: white;
-  border: 1px solid #e2e8f0;
+  position: relative;
+  background: linear-gradient(160deg, rgba(30, 40, 78, 0.6), rgba(14, 20, 46, 0.68));
+  border: 1px solid rgba(148, 178, 255, 0.16);
   border-radius: 12px;
   overflow: hidden;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  backdrop-filter: blur(16px) saturate(1.4);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s var(--set-ease);
 }
 
 .account-card:hover {
-  border-color: #bfdbfe;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+  border-color: rgba(148, 178, 255, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 30px rgba(4, 8, 24, 0.5),
+    0 0 18px rgba(79, 124, 255, 0.14);
 }
 
 .account-card--open {
-  border-color: #bfdbfe;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  border-color: rgba(148, 178, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 12px 34px rgba(4, 8, 24, 0.55),
+    0 0 22px rgba(79, 124, 255, 0.18);
 }
 
 .account-card--unconfigured {
@@ -3274,7 +3318,7 @@ color: #475569;
 }
 
 .account-card__name {
-  color: #0f172a;
+  color: #eef3ff;
   font-size: 14px;
   font-weight: 650;
   line-height: 1.25;
@@ -3283,9 +3327,9 @@ color: #475569;
 .account-card__plan {
   padding: 1px 7px;
   border-radius: 999px;
-  background: #eef2ff;
-  border: 1px solid #e0e7ff;
-  color: #4f46e5;
+  background: rgba(79, 124, 255, 0.18);
+  border: 1px solid rgba(148, 178, 255, 0.32);
+  color: #cfe0ff;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.5;
@@ -3293,7 +3337,7 @@ color: #475569;
 }
 
 .account-card__summary {
-  color: #64748b;
+  color: rgba(165, 180, 220, 0.75);
   font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
@@ -3316,25 +3360,25 @@ color: #475569;
 }
 
 .account-card__status--green {
-  background: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.35);
 }
 
 .account-card__status--gray {
-  background: #f8fafc;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  background: rgba(148, 163, 184, 0.12);
+  color: rgba(203, 213, 235, 0.75);
+  border: 1px solid rgba(148, 178, 255, 0.2);
 }
 
 .account-card__status--yellow {
-  background: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
+  background: rgba(245, 158, 11, 0.14);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .account-card__chevron {
-  color: #94a3b8;
+  color: rgba(165, 180, 220, 0.6);
   font-size: 13px;
 }
 
@@ -3354,28 +3398,28 @@ color: #475569;
   border-radius: 999px;
   font-size: 11px;
   line-height: 1.4;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #475569;
+  border: 1px solid rgba(148, 178, 255, 0.2);
+  background: rgba(20, 28, 58, 0.55);
+  color: rgba(200, 214, 245, 0.85);
   white-space: nowrap;
 }
 
 .limit-chip--ok {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #15803d;
+  border-color: rgba(52, 211, 153, 0.38);
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
 }
 
 .limit-chip--warn {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.38);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fcd34d;
 }
 
 .limit-chip--bad {
-  border-color: #fecaca;
-  background: #fef2f2;
-  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.13);
+  color: #fca5a5;
 }
 
 .limit-chip__label {
@@ -3386,7 +3430,7 @@ color: #475569;
   width: 44px;
   height: 4px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.14);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -3418,7 +3462,7 @@ color: #475569;
   flex-direction: column;
   gap: 10px;
   padding: 0 12px 12px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid rgba(148, 178, 255, 0.12);
   padding-top: 10px;
 }
 
@@ -3435,7 +3479,8 @@ color: #475569;
 }
 
 .account-card__config {
-  background: #f8fafc;
+  background: rgba(11, 16, 38, 0.45);
+  border: 1px solid rgba(148, 178, 255, 0.14);
 }
 
 .btn-secondary--compact {
