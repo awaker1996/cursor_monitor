@@ -3457,23 +3457,98 @@ color: #475569;
 /* ── 页面骨架 ── */
 
 .settings-page {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(1100px 420px at 85% -10%, rgba(79, 124, 255, 0.09), transparent 60%),
-    radial-gradient(900px 380px at -10% 110%, rgba(16, 185, 129, 0.07), transparent 55%),
-    var(--set-bg);
+  background: var(--set-bg);
   color: var(--set-text);
+}
+
+/* ── 动态玻璃 · 页面级极光底 ──
+   两片大范围径向光斑缓慢漂移，透过卡片半透明表面形成流动的玻璃质感。
+   只动 background-position，避免每帧重绘大片模糊。 */
+
+.settings-page::before {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(42% 34% at 20% 16%, rgba(79, 124, 255, 0.14), transparent 68%),
+    radial-gradient(36% 30% at 80% 10%, rgba(16, 185, 129, 0.11), transparent 68%),
+    radial-gradient(44% 38% at 64% 92%, rgba(168, 85, 247, 0.09), transparent 70%);
+  background-size: 170% 170%, 150% 150%, 185% 185%;
+  background-position: 12% 8%, 88% 16%, 55% 90%;
+  animation: pageAuroraDrift 26s ease-in-out infinite alternate;
+}
+
+/* 斜向亮带整窗扫掠，峰值极低（0.05），只是让玻璃「活着」 */
+.settings-page::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    112deg,
+    transparent 43%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 57%
+  );
+  opacity: 0.05;
+  animation: pageSheenSweep 16s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+@keyframes pageAuroraDrift {
+  0% {
+    background-position: 12% 8%, 88% 16%, 55% 90%;
+  }
+
+  50% {
+    background-position: 42% 60%, 60% 84%, 22% 34%;
+  }
+
+  100% {
+    background-position: 74% 30%, 26% 62%, 80% 62%;
+  }
+}
+
+@keyframes pageSheenSweep {
+  0%,
+  100% {
+    transform: translateX(-32%) rotate(4deg);
+    opacity: 0;
+  }
+
+  14% {
+    opacity: 0.05;
+  }
+
+  50% {
+    transform: translateX(32%) rotate(4deg);
+    opacity: 0.05;
+  }
+
+  64% {
+    opacity: 0;
+  }
+}
+
+.settings-page__topbar,
+.settings-page__layout {
+  position: relative;
+  z-index: 1;
 }
 
 .settings-page__topbar {
   flex-shrink: 0;
   padding: 12px 24px 10px;
-  border-bottom: 1px solid var(--set-border);
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.45));
+  backdrop-filter: blur(18px) saturate(1.4);
 }
 
 .settings-page__topbar h1 {
@@ -3498,10 +3573,11 @@ color: #475569;
 /* ── 侧边导航：低视觉重量，不与主区争抢 ── */
 
 .settings-nav {
-  border-right: 1px solid var(--set-border);
+  border-right: 1px solid rgba(255, 255, 255, 0.42);
   padding: 14px 10px;
   overflow-y: auto;
-  background: transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.16));
+  backdrop-filter: blur(16px) saturate(1.3);
 }
 
 .settings-nav__list {
@@ -3597,6 +3673,8 @@ color: #475569;
   position: relative;
   overflow-y: auto;
   padding: 16px 24px 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(10px);
 }
 
 .settings-panel {
@@ -3640,13 +3718,105 @@ color: #475569;
 
 /* ── 设置卡片与行 ── */
 
+/* ── 设置卡片：动态玻璃 ──
+   ::before 三片彩色光斑慢速漂移（悬浮球同语言），hover 时 ::after 扫过一道高光。 */
+
 .set-card {
-  background: var(--set-surface);
-  border: 1px solid var(--set-border);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34));
+  border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: var(--set-radius);
-  box-shadow: var(--set-shadow-sm);
-  backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    var(--set-shadow-sm);
+  backdrop-filter: blur(20px) saturate(1.5);
   transition: box-shadow 0.2s var(--set-ease), border-color 0.2s var(--set-ease);
+}
+
+.set-card::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  background:
+    radial-gradient(30% 26% at 24% 22%, var(--card-glass-1, rgba(79, 124, 255, 0.12)), transparent 70%),
+    radial-gradient(26% 24% at 78% 30%, var(--card-glass-2, rgba(45, 212, 191, 0.1)), transparent 70%),
+    radial-gradient(28% 26% at 52% 86%, var(--card-glass-3, rgba(192, 132, 252, 0.08)), transparent 70%);
+  background-size: 160% 160%, 140% 140%, 175% 175%;
+  background-position: 10% 12%, 90% 20%, 50% 88%;
+  animation: cardGlassDrift calc(18s * var(--card-glass-speed, 1)) ease-in-out infinite alternate;
+}
+
+.set-card::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  pointer-events: none;
+  background: linear-gradient(
+    108deg,
+    transparent 44%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 56%
+  );
+  opacity: 0;
+  transform: translateX(-40%) rotate(4deg);
+  transition: opacity 0.3s var(--set-ease);
+}
+
+.set-card:hover::after {
+  opacity: 0.22;
+  animation: cardSheenSweep 1.1s var(--set-ease);
+}
+
+@keyframes cardGlassDrift {
+  0% {
+    background-position: 10% 12%, 90% 20%, 50% 88%;
+  }
+
+  50% {
+    background-position: 46% 64%, 58% 82%, 18% 36%;
+  }
+
+  100% {
+    background-position: 78% 34%, 28% 58%, 76% 60%;
+  }
+}
+
+@keyframes cardSheenSweep {
+  from {
+    transform: translateX(-40%) rotate(4deg);
+  }
+
+  to {
+    transform: translateX(40%) rotate(4deg);
+  }
+}
+
+/* 分区主题色：让每个分区的玻璃光斑色调不同 */
+.set-card--accent-data {
+  --card-glass-1: rgba(79, 124, 255, 0.14);
+  --card-glass-2: rgba(56, 189, 248, 0.11);
+  --card-glass-3: rgba(129, 140, 248, 0.09);
+}
+
+.set-card--accent-ball {
+  --card-glass-1: rgba(16, 185, 129, 0.13);
+  --card-glass-2: rgba(45, 212, 191, 0.1);
+  --card-glass-3: rgba(110, 231, 183, 0.08);
+}
+
+.set-card--accent-icon {
+  --card-glass-1: rgba(245, 158, 11, 0.12);
+  --card-glass-2: rgba(251, 146, 60, 0.1);
+  --card-glass-3: rgba(252, 211, 77, 0.08);
+}
+
+.set-card--accent-about {
+  --card-glass-1: rgba(168, 85, 247, 0.12);
+  --card-glass-2: rgba(192, 132, 252, 0.1);
+  --card-glass-3: rgba(216, 180, 254, 0.08);
 }
 
 .set-card + .set-card {
@@ -3654,7 +3824,10 @@ color: #475569;
 }
 
 .set-card:hover {
-  box-shadow: var(--set-shadow-md);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    var(--set-shadow-md);
 }
 
 .set-card__body {
@@ -3678,7 +3851,7 @@ color: #475569;
 }
 
 .set-row:hover {
-  background: rgba(15, 23, 42, 0.022);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .set-row__text {
@@ -4160,6 +4333,21 @@ color: #475569;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .settings-page::before,
+  .settings-page::after,
+  .set-card::before {
+    animation: none;
+  }
+
+  .settings-page::after {
+    display: none;
+  }
+
+  .set-card:hover::after {
+    opacity: 0;
+    animation: none;
+  }
+
   .settings-panel.is-active,
   .settings-toast,
   .set-skeleton__bar {

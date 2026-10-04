@@ -79,7 +79,7 @@ export default function SettingsPage() {
             active={active === 'data'}
           >
             {settings ? (
-              <DataRefreshPrefs settings={settings} onToast={showToast} />
+              <DataRefreshPrefs accent="data" settings={settings} onToast={showToast} />
 
             ) : (
               <PanelSkeleton />
@@ -93,7 +93,7 @@ export default function SettingsPage() {
             active={active === 'ball'}
           >
             {settings ? (
-              <BallPrefs settings={settings} onToast={showToast} />
+              <BallPrefs accent="ball" settings={settings} onToast={showToast} />
             ) : (
               <PanelSkeleton />
             )}
@@ -105,7 +105,7 @@ export default function SettingsPage() {
             description={SECTION_DESCRIPTIONS.icon}
             active={active === 'icon'}
           >
-            <IconPrefs onToast={showToast} />
+            <IconPrefs accent="icon" onToast={showToast} />
           </SettingsPanel>
 
           <SettingsPanel

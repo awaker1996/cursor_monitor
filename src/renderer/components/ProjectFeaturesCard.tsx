@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import readmeSource from '../../../README.md?raw';
+import { GlassCard } from './SettingsTabContent';
 
 const README_LINES = readmeSource.split(/\r?\n/);
 
@@ -66,7 +67,7 @@ export default function ProjectFeaturesCard() {
   if (!INTRO && FEATURES_DISPLAY.length === 0) return null;
 
   return (
-    <div className="set-card">
+    <GlassCard accent="about">
       <div className="set-card__body project-features">
         {INTRO && <p className="project-features__intro">{renderInline(INTRO)}</p>}
         <ul className="project-features__list">
@@ -75,6 +76,6 @@ export default function ProjectFeaturesCard() {
           ))}
         </ul>
       </div>
-    </div>
+    </GlassCard>
   );
 }
