@@ -684,10 +684,39 @@ body.page-settings-tab * {
   max-height: 100%;
   overflow-x: hidden;
   overflow-y: hidden;
-  background: rgba(22, 22, 40, 0.98);
+  /* 深海军蓝基底：与设置页 .settings-page 同源，极光光斑在其上才能「发光」 */
+  background:
+    radial-gradient(120% 90% at 78% -12%, #101a3a 0%, transparent 60%),
+    linear-gradient(160deg, #0b1026 0%, #0d1330 48%, #0a0f24 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 12px;
+}
+
+/* ── 动态玻璃 · 面板级极光画布 ──
+   与设置页 .settings-page::before 同一套光斑配色与漂移节奏（共用
+   pageAuroraDrift 关键帧），两窗玻璃语言统一。 */
+.floating-ball__panel::before {
+  content: '';
+  position: absolute;
+  inset: -24%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(38% 32% at 22% 18%, rgba(79, 124, 255, 0.5), transparent 66%),
+    radial-gradient(34% 30% at 82% 14%, rgba(34, 211, 238, 0.34), transparent 68%),
+    radial-gradient(40% 36% at 62% 94%, rgba(168, 85, 247, 0.36), transparent 70%),
+    radial-gradient(30% 26% at 8% 82%, rgba(52, 211, 153, 0.22), transparent 68%);
+  background-size: 175% 175%, 155% 155%, 190% 190%, 165% 165%;
+  background-position: 14% 10%, 86% 18%, 56% 88%, 10% 78%;
+  animation: pageAuroraDrift 22s ease-in-out infinite alternate;
+  filter: saturate(1.35);
+}
+
+/* 内容浮于极光之上（与设置页 topbar/layout 的 z-index:1 同规则） */
+.floating-ball__panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .floating-ball__panel:not(.floating-ball__panel--included) .dashboard-summary {
@@ -1200,6 +1229,10 @@ body.page-settings-tab * {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .floating-ball__panel::before {
+    animation: none;
+  }
+
   .floating-ball__panel-frame--refreshing::before,
   .floating-ball__panel-frame--refreshing::after {
     animation: none;
@@ -4118,10 +4151,30 @@ color: rgba(200, 214, 245, 0.9);
   height: 23px;
   border: 1px solid rgba(148, 178, 255, 0.28);
   border-radius: 999px;
+  /* 玻璃底：与 .form-group input / .floating-ball__panel 同源的深蓝半透明 */
   background: rgba(11, 16, 38, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   cursor: pointer;
+  overflow: hidden;
   transition: background 0.22s var(--set-ease), box-shadow 0.22s var(--set-ease);
   flex-shrink: 0;
+}
+
+/* 玻璃高光带：与弹窗卡片 glassShine 同款扫光，开关也有玻璃微动效 */
+.switch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+  animation: glassShine 6s ease-in-out 1.2s infinite;
 }
 
 .switch:hover {
@@ -4148,7 +4201,13 @@ color: rgba(200, 214, 245, 0.9);
 .switch.is-on {
   background: linear-gradient(120deg, #4f7cff, #22d3ee);
   border-color: transparent;
-  box-shadow: 0 0 16px rgba(79, 124, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 0 16px rgba(79, 124, 255, 0.45);
+}
+
+.switch.is-on::before {
+  animation-delay: 0s;
 }
 
 .switch.is-on .switch__thumb {
@@ -4577,6 +4636,7 @@ color: rgba(200, 214, 245, 0.9);
   .settings-page::after,
   .set-card::before,
   .set-card::after,
+  .floating-ball__panel::before,
   .floating-ball__panel-frame--open .floating-ball__panel::after {
     animation: none;
   }
@@ -4604,5 +4664,11 @@ color: rgba(200, 214, 245, 0.9);
   .btn-ghost,
   .slider-input__range::-webkit-slider-thumb {
     transition: none;
+  }
+
+  /* 开关扫光与弹窗卡片光泽同规则：停帧但保留玻璃质感 */
+  .switch::before {
+    animation: none;
+    transform: translateX(-100%);
   }
 }
