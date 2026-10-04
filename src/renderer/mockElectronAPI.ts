@@ -107,6 +107,9 @@ export function installBrowserMock(): void {
       message: '浏览器预览模式：仅演示',
     }),
     clearCustomIcon: async () => ({ success: true }),
+    settingsWindowControl: () => undefined,
+    settingsWindowIsMaximized: async () => false,
+    onSettingsWindowMaximized: () => () => undefined,
   };
 
   window.electronAPI = api;

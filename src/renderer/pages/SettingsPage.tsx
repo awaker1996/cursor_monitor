@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppSettings } from '../../shared/types';
 import SettingsPanel, { type SettingsSectionId } from '../components/SettingsPanel';
 import SettingsNav from '../components/SettingsNav';
+import SettingsTitleBar from '../components/SettingsTitleBar';
 import { BallPrefs, DataRefreshPrefs, IconPrefs } from '../components/SettingsTabContent';
 import ProjectFeaturesCard from '../components/ProjectFeaturesCard';
 import SubscriptionsPage from './SubscriptionsPage';
@@ -56,6 +57,7 @@ export default function SettingsPage() {
 
   return (
     <div className="settings-page">
+      <SettingsTitleBar />
       <header className="settings-page__topbar">
         <h1>设置</h1>
         <p>Cursor Token Monitor 偏好设置 · 改动即时保存</p>

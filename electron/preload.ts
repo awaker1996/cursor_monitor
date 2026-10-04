@@ -60,6 +60,9 @@ export interface ElectronAPI {
   getIconPreview: () => Promise<string | null>;
   selectCustomIcon: () => Promise<{ success: boolean; message?: string; preview?: string | null }>;
   clearCustomIcon: () => Promise<{ success: boolean; preview?: string | null }>;
+  settingsWindowControl: (action: 'minimize' | 'toggle-maximize' | 'close') => void;
+  settingsWindowIsMaximized: () => Promise<boolean>;
+  onSettingsWindowMaximized: (callback: (maximized: boolean) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -117,6 +120,13 @@ const api: ElectronAPI = {
   getIconPreview: () => ipcRenderer.invoke('get-icon-preview'),
   selectCustomIcon: () => ipcRenderer.invoke('select-custom-icon'),
   clearCustomIcon: () => ipcRenderer.invoke('clear-custom-icon'),
+  settingsWindowControl: (action) => ipcRenderer.send('settings-window-control', action),
+  settingsWindowIsMaximized: () => ipcRenderer.invoke('settings-window-is-maximized'),
+  onSettingsWindowMaximized: (callback) => {
+    const handler = (_: Electron.IpcRendererEvent, maximized: boolean) => callback(maximized);
+    ipcRenderer.on('settings-window-maximized', handler);
+    return () => ipcRenderer.removeListener('settings-window-maximized', handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

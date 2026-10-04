@@ -466,6 +466,22 @@ function setupIpc(): void {
     });
     return { success: true, preview: getIconPreviewDataUrl(settings) };
   });
+
+  // 自绘标题栏的窗口控制：事件由设置窗口自身发起
+  ipcMain.on('settings-window-control', (_event, action: 'minimize' | 'toggle-maximize' | 'close') => {
+    const win = BrowserWindow.fromWebContents(_event.sender);
+    if (!win || win.isDestroyed()) return;
+    if (action === 'minimize') win.minimize();
+    else if (action === 'toggle-maximize') {
+      if (win.isMaximized()) win.unmaximize();
+      else win.maximize();
+    } else win.close();
+  });
+
+  ipcMain.handle('settings-window-is-maximized', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    return win ? win.isMaximized() : false;
+  });
 }
 
 function setupPollerEvents(): void {

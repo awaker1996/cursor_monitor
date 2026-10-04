@@ -61,6 +61,9 @@ export interface ElectronAPI {
   getIconPreview: () => Promise<string | null>;
   selectCustomIcon: () => Promise<{ success: boolean; message?: string; preview?: string | null }>;
   clearCustomIcon: () => Promise<{ success: boolean; preview?: string | null }>;
+  settingsWindowControl: (action: 'minimize' | 'toggle-maximize' | 'close') => void;
+  settingsWindowIsMaximized: () => Promise<boolean>;
+  onSettingsWindowMaximized: (callback: (maximized: boolean) => void) => () => void;
 }
 
 declare global {

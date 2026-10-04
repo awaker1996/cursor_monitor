@@ -26,6 +26,7 @@ export function createSettingsWindow(isDev: boolean, settings?: AppSettings): Br
     title: '设置界面',
     resizable: true,
     autoHideMenuBar: true,
+    frame: false,
     backgroundColor: '#0b1026',
     backgroundMaterial: isWin11 ? 'mica' : undefined,
     ...(icon && !icon.isEmpty() ? { icon } : {}),
@@ -43,6 +44,12 @@ export function createSettingsWindow(isDev: boolean, settings?: AppSettings): Br
   }
 
   settingsWindow.setMenuBarVisibility(false);
+  settingsWindow.on('maximize', () => {
+    settingsWindow?.webContents.send('settings-window-maximized', true);
+  });
+  settingsWindow.on('unmaximize', () => {
+    settingsWindow?.webContents.send('settings-window-maximized', false);
+  });
   settingsWindow.on('closed', () => {
     settingsWindow = null;
   });
