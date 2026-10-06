@@ -70,10 +70,23 @@ console.log('providerCollapsedUsage: cursor');
 }
 
 {
-  // 两个池都没有今日数据（刷新失败 / 缓存回填未命中）时不出小条。
+  // 两个池都没有今日数据（官方额度源 / 今日事件不完整）时回退为周期口径，标签标注窗口。
   const chips = providerCollapsedUsage('cursor', entry(cursorData()));
-  assert('no chips without today data', chips.length === 0, `got ${chips.length}`);
-  assert('aria label', collapsedUsageAriaLabel('cursor') === '今日用量摘要');
+  assert('cycle fallback chips', chips.length === 2, `got ${chips.length}`);
+  assert('cycle cursor label', chips[0].label === '周期 Cursor', chips[0].label);
+  assert('cycle cursor title', chips[0].title === '周期 Cursor Models已用 21%', chips[0].title);
+  assert('cycle other label', chips[1].label === '周期 Other', chips[1].label);
+  assert('cycle other percent', chips[1].percent === 0, String(chips[1].percent));
+  assert('aria label', collapsedUsageAriaLabel('cursor') === '用量摘要');
+}
+
+{
+  // 今日与周期都缺失（无任何可用数据）时才不出小条。
+  const chips = providerCollapsedUsage(
+    'cursor',
+    entry(cursorData({ cursorModelsUsedPercent: null, otherModelsUsedPercent: null })),
+  );
+  assert('no chips without any data', chips.length === 0, `got ${chips.length}`);
 }
 
 {

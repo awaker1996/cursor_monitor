@@ -56,20 +56,25 @@ function commandCodeCollapsedChips(data: CommandCodeSubscriptionData): Collapsed
   return chips;
 }
 
-/** Cursor 收起态摘要：今日 Cursor / 今日 Other 两个用量池，缺少今日数据的不出小条。 */
+/** Cursor 收起态摘要：今日 Cursor / 今日 Other 两个用量池。
+ *  快照缺今日口径时（官方额度源、今日事件不完整）回退为周期口径，
+ *  标签明确标注窗口——不把「无今日数据」误读成「没用量」，也不再整块留白。 */
 function cursorCollapsedChips(data: CursorSubscriptionData): CollapsedUsageChip[] {
+  const hasToday =
+    data.cursorModelsTodayUsedPercent != null || data.otherModelsTodayUsedPercent != null;
+  const windowLabel = hasToday ? '今日' : '周期';
   const buckets: Array<{ key: string; label: string; full: string; percent: number | null }> = [
     {
-      key: 'cursorModelsToday',
-      label: '今日 Cursor',
-      full: `今日 ${CURSOR_MODELS_LABEL}`,
-      percent: data.cursorModelsTodayUsedPercent,
+      key: hasToday ? 'cursorModelsToday' : 'cursorModelsCycle',
+      label: `${windowLabel} Cursor`,
+      full: `${windowLabel} ${CURSOR_MODELS_LABEL}`,
+      percent: hasToday ? data.cursorModelsTodayUsedPercent : data.cursorModelsUsedPercent,
     },
     {
-      key: 'otherModelsToday',
-      label: '今日 Other',
-      full: `今日 ${OTHER_MODELS_LABEL}`,
-      percent: data.otherModelsTodayUsedPercent,
+      key: hasToday ? 'otherModelsToday' : 'otherModelsCycle',
+      label: `${windowLabel} Other`,
+      full: `${windowLabel} ${OTHER_MODELS_LABEL}`,
+      percent: hasToday ? data.otherModelsTodayUsedPercent : data.otherModelsUsedPercent,
     },
   ];
 
@@ -102,9 +107,9 @@ export function providerCollapsedUsage(
   return [];
 }
 
-/** 收起态小条分组的无障碍名称，避免 Cursor 的今日用量被读成限额。 */
+/** 收起态小条分组的无障碍名称，避免 Cursor 的用量摘要被读成限额。 */
 export function collapsedUsageAriaLabel(id: SubscriptionProviderId): string {
-  return id === 'cursor' ? '今日用量摘要' : '限额摘要';
+  return id === 'cursor' ? '用量摘要' : '限额摘要';
 }
 
 /** 收起态套餐标签：有真实套餐数据时返回展示文案，否则返回 null（不展示、不写死）。 */
