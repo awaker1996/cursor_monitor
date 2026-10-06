@@ -14,7 +14,7 @@ import {
   getFloatingBallWindow,
   sendToFloatingBall,
 } from './windows/floatingBall';
-import { createSettingsWindow } from './windows/settings';
+import { createSettingsWindow, getSettingsWindow } from './windows/settings';
 import { createTray, destroyTray, updateTrayIcon, updateTrayToolTip } from './tray';
 import {
   clearDockState,
@@ -245,6 +245,11 @@ function setupIpc(): void {
     }
     const settings = settingsStore.update(partial);
     poller.applySettingsChange();
+    if (partial.uiStyle !== undefined) {
+      getSettingsWindow()?.setBackgroundColor(
+        partial.uiStyle === 'calm' ? '#f2f4f8' : '#0b1026',
+      );
+    }
     if (partial.includeGrokBotUsage !== undefined) {
       void poller.manualRefresh().then(() => {
         broadcastSnapshot();

@@ -1,6 +1,6 @@
 # Cursor Token Monitor — 项目参考文档
 
-> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口为单页设置中心，包含账户与订阅、运行行为与外观两个功能区。
+> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口为侧边导航 + 分区面板的设置中心，按「账户与订阅 / 数据刷新 / 外观 / 关于」组织，支持 Aurora 玻璃与清爽纸面双主题。
 > 本文档整合需求说明、架构设计、实现细节、使用与维护指南，便于后续查阅。
 
 ---
@@ -45,7 +45,8 @@
 **范围内：**
 - Windows 悬浮球（拖拽、置顶、贴边半隐收起、托盘）
 - Cursor Models / Other Models 余量与 Dashboard 用量指标展示（概览 / 用量切换）
-- 设置窗口单页设置中心：账户与订阅（高频）+ 运行行为与外观（低频），无 Tab 切换
+- 设置窗口侧边导航设置中心：账户与订阅 / 数据刷新 / 外观（界面风格 · 悬浮球 · 应用图标）/ 关于
+- 双主题界面风格：Aurora 玻璃（深色）/ 清爽纸面（浅色），设置页切换即时生效于悬浮球与设置窗口
 - 订阅额度与用量查询：Cursor 周期用量（含订阅套餐）、Command Code 额度与 5 小时/每周/每月限额（含套餐）、DeepSeek 余额与按月模型用量
 - Grok Bot 用量可选计入：默认从今日%、模型明细剔除 `grok-bot-*` 模型，可在用量统计卡片开关；周期官方占比不变
 - 系统托盘悬停展示概览用量摘要；右键提供设置 / 复位 / 退出
@@ -207,15 +208,12 @@ npm run dist
 
 ### FR-11 设置窗口结构
 
-- 设置窗口 840×720（最小 720×560），单页设置中心无 Tab：**账户与订阅**在上，**运行行为与外观**在下；窗口标题为「设置」
+- 设置窗口 840×700（最小 720×560），侧边导航 + 分区面板：**账户与订阅 / 数据刷新 / 外观 / 关于** 四分区，无 Tab 切换；窗口标题为「设置」，底色跟随界面风格避免深浅闪变
 - 「账户与订阅」区：账户卡片纵向单列，工具栏含查询时间、自动刷新状态与「刷新全部」
-- 「运行行为与外观」区：固定 2×2 卡片（数据刷新 / 用量统计 / 悬浮球行为 / 应用图标），下方「关于与功能说明」默认折叠
-  - **数据刷新**：自动刷新、刷新间隔（30–3600 秒，防抖自动保存）
-  - **用量统计**：计入 Grok Bot 用量（默认关闭）
-  - **悬浮球行为**：贴边缘自动收起开关
-  - **应用图标**：自定义图标选择 / 恢复默认（即时生效于托盘与设置窗口）
-- 窄窗 700px 以下偏好区回落单列；内容超出时由整页 body 滚动查看
-- 「关于与功能说明」卡通过 Vite `?raw` 在构建期导入 `README.md`，提取开头简介与「范围内」清单
+- 「数据刷新」区：自动刷新、刷新间隔（30–3600 秒，防抖自动保存）、计入 Grok Bot 用量（默认关闭）
+- 「外观」区：界面风格切换（Aurora 玻璃 / 清爽纸面）、悬浮球贴边自动收起、应用图标选择 / 恢复默认（即时生效于托盘与设置窗口）
+- 「关于」区：功能范围卡片纵向铺满面板区，内容由 `README.md` 构建期 `?raw` 派生
+- 面板区内容超出时纵向滚动；横向一律裁剪（装饰性光斑溢出不产生横滚条）
 
 ### 非功能需求
 
@@ -269,7 +267,7 @@ flowchart TD
 | 边缘吸附 | `electron/floatingBallDock.ts` | 贴边半隐、悬停滑入、窗口 undock |
 | 图标管理 | `electron/iconManager.ts` | 自定义图标读写与预览 |
 | 悬浮窗 | `electron/windows/floatingBall.ts` | 无边框置顶窗口 |
-| 设置窗 | `electron/windows/settings.ts` | 设置窗口（单页设置中心，840×720） |
+| 设置窗 | `electron/windows/settings.ts` | 设置窗口（侧边导航设置中心，840×700，底色跟随界面风格） |
 | 托盘 | `electron/tray.ts` | 系统托盘菜单与悬停 tooltip |
 | 预加载 | `electron/preload.ts` | 安全 IPC 桥接 |
 | 开发态 URL | `src/shared/devServer.ts` | dev server 端口与 URL 的单一来源（5180） |
@@ -289,8 +287,11 @@ flowchart TD
 | 日志 | `src/utils/logger.ts` | 敏感信息脱敏 |
 | 格式化 | `src/shared/format.ts` | 展示格式化、托盘 tooltip、概览/用量构建 |
 | 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开、概览/用量切换 |
-| 设置 UI | `src/renderer/pages/SettingsPage.tsx` | 单页设置中心骨架（账户与订阅 + 运行行为与外观） |
-| 偏好设置 UI | `src/renderer/components/SettingsTabContent.tsx` | 数据刷新 / 用量统计 / 悬浮球行为 / 应用图标 / 关于说明 |
+| 设置 UI | `src/renderer/pages/SettingsPage.tsx` | 侧边导航设置中心骨架（账户与订阅 / 数据刷新 / 外观 / 关于） |
+| 设置导航 | `src/renderer/components/SettingsNav.tsx` | 侧边导航（两字标签 + 底部品牌角标含版本号） |
+| 设置面板 | `src/renderer/components/SettingsPanel.tsx` | 分区面板骨架（标题 / 描述 / fill 铺满模式） |
+| 主题风格 | `src/renderer/uiStyle.ts` | 界面风格元数据与 `data-ui-style` 应用 / 跟随同步 |
+| 偏好设置 UI | `src/renderer/components/SettingsTabContent.tsx` | 数据刷新 / 界面风格 / 悬浮球行为 / 应用图标 / 关于说明 |
 | 核心功能卡 | `src/renderer/components/ProjectFeaturesCard.tsx` | 由 `README.md` 派生功能清单（`?raw`），默认折叠 |
 | 打包编排 | `scripts/dist.mjs` | 结束残留实例、工作区外打包、发布产物到 `release/` |
 | 订阅 UI | `src/renderer/pages/SubscriptionsPage.tsx` | 账户卡片列表：独立展开、独立刷新、独立凭据配置 |
@@ -315,7 +316,7 @@ cursor_monitor/
 │   ├── iconManager.ts           # 自定义图标管理
 │   └── windows/
 │       ├── floatingBall.ts      # 悬浮球窗口（固定 300 宽）
-│       └── settings.ts          # 设置窗口（单页设置中心）
+│       └── settings.ts          # 设置窗口（侧边导航设置中心）
 ├── src/
 │   ├── core/
 │   │   ├── poller.ts            # 轮询与状态机
@@ -348,12 +349,15 @@ cursor_monitor/
 │       ├── App.tsx              # 悬浮球
 │       ├── main.tsx             # 悬浮球入口
 │       ├── settings-main.tsx    # 设置窗入口
+│       ├── uiStyle.ts           # 界面风格元数据与 data-ui-style 同步
 │       ├── pages/
-│       │   ├── SettingsPage.tsx      # 单页设置中心骨架
+│       │   ├── SettingsPage.tsx      # 侧边导航设置中心骨架
 │       │   └── SubscriptionsPage.tsx # 账户卡片列表
 │       └── components/
-│           ├── SettingsTabContent.tsx   # 偏好设置四卡片 + 关于说明
-│           ├── ProjectFeaturesCard.tsx  # 关于与功能说明（读 README，默认折叠）
+│           ├── SettingsNav.tsx          # 设置侧边导航（含品牌角标）
+│           ├── SettingsPanel.tsx        # 分区面板骨架（fill 铺满模式）
+│           ├── SettingsTabContent.tsx   # 偏好设置卡片（数据刷新/风格/悬浮球/图标）+ 关于说明
+│           ├── ProjectFeaturesCard.tsx  # 关于与功能说明（读 README）
 │           ├── SubscriptionPanels.tsx
 │           ├── SubscriptionUtils.ts
 │           ├── IncludedUsageTable.tsx
@@ -371,7 +375,7 @@ cursor_monitor/
 ├── .cursorignore                # 编辑器索引排除（构建产物）
 ├── .vscode/settings.json        # 编辑器 search / watcher 排除
 ├── index.html                   # 悬浮球入口
-├── settings.html                # 设置窗口入口（单页设置中心）
+├── settings.html                # 设置窗口入口（侧边导航设置中心）
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tsconfig.electron.json
@@ -570,9 +574,9 @@ OfficialProvider 请求
 
 视觉细节：弹窗 header 左侧为「三色状态灯 + Cursor监控」品牌行——三色灯为纯装饰循环动画（红→黄→绿，2.7s 错相位），与健康状态 / 用量数据完全解耦；`prefers-reduced-motion: reduce` 下三灯静态显示熄灭态。悬浮球本体与概览/用量卡片叠加动态玻璃质感（缓慢扫过的光泽带 + 描边高光，各卡片错相位），减少动态效果时关闭扫光但保留玻璃质感。
 
-### 设置窗口（单页设置中心）
+### 设置窗口（侧边导航设置中心）
 
-窗口 840×720（最小 720×560），无 Tab：**账户与订阅**在上，**运行行为与外观**在下；窗口标题显示「设置」。
+窗口 840×700（最小 720×560），侧边导航 + 分区面板：**账户与订阅 / 数据刷新 / 外观 / 关于**；窗口标题显示「设置」。导航两字标签（账户 / 数据 / 外观 / 关于），底部为品牌角标（logo + 应用名 + 版本号）。
 
 **账户与订阅**
 
@@ -586,14 +590,20 @@ OfficialProvider 请求
 - 凭据配置区按卡片独立折叠：Cursor 填 `WorkosCursorSessionToken` 并可测试连接（结构化结果）；其余平台填 API Key；支持按月用量的平台另有独立的「用量 Token」
 - 打开即有缓存数据；查询失败保留上次成功结果并给出黄色提示
 
-**运行行为与外观**
+**数据刷新**
 
-- 固定 2×2 卡片等高（窄窗 700px 以下回落单列），说明文案收至卡片底部脚注；取消卡内滚动，内容超出时整页 body 滚动
-- 数据刷新：自动刷新、间隔（30–3600 秒）
-- 用量统计：计入 Grok Bot 用量（默认关闭）
-- 悬浮球行为：贴边缘自动收起
-- 应用图标：自定义应用图标（选择 / 恢复默认）
-- 关于与功能说明：默认折叠，由 `README.md` 派生的项目功能清单（构建期 `?raw` 同步）
+- 单卡三行：自动刷新、刷新间隔（30–3600 秒，防抖自动保存）、计入 Grok Bot 用量（默认关闭）
+
+**外观**
+
+- 三张等高卡片（统一中性染色纸风格，Aurora 下统一品牌流光）：
+  - 界面风格：Aurora 玻璃（深色玻璃极光）/ 清爽纸面（浅色坐标纸底纹、静态无动效、高对比文字），Segmented 切换即时生效并同时作用于悬浮球与设置窗口；窗口底色随风格切换
+  - 悬浮球行为：贴边缘自动收起
+  - 应用图标：自定义应用图标（选择 / 恢复默认）
+
+**关于**
+
+- 功能范围与设计说明卡纵向铺满面板区（功能条目 space-evenly 均匀分布），由 `README.md` 派生（构建期 `?raw` 同步）
 
 ### 托盘
 
@@ -631,6 +641,7 @@ OfficialProvider 请求
 | edgeAutoDockEnabled | true | 贴边缘自动收起 |
 | includeGrokBotUsage | false | 是否将 Grok Bot 计入今日% 与模型明细 |
 | customIconPath | null | 自定义图标路径（null 为默认） |
+| uiStyle | aurora | 界面风格：aurora（深色玻璃极光）/ calm（浅色清爽纸面），同时作用于悬浮球与设置窗口，设置页「外观」分区可切换 |
 
 修改端点或映射逻辑见 [维护与扩展](#13-维护与扩展)。
 
@@ -727,15 +738,16 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 - [ ] 快照缓存在启动/失败时可展示 stale 数据（状态 pill 标识）
 - [ ] 托盘悬停显示多行概览用量（模型名列对齐），随刷新更新
 - [ ] 托盘右键含设置、复位、退出；左键点击弹出同一菜单
-- [ ] 设置窗口单页内账户与订阅、运行行为与外观上下排列，无 Tab
+- [ ] 设置窗口侧边导航四分区（账户与订阅 / 数据刷新 / 外观 / 关于），无 Tab
 - [ ] 调试折叠可展示数据库路径与命中表，并可复制诊断信息
 - [ ] 订阅三张账户卡片默认收起，未配置时给出引导并显示未配置状态
 - [ ] 订阅「刷新全部」覆盖全部已配置提供方；打开设置窗口立即显示缓存
 - [ ] Command Code 收起态展示套餐与 5 小时/每周限额，展开可见额度与三段限额；DeepSeek 可按月查询模型用量
 - [ ] Cursor 收起态展示订阅套餐（如 Pro），展开明细「周期与账户」首行展示订阅套餐
 - [ ] 订阅查询失败时保留上次成功结果并给出黄色提示，不显示空白
-- [ ] 运行行为区改刷新间隔后，订阅自动刷新同步生效
-- [ ] 运行行为区 2×2 卡片等高，窄窗回落单列、无卡内滚动；关于说明默认折叠且内容与 README「范围内」清单一致
+- [ ] 数据刷新分区改刷新间隔后，订阅自动刷新同步生效
+- [ ] 外观分区三卡等高、全部分区卡片风格统一（Aurora 品牌流光 / 纸面中性染色）；关于页功能卡铺满面板区且内容与 README「范围内」清单一致
+- [ ] 「外观」分区切换界面风格后，悬浮球与设置窗口立即换肤且窗口底色无深浅闪变
 - [ ] 「计入 Grok Bot 用量」开关切换后用量立即按新口径刷新
 - [ ] 自定义图标可即时生效于托盘与设置窗
 - [ ] 安装包可在 Windows 环境安装运行
@@ -844,7 +856,7 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、单页设置中心（账户与订阅 + 运行行为与外观）、订阅额度与按月用量（Cursor / Command Code / DeepSeek，含套餐展示）、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
+| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、侧边导航设置中心（账户与订阅 / 数据刷新 / 外观 / 关于）、订阅额度与按月用量（Cursor / Command Code / DeepSeek，含套餐展示）、双主题界面风格（Aurora 玻璃 / 清爽纸面）、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 

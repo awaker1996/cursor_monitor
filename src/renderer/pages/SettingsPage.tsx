@@ -3,15 +3,15 @@ import type { AppSettings } from '../../shared/types';
 import SettingsPanel, { type SettingsSectionId } from '../components/SettingsPanel';
 import SettingsNav from '../components/SettingsNav';
 import SettingsTitleBar from '../components/SettingsTitleBar';
-import { BallPrefs, DataRefreshPrefs, IconPrefs } from '../components/SettingsTabContent';
+import { BallPrefs, DataRefreshPrefs, IconPrefs, AppearancePrefs } from '../components/SettingsTabContent';
 import ProjectFeaturesCard from '../components/ProjectFeaturesCard';
 import SubscriptionsPage from './SubscriptionsPage';
+import { useUiStyleSync } from '../uiStyle';
 
 const SECTION_TITLES: Record<SettingsSectionId, string> = {
   accounts: '账户与订阅',
   data: '数据刷新',
-  ball: '悬浮球',
-  icon: '应用图标',
+  appearance: '外观',
   about: '关于',
 };
 
@@ -19,12 +19,12 @@ const SECTION_DESCRIPTIONS: Record<SettingsSectionId, string> = {
   accounts:
     '配置 Cursor、Command Code、DeepSeek 的访问凭据；配置后自动查询订阅额度和用量，凭据仅保存在本机。',
   data: '控制后台多久拉取一次数据，以及今日用量百分比是否计入 Grok Bot 调用。',
-  ball: '桌面悬浮球的显示方式。改动立即生效，无需重启应用。',
-  icon: '替换系统托盘和设置窗口左上角的应用图标，不会影响悬浮球。',
+  appearance: '界面风格、悬浮球显示与应用图标的个性化设置，改动立即生效，无需重启。',
   about: '本项目的功能范围与设计说明。',
 };
 
 export default function SettingsPage() {
+  useUiStyleSync();
   const [active, setActive] = useState<SettingsSectionId>('accounts');
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -89,25 +89,20 @@ export default function SettingsPage() {
           </SettingsPanel>
 
           <SettingsPanel
-            id="ball"
-            title={SECTION_TITLES.ball}
-            description={SECTION_DESCRIPTIONS.ball}
-            active={active === 'ball'}
+            id="appearance"
+            title={SECTION_TITLES.appearance}
+            description={SECTION_DESCRIPTIONS.appearance}
+            active={active === 'appearance'}
           >
             {settings ? (
-              <BallPrefs accent="ball" settings={settings} onToast={showToast} />
+              <>
+                <AppearancePrefs accent="appearance" settings={settings} onToast={showToast} />
+                <BallPrefs accent="ball" settings={settings} onToast={showToast} />
+                <IconPrefs accent="icon" onToast={showToast} />
+              </>
             ) : (
               <PanelSkeleton />
             )}
-          </SettingsPanel>
-
-          <SettingsPanel
-            id="icon"
-            title={SECTION_TITLES.icon}
-            description={SECTION_DESCRIPTIONS.icon}
-            active={active === 'icon'}
-          >
-            <IconPrefs accent="icon" onToast={showToast} />
           </SettingsPanel>
 
           <SettingsPanel
@@ -115,6 +110,7 @@ export default function SettingsPage() {
             title={SECTION_TITLES.about}
             description={SECTION_DESCRIPTIONS.about}
             active={active === 'about'}
+            fill
           >
             <ProjectFeaturesCard />
           </SettingsPanel>

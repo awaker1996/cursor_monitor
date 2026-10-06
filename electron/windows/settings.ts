@@ -27,7 +27,8 @@ export function createSettingsWindow(isDev: boolean, settings?: AppSettings): Br
     resizable: true,
     autoHideMenuBar: true,
     frame: false,
-    backgroundColor: '#0b1026',
+    // 底色跟随界面风格，避免加载与拉伸窗口时出现深浅色闪变
+    backgroundColor: settings?.uiStyle === 'calm' ? '#f2f4f8' : '#0b1026',
     backgroundMaterial: isWin11 ? 'mica' : undefined,
     ...(icon && !icon.isEmpty() ? { icon } : {}),
     webPreferences: {

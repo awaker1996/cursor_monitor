@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import pkg from '../../../package.json';
 
 export default function SettingsNav({
   active,
@@ -20,7 +21,7 @@ export default function SettingsNav({
           <path d="M3.6 16.2c.9-3 3.4-4.6 6.4-4.6s5.5 1.6 6.4 4.6a.9.9 0 0 1-.86 1.16H4.46A.9.9 0 0 1 3.6 16.2Z" />
         </svg>
       ),
-      label: '账户与订阅',
+      label: '账户',
     },
     {
       id: 'data',
@@ -35,28 +36,17 @@ export default function SettingsNav({
           <circle cx="8.6" cy="15.5" r="1.7" />
         </svg>
       ),
-      label: '数据刷新',
+      label: '数据',
     },
     {
-      id: 'ball',
+      id: 'appearance',
       icon: (
         <svg viewBox="0 0 20 20" aria-hidden>
-          <circle cx="10" cy="10" r="6.2" />
-          <path d="M4.4 13.4c1.5-1.2 3.4-1.9 5.6-1.9s4.1.7 5.6 1.9" strokeLinecap="round" />
+          <circle cx="10" cy="10" r="6.8" />
+          <path d="M10 3.2a6.8 6.8 0 0 1 0 13.6Z" fill="currentColor" stroke="none" />
         </svg>
       ),
-      label: '悬浮球',
-    },
-    {
-      id: 'icon',
-      icon: (
-        <svg viewBox="0 0 20 20" aria-hidden>
-          <rect x="3.2" y="3.2" width="13.6" height="13.6" rx="3.4" />
-          <circle cx="7.8" cy="7.8" r="1.6" />
-          <path d="m4.4 13.8 3.2-3.2a1.6 1.6 0 0 1 2.3 0l4.6 4.6" strokeLinecap="round" />
-        </svg>
-      ),
-      label: '应用图标',
+      label: '外观',
     },
     {
       id: 'about',
@@ -93,6 +83,18 @@ export default function SettingsNav({
           );
         })}
       </ul>
+      <div className="settings-nav__footer" aria-hidden>
+        <span className="settings-nav__footer-logo">
+          <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="8" cy="8" r="2.4" />
+            <path d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M12.5 3.5l-1.4 1.4M4.9 11.1l-1.4 1.4" strokeLinecap="round" />
+          </svg>
+        </span>
+        <span className="settings-nav__footer-text">
+          <span className="settings-nav__footer-name">Cursor Monitor</span>
+          <span className="settings-nav__footer-ver">v{pkg.version}</span>
+        </span>
+      </div>
     </nav>
   );
 }

@@ -4,11 +4,14 @@ import {
   REFRESH_INTERVAL_MIN,
   type AppSettings,
 } from '../../shared/types';
-import { SettingsRow, SliderInput, Switch } from './SettingsControls';
-type CardAccent = 'data' | 'ball' | 'icon' | 'about';
+import { SettingsRow, Segmented, SliderInput, Switch } from './SettingsControls';
+import { UI_STYLE_OPTIONS } from '../uiStyle';
+import type { UiStyle } from '../../shared/types';
+type CardAccent = 'data' | 'appearance' | 'ball' | 'icon' | 'about';
 
 const ACCENT_CLASS: Record<CardAccent, string> = {
   data: 'set-card--accent-data',
+  appearance: 'set-card--accent-appearance',
   ball: 'set-card--accent-ball',
   icon: 'set-card--accent-icon',
   about: 'set-card--accent-about',
@@ -155,6 +158,44 @@ export function DataRefreshPrefs({
                 );
             }}
             label="计入 Grok Bot 用量"
+          />
+        </SettingsRow>
+      </div>
+    </GlassCard>
+  );
+}
+
+/** 界面风格切换：同时作用于悬浮球与设置窗口，改动即时生效。 */
+export function AppearancePrefs({
+  settings,
+  onToast,
+  accent,
+}: {
+  settings: AppSettings;
+  onToast: (message: string) => void;
+  accent?: CardAccent;
+}) {
+  const current = UI_STYLE_OPTIONS.find((o) => o.value === settings.uiStyle);
+  return (
+    <GlassCard accent={accent}>
+      <div className="set-card__body">
+        <SettingsRow
+          title="界面风格"
+          description={
+            current
+              ? `当前：${current.label} —— ${current.description}。切换同时作用于悬浮球与设置窗口`
+              : '切换同时作用于悬浮球与设置窗口'
+          }
+        >
+          <Segmented<UiStyle>
+            value={settings.uiStyle}
+            options={UI_STYLE_OPTIONS.map(({ value, label }) => ({ value, label }))}
+            onChange={(next) => {
+              void window.electronAPI
+                .updateSettings({ uiStyle: next })
+                .then(() => onToast(next === 'calm' ? '已切换到清爽纸面' : '已切换到 Aurora 玻璃'));
+            }}
+            ariaLabel="界面风格"
           />
         </SettingsRow>
       </div>

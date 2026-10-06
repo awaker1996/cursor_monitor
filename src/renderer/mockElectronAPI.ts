@@ -2,6 +2,7 @@
   AppSettings,
   PollerState,
   TestConnectionResult,
+  TokenSnapshot,
 } from '../shared/types';
 import type {
   SubscriptionCacheSnapshot,
@@ -24,6 +25,61 @@ const DEFAULT_SETTINGS: AppSettings = {
   edgeAutoDockEnabled: true,
   includeGrokBotUsage: false,
   customIconPath: null,
+  uiStyle: 'aurora',
+};
+
+/** 浏览器预览悬浮球时的示例数据（仅 mock，Electron 走真实快照）。 */
+const DEMO_SNAPSHOT: TokenSnapshot = {
+  source: 'cookie',
+  auto: { remaining: 412, limit: 500, resetAt: null },
+  api: { remaining: 36.5, limit: 50, resetAt: null },
+  metrics: {
+    totalUsedPercent: 63,
+    apiUsedPercent: 27,
+    autoUsedPercent: 63,
+    apiTodayUsedPercent: 18,
+    autoTodayUsedPercent: 42,
+    totalUsed: 315,
+    planLimit: 500,
+    totalTokens: 48_200_000,
+    apiTodayTokens: 3_400_000,
+    autoTodayTokens: 8_900_000,
+  },
+  includedUsage: {
+    available: true,
+    categories: [
+      {
+        key: 'api',
+        label: 'API 用量',
+        totalTokens: 12_400_000,
+        usagePercent: 27,
+        models: [
+          { model: 'gpt-5', tokens: 6_100_000, usagePercent: 13.2 },
+          { model: 'claude-sonnet-4.5', tokens: 4_300_000, usagePercent: 9.4 },
+          { model: 'claude-opus-4.1', tokens: 900_000, usagePercent: 2.1 },
+          { model: 'gemini-2.5-pro', tokens: 2_000_000, usagePercent: 4.4 },
+          { model: 'grok-4', tokens: 700_000, usagePercent: 1.6 },
+          { model: 'deepseek-v3.2', tokens: 450_000, usagePercent: 0.9 },
+        ],
+      },
+      {
+        key: 'firstParty',
+        label: 'Cursor 模型',
+        totalTokens: 35_800_000,
+        usagePercent: 63,
+        models: [
+          { model: 'composer-1', tokens: 21_600_000, usagePercent: 38.1 },
+          { model: 'auto', tokens: 14_200_000, usagePercent: 24.9 },
+        ],
+      },
+    ],
+  },
+  billingCycleStart: '2026-09-27',
+  billingCycleEnd: '2026-10-27',
+  membershipType: 'pro',
+  fetchedAt: new Date().toISOString(),
+  stale: false,
+  rawVersion: 'mock',
 };
 
 const TEST_RESULT: TestConnectionResult = {
@@ -38,11 +94,11 @@ export function installBrowserMock(): void {
   let settings = { ...DEFAULT_SETTINGS };
 
   const api: ElectronAPI = {
-    getSnapshot: async () => null,
+    getSnapshot: async () => DEMO_SNAPSHOT,
     getPollerState: async (): Promise<PollerState> => ({
-      status: 'idle',
+      status: 'running',
       fetching: false,
-      activeProvider: 'official',
+      activeProvider: 'cookie',
       failureCount: 0,
     }),
     getSettings: async () => settings,

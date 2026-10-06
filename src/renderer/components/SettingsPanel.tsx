@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
 
-export type SettingsSectionId = 'accounts' | 'data' | 'ball' | 'icon' | 'about';
+export type SettingsSectionId = 'accounts' | 'data' | 'appearance' | 'about';
 
 interface SettingsPanelProps {
   id: SettingsSectionId;
   title: string;
   description: string;
   active: boolean;
+  /** 单卡面板（如「关于」）：卡片纵向铺满面板区剩余高度。 */
+  fill?: boolean;
   children: ReactNode;
 }
 export default function SettingsPanel({
@@ -14,12 +16,13 @@ export default function SettingsPanel({
   title,
   description,
   active,
+  fill,
   children,
 }: SettingsPanelProps) {
   return (
     <section
       id={`settings-panel-${id}`}
-      className={`settings-panel${active ? ' is-active' : ''}`}
+      className={`settings-panel${active ? ' is-active' : ''}${fill ? ' settings-panel--fill' : ''}`}
       hidden={!active}
       aria-labelledby={`settings-panel-${id}-title`}
     >

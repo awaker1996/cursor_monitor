@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import MetricRow from './components/MetricRow';
 import IncludedUsageTable from './components/IncludedUsageTable';
 import ErrorHint from './components/ErrorHint';
+import { useUiStyleSync } from './uiStyle';
 import {
   buildDashboardSummary,
   buildIncludedUsageDisplay,
@@ -94,6 +95,7 @@ type PanelView = 'overview' | 'included';
 type PanelPhase = 'hidden' | 'entering' | 'shown' | 'leaving';
 
 export default function App() {
+  useUiStyleSync();
   const [expanded, setExpanded] = useState(false);
   const [panelPhase, setPanelPhase] = useState<PanelPhase>('hidden');
   const [panelAnimOpen, setPanelAnimOpen] = useState(false);

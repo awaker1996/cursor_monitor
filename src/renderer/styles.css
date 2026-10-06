@@ -850,6 +850,12 @@ body.page-settings-tab * {
   scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
 }
 
+/* 分类块不参与压缩：模型超出面板高度时由 __body 出滚动条，
+   而不是块被 flex 压扁后用自身 overflow:hidden 裁掉底部模型。 */
+.floating-ball__panel--included .included-usage__body > .included-usage__block {
+  flex-shrink: 0;
+}
+
 .floating-ball__panel--included .included-usage__body::-webkit-scrollbar {
   width: 6px;
 }
@@ -3185,6 +3191,14 @@ color: rgba(200, 214, 245, 0.9);
   white-space: nowrap;
 }
 
+/* 表头的数值列必须与表体同缘：.sub-table th 的 text-align:left
+   特异性（0,1,1）高于 .sub-table__num（0,1,0），会把它压回左对齐，
+   导致表头与下方数值错位 —— 这里用更高特异性夺回来。 */
+.sub-table th.sub-table__num,
+.sub-table th.sub-table__value {
+  text-align: right;
+}
+
 /* 模型名占余下宽度，过长时省略而不是把表格顶出面板 */
 .sub-table__model {
   color: #dbe4f8;
@@ -3824,12 +3838,16 @@ color: rgba(200, 214, 245, 0.9);
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 148px minmax(0, 1fr);
 }
 
-/* ── 侧边导航：低视觉重量，不与主区争抢 ── */
+/* ── 侧边导航：低视觉重量，不与主区争抢 ──
+   纵向 flex：菜单在顶、品牌角标沉底（margin-top:auto），
+   上下两端锚定后，中段留白读起来是「呼吸」而不是「空缺」。 */
 
 .settings-nav {
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid rgba(148, 178, 255, 0.12);
   padding: 14px 10px;
   overflow-y: auto;
@@ -3928,11 +3946,60 @@ color: rgba(200, 214, 245, 0.9);
   display: none;
 }
 
+/* ── 导航底部品牌角标：应用名 + 版本，沉底锚定 ── */
+
+.settings-nav__footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 8px 2px;
+  border-top: 1px solid rgba(148, 178, 255, 0.1);
+}
+
+.settings-nav__footer-logo {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  color: rgba(207, 224, 255, 0.8);
+  background: linear-gradient(135deg, rgba(79, 124, 255, 0.28), rgba(34, 211, 238, 0.14));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.settings-nav__footer-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.settings-nav__footer-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(210, 222, 248, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-nav__footer-ver {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(165, 180, 220, 0.45);
+}
+
 /* ── 面板区 ── */
 
 .settings-page__panels {
   position: relative;
   overflow-y: auto;
+  /* 卡片流光/光斑伪元素会超出卡片边界（inset -30%），横向一律裁掉 */
+  overflow-x: hidden;
   padding: 16px 24px 24px;
   background: linear-gradient(180deg, rgba(10, 15, 36, 0.24), rgba(10, 15, 36, 0.05));
   backdrop-filter: blur(6px);
@@ -3976,6 +4043,58 @@ color: rgba(200, 214, 245, 0.9);
   margin-top: 2px;
   font-size: 12px;
   color: rgba(165, 180, 220, 0.72);
+}
+
+/* ── 外观页：三张单行卡片等高 ──
+   以最高的卡（图标卡/两行描述）为基准统一 min-height，
+   卡体纵向居中，内容不足时上下留白对称；
+   窗口收窄导致描述多折一行时卡片仍可自动长高，不裁切。 */
+
+#settings-panel-appearance .set-card {
+  min-height: 94px;
+  display: flex;
+  flex-direction: column;
+}
+
+#settings-panel-appearance .set-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ── 单卡面板铺满：卡片纵向填满面板区剩余高度（关于页） ──
+   面板为纵向 flex，卡片与卡体逐层伸展；功能列表用 space-evenly
+   把条目均匀铺开，避免卡片下半部留大片空白。 */
+
+.settings-panel--fill {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-panel--fill .set-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-panel--fill .set-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-panel--fill .project-features {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-panel--fill .project-features__list {
+  flex: 1;
+  justify-content: space-evenly;
+  gap: 0;
 }
 
 /* ── 设置卡片与行 ── */
@@ -4063,34 +4182,8 @@ color: rgba(200, 214, 245, 0.9);
     0 0 24px rgba(79, 124, 255, 0.14);
 }
 
-/* 分区主题：流光的主色相随分区变化 */
-.set-card--accent-data {
-  --glow-1: #4f7cff;
-  --glow-2: #22d3ee;
-  --glow-3: #818cf8;
-  --glow-4: #38bdf8;
-}
-
-.set-card--accent-ball {
-  --glow-1: #10b981;
-  --glow-2: #2dd4bf;
-  --glow-3: #34d399;
-  --glow-4: #60a5fa;
-}
-
-.set-card--accent-icon {
-  --glow-1: #f59e0b;
-  --glow-2: #fb923c;
-  --glow-3: #fbbf24;
-  --glow-4: #f472b6;
-}
-
-.set-card--accent-about {
-  --glow-1: #a855f7;
-  --glow-2: #c084fc;
-  --glow-3: #e879f9;
-  --glow-4: #818cf8;
-}
+/* 卡片不再按分区换流光色相：全部卡片共享同一套品牌四色流光，
+   多卡并列时色彩语言统一（分区身份由导航与页面标题承担）。 */
 
 .set-card__body {
   padding: 4px 18px;
@@ -4099,17 +4192,34 @@ color: rgba(200, 214, 245, 0.9);
 /* 行：分割线由行自身携带，避免首行贴边 */
 
 .set-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 13px 0;
+  /* 悬浮高亮向内容两侧各延伸 12px，文字与高亮边缘留出呼吸空间；
+     负外边距抵消延伸量，行内内容仍与卡片其他元素对齐 */
+  padding: 13px 12px;
+  margin: 0 -12px;
   border-radius: 10px;
   transition: background 0.14s var(--set-ease);
 }
 
 .set-row + .set-row {
-  border-top: 1px solid rgba(148, 178, 255, 0.1);
+  border-top: none;
+}
+
+/* 分隔线保持在内容宽度：行加宽后 border-top 会跟着外扩到近卡片边缘，
+   改用伪元素向内收 12px，与悬浮胶囊的延伸区分离 */
+.set-row + .set-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: rgba(148, 178, 255, 0.1);
+  pointer-events: none;
 }
 
 .set-row:hover {
@@ -4217,6 +4327,53 @@ color: rgba(200, 214, 245, 0.9);
 .switch:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* ── 分段控件 ──
+   深色玻璃底 + 选中项渐变实心，与开关同一套玻璃语言。 */
+
+.segmented {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(148, 178, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(11, 16, 38, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.segmented__item {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(200, 214, 245, 0.78);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.16s var(--set-ease);
+}
+
+.segmented__item:hover {
+  color: #eaf1ff;
+  background: rgba(120, 150, 255, 0.14);
+}
+
+.segmented__item.is-active {
+  color: #fff;
+  background: linear-gradient(120deg, #4f7cff, #22d3ee);
+  font-weight: 600;
+  box-shadow: 0 1px 6px rgba(79, 124, 255, 0.4);
+}
+
+.segmented__item:focus-visible {
+  outline: 2px solid var(--set-accent);
+  outline-offset: 1px;
 }
 
 /* ── 滑杆 ── */
@@ -4589,6 +4746,11 @@ color: rgba(200, 214, 245, 0.9);
     overflow-x: auto;
   }
 
+  /* 窄屏横排导航：底部角标退场 */
+  .settings-nav__footer {
+    display: none;
+  }
+
   .settings-nav__list {
     flex-direction: row;
     gap: 4px;
@@ -4671,4 +4833,1538 @@ color: rgba(200, 214, 245, 0.9);
     animation: none;
     transform: translateX(-100%);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   清爽纸面主题（html[data-ui-style='calm']）
+   设计目标：可读性优先，专为长时间盯盘减少视觉疲劳 ——
+   · 浅色实底 + 高对比墨色文字，去掉深色玻璃与半透明叠层
+   · 去除极光画布、流光边框、玻璃扫光、呼吸/漂移动效
+   · 层级与边界用 1px 实线 + 极轻投影表达，不依赖发光
+   · 状态色加深（浅底上仍达 AA 对比度），进度环用实色
+   Aurora 样式是基底，本层全部规则加 html[data-ui-style='calm'] 前缀，
+   特异性必然覆盖，且互不影响默认主题。
+   ══════════════════════════════════════════════════════════════ */
+
+html[data-ui-style='calm'] {
+  /* 设计令牌：复用 --set-* 的地方自动切到浅色 */
+  --set-bg: #f2f4f8;
+  --set-surface: #ffffff;
+  --set-border: #e2e8f0;
+  --set-text: #1e293b;
+  --set-text-2: #5b6b80;
+  --set-text-3: #8a97a8;
+  --set-accent: #2f6bde;
+  --set-accent-soft: rgba(47, 107, 222, 0.1);
+
+  /* 本主题专用令牌 */
+  --calm-bg: #eef1f7;
+  --calm-ink: #17202f;
+  --calm-ink-2: #3f4c63;
+  --calm-ink-3: #64748b;
+  --calm-line: #e3e8f0;
+  --calm-line-strong: #cbd5e1;
+  --calm-card: #ffffff;
+  --calm-card-2: #f7f9fc;
+  --calm-accent: #2f6bde;
+  --calm-accent-deep: #1d4fd8;
+  --calm-accent-soft: #e9effc;
+  --calm-ok: #0f8a4d;
+  --calm-ok-soft: #e3f6ec;
+  --calm-warn: #b26205;
+  --calm-warn-soft: #fdf2df;
+  --calm-bad: #d43c3c;
+  --calm-bad-soft: #fdeaea;
+  --calm-info: #1d5fd8;
+  --calm-info-soft: #e9f0fd;
+
+  /* 纸面质感：坐标纸点阵 + 桌面冷暖两块环境光斑 */
+  --calm-dot: rgba(96, 118, 154, 0.14);
+  --calm-paper-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 8px 20px -8px rgba(15, 23, 42, 0.09);
+}
+
+/* ── 页面基底：坐标纸画布 ──
+   纯平面底太寡淡，这里叠三层「纸面语言」：
+   右上冷色天光 + 左下暖绿台灯光 + 22px 方格点阵（绘图坐标纸），
+   全部静态，不引入任何动效。 */
+
+html[data-ui-style='calm'] body.page-settings-tab {
+  background: var(--calm-bg, #eef1f7);
+  color-scheme: light;
+}
+
+html[data-ui-style='calm'] .settings-page {
+  background:
+    radial-gradient(56% 44% at 88% -8%, rgba(79, 124, 255, 0.09), transparent 68%),
+    radial-gradient(48% 42% at 2% 110%, rgba(16, 185, 129, 0.08), transparent 70%),
+    radial-gradient(var(--calm-dot) 1px, transparent 1.55px),
+    linear-gradient(168deg, #f3f5fa 0%, #eef1f7 55%, #e9edf5 100%);
+  background-size: auto, auto, 22px 22px, auto;
+  color: var(--calm-ink-2);
+}
+
+/* 极光画布与扫光带整体退场（标题栏静态渐变线在上方单独恢复） */
+html[data-ui-style='calm'] .settings-page::before,
+html[data-ui-style='calm'] .settings-page::after {
+  content: none;
+}
+
+html[data-ui-style='calm'] body.page-settings-tab * {
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+/* ── 自绘标题栏 ── */
+
+html[data-ui-style='calm'] .titlebar {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f6fa 100%);
+  border-bottom: 1px solid var(--calm-line);
+  backdrop-filter: none;
+}
+
+/* Aurora 流光线的静态纸面版：不再流动，只留一条低饱和品牌渐变缝 */
+html[data-ui-style='calm'] .titlebar::after {
+  content: '';
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(47, 107, 222, 0.5) 28%,
+    rgba(13, 148, 136, 0.45) 52%,
+    rgba(139, 92, 246, 0.4) 76%,
+    transparent 100%
+  );
+  background-size: 100% 100%;
+  opacity: 0.38;
+  animation: none;
+}
+
+html[data-ui-style='calm'] .titlebar__logo {
+  color: var(--calm-accent);
+  background: var(--calm-accent-soft);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .titlebar__title {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .titlebar__btn {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .titlebar__btn:hover {
+  background: #edf1f7;
+  color: var(--calm-ink);
+}
+
+/* ── 顶栏与布局 ── */
+
+html[data-ui-style='calm'] .settings-page__topbar {
+  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid var(--calm-line);
+  backdrop-filter: none;
+}
+
+html[data-ui-style='calm'] .settings-page__topbar h1 {
+  /* 墨色→深蓝的双色渐变字，纸面上的「钢笔字」层次 */
+  background: linear-gradient(115deg, #17202f 20%, #2c4a8f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+
+html[data-ui-style='calm'] .settings-page__topbar p {
+  color: var(--calm-ink-3);
+}
+
+/* ── 侧边导航 ── */
+
+html[data-ui-style='calm'] .settings-nav {
+  background: rgba(255, 255, 255, 0.62);
+  border-right: 1px solid var(--calm-line);
+  backdrop-filter: none;
+}
+
+html[data-ui-style='calm'] .settings-nav__item {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .settings-nav__item:hover {
+  color: var(--calm-ink);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 0 0 1px var(--calm-line);
+}
+
+html[data-ui-style='calm'] .settings-nav__item.is-active {
+  color: var(--calm-accent-deep);
+  background: linear-gradient(115deg, #e4ecfc 0%, #ecf2fd 55%, #f5f9ff 100%);
+  font-weight: 600;
+  box-shadow:
+    inset 0 0 0 1px rgba(47, 107, 222, 0.18),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+/* 激活项左侧的彩色索引条，像纸上贴的彩色标签 */
+html[data-ui-style='calm'] .settings-nav__item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--calm-accent), #0d9488);
+}
+
+html[data-ui-style='calm'] .settings-nav__item.is-active .settings-nav__icon {
+  color: var(--calm-accent);
+  background: #ffffff;
+  border-radius: 7px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.12),
+    inset 0 0 0 1px rgba(47, 107, 222, 0.1);
+}
+
+/* 导航底部品牌角标：浅色纸面配色 */
+html[data-ui-style='calm'] .settings-nav__footer {
+  border-top-color: #edf1f7;
+}
+
+html[data-ui-style='calm'] .settings-nav__footer-logo {
+  color: var(--calm-accent);
+  background: var(--calm-accent-soft);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .settings-nav__footer-name {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .settings-nav__footer-ver {
+  color: #93a1b5;
+}
+
+/* ── 面板区 ── */
+
+html[data-ui-style='calm'] .settings-page__panels {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+html[data-ui-style='calm'] .settings-panel__header h2 {
+  color: var(--calm-ink);
+  /* 标题前的渐变引导条：蓝→青，与导航索引条同语言 */
+  background: linear-gradient(180deg, var(--calm-accent), #0d9488) left center / 4px 14px no-repeat;
+  padding-left: 11px;
+}
+
+html[data-ui-style='calm'] .settings-panel__header p {
+  color: var(--calm-ink-3);
+}
+
+/* ── 设置卡片：纸面卡片 ──
+   白卡微渐变 + 双层纸影；分区身份用「染色纸」表达 ——
+   卡片顶部一段同色系淡晕向下融入纸面，顶边框微着同色，
+   不再使用饱和彩条（在纸面上太像进度条）。 */
+
+html[data-ui-style='calm'] .set-card {
+  background:
+    linear-gradient(180deg, var(--calm-card-wash, rgba(100, 116, 139, 0.05)), rgba(255, 255, 255, 0) 64px),
+    linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  border: 1px solid var(--calm-line);
+  border-top-color: var(--calm-card-edge, #d7dfe9);
+  box-shadow: var(--calm-paper-shadow);
+  backdrop-filter: none;
+}
+
+/* 流光边框与表面光斑退场，层级靠边框与纸影 */
+html[data-ui-style='calm'] .set-card::before,
+html[data-ui-style='calm'] .set-card::after {
+  content: none;
+}
+
+/* 分区色不再逐卡变化：所有卡片统一「中性染色纸」——
+   顶部一段极淡的冷灰晕 + 统一顶边框色，多卡并列时视觉同源。 */
+
+html[data-ui-style='calm'] .set-card:hover {
+  transform: none;
+  border-color: #d0dae8;
+  border-top-color: var(--calm-card-edge, #d7dfe9);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 2px 4px rgba(15, 23, 42, 0.05),
+    0 12px 28px -10px rgba(15, 23, 42, 0.14);
+}
+
+/* 行分隔线已改为伪元素绘制，这里同步浅色主题的线色 */
+html[data-ui-style='calm'] .set-row + .set-row::before {
+  background: #edf1f7;
+}
+
+html[data-ui-style='calm'] .set-row:hover {
+  background: #f5f8fc;
+}
+
+html[data-ui-style='calm'] .set-row__title {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .set-row__desc {
+  color: var(--calm-ink-3);
+}
+
+/* ── 控件：开关 ── */
+
+html[data-ui-style='calm'] .switch {
+  background: linear-gradient(180deg, #cfd7e3, #dbe1ea);
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+
+html[data-ui-style='calm'] .switch::before {
+  content: none;
+}
+
+html[data-ui-style='calm'] .switch:hover {
+  box-shadow:
+    inset 0 1px 3px rgba(15, 23, 42, 0.14),
+    0 0 0 4px rgba(47, 107, 222, 0.12);
+}
+
+html[data-ui-style='calm'] .switch.is-on {
+  background: linear-gradient(135deg, #4382f2 0%, #2f6bde 62%, #2a5fd0 100%);
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 1px 3px rgba(47, 107, 222, 0.38);
+}
+
+/* ── 控件：滑杆 ── */
+
+html[data-ui-style='calm'] .slider-input__range {
+  background:
+    linear-gradient(90deg, var(--calm-accent), var(--calm-accent)) 0 / var(--slider-fill, 0%) 100% no-repeat,
+    #dbe1ea;
+}
+
+html[data-ui-style='calm'] .slider-input__range::-webkit-slider-thumb {
+  border-color: var(--calm-accent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+}
+
+html[data-ui-style='calm'] .slider-input__range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.25),
+    0 0 0 6px rgba(47, 107, 222, 0.14);
+}
+
+html[data-ui-style='calm'] .slider-input__step {
+  background: var(--calm-card);
+  border-color: var(--calm-line-strong);
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .slider-input__step:hover:not(:disabled) {
+  border-color: var(--calm-accent);
+  color: var(--calm-accent-deep);
+  background: var(--calm-accent-soft);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .slider-input__preset {
+  background: var(--calm-card);
+  border-color: var(--calm-line);
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .slider-input__preset:hover {
+  color: var(--calm-accent-deep);
+  background: var(--calm-accent-soft);
+}
+
+html[data-ui-style='calm'] .slider-input__preset.is-active {
+  color: var(--calm-accent-deep);
+  background: var(--calm-accent-soft);
+  border-color: #a9c0f2;
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .slider-input__value {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .slider-input__value em {
+  color: var(--calm-ink-3);
+}
+
+/* ── 控件：分段 ── */
+
+html[data-ui-style='calm'] .segmented {
+  background: linear-gradient(180deg, #e2e7ef, #e9edf4);
+  border-color: var(--calm-line);
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.07);
+}
+
+html[data-ui-style='calm'] .segmented__item {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .segmented__item:hover {
+  color: var(--calm-ink);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-ui-style='calm'] .segmented__item.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, #4a80ef, #2f6bde);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 3px rgba(15, 23, 42, 0.22);
+}
+
+/* ── 按钮 ── */
+
+html[data-ui-style='calm'] .btn-primary {
+  background: linear-gradient(180deg, #4a80ef 0%, #2f6bde 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 3px rgba(29, 79, 216, 0.32);
+}
+
+html[data-ui-style='calm'] .btn-primary:hover:not(:disabled) {
+  filter: none;
+  background: linear-gradient(180deg, #3f75e8 0%, #1d4fd8 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 2px 8px rgba(29, 79, 216, 0.38);
+}
+
+html[data-ui-style='calm'] .btn-secondary,
+html[data-ui-style='calm'] .btn-ghost {
+  background: linear-gradient(180deg, #ffffff, #f8fafd);
+  border-color: var(--calm-line-strong);
+  color: var(--calm-ink-2);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+html[data-ui-style='calm'] .btn-secondary:hover:not(:disabled),
+html[data-ui-style='calm'] .btn-ghost:hover:not(:disabled) {
+  border-color: var(--calm-accent);
+  color: var(--calm-accent-deep);
+  background: var(--calm-accent-soft);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .btn-ghost--danger:hover:not(:disabled) {
+  border-color: var(--calm-bad);
+  color: var(--calm-bad);
+  background: var(--calm-bad-soft);
+  box-shadow: none;
+}
+
+/* ── 表单与测试结果 ── */
+
+html[data-ui-style='calm'] .settings-section {
+  background: linear-gradient(180deg, #fbfcfe, #f5f8fc);
+  border-color: var(--calm-line);
+  box-shadow: inset 0 1px 0 #ffffff;
+}
+
+html[data-ui-style='calm'] .settings-section h2 {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .form-group label {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .form-group input,
+html[data-ui-style='calm'] .form-group textarea,
+html[data-ui-style='calm'] .sub-block__head input[type='month'] {
+  background: var(--calm-card);
+  border-color: var(--calm-line-strong);
+  color: var(--calm-ink);
+  color-scheme: light;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+html[data-ui-style='calm'] .form-group input::placeholder,
+html[data-ui-style='calm'] .form-group textarea::placeholder {
+  color: #93a1b5;
+}
+
+html[data-ui-style='calm'] .form-group input:focus,
+html[data-ui-style='calm'] .form-group textarea:focus,
+html[data-ui-style='calm'] .sub-block__head input[type='month']:focus-visible {
+  border-color: var(--calm-accent);
+  box-shadow: 0 0 0 2px rgba(47, 107, 222, 0.15);
+}
+
+html[data-ui-style='calm'] .field-error {
+  color: var(--calm-bad);
+}
+
+html[data-ui-style='calm'] .field-hint {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .field-success {
+  color: var(--calm-ok);
+}
+
+html[data-ui-style='calm'] .test-result--ok {
+  background: var(--calm-ok-soft);
+  color: #0b6e3d;
+  border-color: #b8e4cc;
+}
+
+html[data-ui-style='calm'] .test-result--fail {
+  background: var(--calm-bad-soft);
+  color: #a32e2e;
+  border-color: #f2c4c4;
+}
+
+html[data-ui-style='calm'] .test-result__body {
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+
+html[data-ui-style='calm'] .test-result--fail .test-result__body {
+  border-top-color: rgba(212, 60, 60, 0.25);
+}
+
+html[data-ui-style='calm'] .test-result__metrics .metric-card {
+  background: var(--calm-card);
+}
+
+html[data-ui-style='calm'] .save-message {
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .sub-section-title {
+  color: var(--calm-ink-2);
+}
+
+/* ── Toast / 骨架屏 ── */
+
+html[data-ui-style='calm'] .settings-toast {
+  background: var(--calm-ink);
+  border-color: transparent;
+  color: #f6f8fb;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+}
+
+html[data-ui-style='calm'] .set-skeleton__bar {
+  background: linear-gradient(90deg, #e8ecf2 25%, #f4f6fa 42%, #e8ecf2 58%);
+  background-size: 220% 100%;
+}
+
+/* ── 账户与订阅 ── */
+
+html[data-ui-style='calm'] .sub-accounts__toolbar {
+  background: var(--calm-card);
+  border-color: var(--calm-line);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  backdrop-filter: none;
+}
+
+html[data-ui-style='calm'] .sub-accounts__meta {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .account-card {
+  background: var(--calm-card);
+  border-color: var(--calm-line);
+  backdrop-filter: none;
+}
+
+html[data-ui-style='calm'] .account-card:hover {
+  border-color: var(--calm-line-strong);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+html[data-ui-style='calm'] .account-card--open {
+  border-color: #a9c0f2;
+  box-shadow:
+    0 0 0 1px rgba(47, 107, 222, 0.18),
+    0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+html[data-ui-style='calm'] .account-card__name {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .account-card__plan {
+  background: var(--calm-accent-soft);
+  border-color: #c4d4f6;
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .account-card__summary {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .account-card__status--green {
+  background: var(--calm-ok-soft);
+  color: #0b6e3d;
+  border-color: #b8e4cc;
+}
+
+html[data-ui-style='calm'] .account-card__status--gray {
+  background: #eef1f6;
+  color: var(--calm-ink-3);
+  border-color: var(--calm-line);
+}
+
+html[data-ui-style='calm'] .account-card__status--yellow {
+  background: var(--calm-warn-soft);
+  color: #8f5406;
+  border-color: #efd9ae;
+}
+
+html[data-ui-style='calm'] .account-card__chevron {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .account-card__body {
+  border-top-color: #edf1f7;
+}
+
+html[data-ui-style='calm'] .account-card__config {
+  background: var(--calm-card-2);
+  border-color: var(--calm-line);
+}
+
+html[data-ui-style='calm'] .limit-chip {
+  background: var(--calm-card-2);
+  border-color: var(--calm-line);
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .limit-chip--ok {
+  border-color: #b8e4cc;
+  background: var(--calm-ok-soft);
+  color: #0b6e3d;
+}
+
+html[data-ui-style='calm'] .limit-chip--warn {
+  border-color: #efd9ae;
+  background: var(--calm-warn-soft);
+  color: #8f5406;
+}
+
+html[data-ui-style='calm'] .limit-chip--bad {
+  border-color: #f2c4c4;
+  background: var(--calm-bad-soft);
+  color: #a32e2e;
+}
+
+html[data-ui-style='calm'] .limit-chip__bar {
+  background: rgba(15, 23, 42, 0.1);
+}
+
+/* ── 订阅数据区：表格 / 指标 / 计量条 ── */
+
+html[data-ui-style='calm'] .sub-block + .sub-block {
+  border-top-color: #edf1f7;
+}
+
+html[data-ui-style='calm'] .sub-table__caption {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .sub-badge--ok {
+  background: var(--calm-ok-soft);
+  color: #0b6e3d;
+  border-color: #b8e4cc;
+}
+
+html[data-ui-style='calm'] .sub-badge--bad {
+  background: var(--calm-bad-soft);
+  color: #a32e2e;
+  border-color: #f2c4c4;
+}
+
+html[data-ui-style='calm'] .sub-hero__amount {
+  color: var(--calm-ink);
+  text-shadow: none;
+}
+
+html[data-ui-style='calm'] .sub-hero__unit,
+html[data-ui-style='calm'] .sub-hero__detail {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .sub-metric__label {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .sub-metric__value {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .sub-row__key {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .sub-row__value {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .sub-meter + .sub-meter {
+  border-top-color: #edf1f7;
+}
+
+html[data-ui-style='calm'] .sub-meter__label {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .sub-meter__percent {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .sub-meter__seg {
+  background: #e4e9f1;
+}
+
+html[data-ui-style='calm'] .sub-meter__reset {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .sub-table th {
+  color: var(--calm-ink-3);
+  border-bottom-color: var(--calm-line);
+}
+
+html[data-ui-style='calm'] .sub-table td {
+  color: var(--calm-ink-2);
+  border-bottom-color: #edf1f7;
+}
+
+html[data-ui-style='calm'] .sub-table__model {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .sub-table__total td {
+  color: var(--calm-ink);
+  border-top-color: var(--calm-line-strong);
+}
+
+html[data-ui-style='calm'] .sub-config-toggle {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .sub-config-toggle__meta,
+html[data-ui-style='calm'] .sub-config-toggle__chevron {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .sub-config-body,
+html[data-ui-style='calm'] .sub-config-group + .sub-config-group {
+  border-top-color: #edf1f7;
+}
+
+/* ── 关于页 ── */
+
+html[data-ui-style='calm'] .project-features__intro,
+html[data-ui-style='calm'] .project-features__list {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .project-features__list code {
+  background: #eef2f8;
+  border-color: var(--calm-line);
+  color: var(--calm-accent-deep);
+}
+
+/* ══════════════ 悬浮球 ══════════════ */
+
+/* ── 球体：白瓷实心，进度环实色，无呼吸/光斑/扫掠 ── */
+
+html[data-ui-style='calm'] .floating-ball__orb {
+  background: var(--calm-card);
+  border: 2px solid rgba(15, 23, 42, 0.1);
+  animation: none;
+  --orb-shadow-a:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 2px 6px rgba(15, 23, 42, 0.18),
+    0 6px 18px rgba(15, 23, 42, 0.12);
+  --orb-shadow-b: var(--orb-shadow-a);
+  box-shadow: var(--orb-shadow-a);
+}
+
+html[data-ui-style='calm'] .floating-ball__orb::before,
+html[data-ui-style='calm'] .floating-ball__orb::after {
+  content: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__orb:hover {
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+/* 健康环色加深：浅底上仍清晰可辨 */
+html[data-ui-style='calm'] .floating-ball__orb--health-green {
+  --orb-ring-color: #0ea372;
+  --orb-glow-color: rgba(14, 163, 114, 0.3);
+  --orb-glow-color-hi: rgba(14, 163, 114, 0.4);
+}
+
+html[data-ui-style='calm'] .floating-ball__orb--health-yellow {
+  --orb-ring-color: #d98a06;
+  --orb-glow-color: rgba(217, 138, 6, 0.3);
+  --orb-glow-color-hi: rgba(217, 138, 6, 0.4);
+}
+
+html[data-ui-style='calm'] .floating-ball__orb--health-blue {
+  --orb-ring-color: #0284c7;
+  --orb-glow-color: rgba(2, 132, 199, 0.3);
+  --orb-glow-color-hi: rgba(2, 132, 199, 0.4);
+}
+
+html[data-ui-style='calm'] .floating-ball__orb--health-gray {
+  --orb-ring-color: #8a97a8;
+  --orb-glow-color: rgba(138, 151, 168, 0.3);
+  --orb-glow-color-hi: rgba(138, 151, 168, 0.4);
+}
+
+html[data-ui-style='calm'] .floating-ball__orb-ring-track {
+  stroke: rgba(15, 23, 42, 0.1);
+}
+
+/* 流光/发光层退场：进度 = 一段实色圆弧 */
+html[data-ui-style='calm'] .floating-ball__orb-ring-glow,
+html[data-ui-style='calm'] .floating-ball__orb-ring-flow,
+html[data-ui-style='calm'] .floating-ball__orb-ring-flow-trail {
+  display: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__orb-ring-progress {
+  stroke: var(--orb-ring-color);
+  filter: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__orb-ring-cap {
+  fill: var(--orb-ring-color);
+  stroke: #ffffff;
+  filter: none;
+  animation: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__orb-core {
+  background: var(--calm-card-2);
+  border: 1px solid var(--calm-line);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__total-label {
+  color: var(--calm-ink-3);
+  text-shadow: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__total-value {
+  color: var(--calm-ink);
+  text-shadow: none;
+}
+
+/* ── 面板：白卡实底，去极光画布与流光边框 ── */
+
+html[data-ui-style='calm'] .floating-ball__panel {
+  background: var(--calm-card);
+  border: 1px solid var(--calm-line);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel::before {
+  content: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel-frame--open .floating-ball__panel {
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel-frame--open .floating-ball__panel::after {
+  content: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel-header {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .floating-ball__brand {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .btn-icon {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .btn-icon--toolbar:hover {
+  background: #eef2f7;
+  color: var(--calm-ink);
+}
+
+/* 状态灯：从循环呼吸改为静态三色点，去装饰动效 */
+html[data-ui-style='calm'] .traffic-light,
+html[data-ui-style='calm'] .traffic-light--red,
+html[data-ui-style='calm'] .traffic-light--yellow,
+html[data-ui-style='calm'] .traffic-light--green {
+  animation: none;
+  transform: none;
+}
+
+html[data-ui-style='calm'] .traffic-light--red {
+  background: #ef8f8f;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.14);
+}
+
+html[data-ui-style='calm'] .traffic-light--yellow {
+  background: #ecc26e;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.14);
+}
+
+html[data-ui-style='calm'] .traffic-light--green {
+  background: #85c9a0;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.14);
+}
+
+/* ── 面板数据卡 ── */
+
+html[data-ui-style='calm'] .floating-ball__refresh-track {
+  background: #e4e9f1;
+}
+
+html[data-ui-style='calm'] .floating-ball__refresh-bar {
+  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+}
+
+/* 玻璃扫光退场 */
+html[data-ui-style='calm'] .dashboard-summary::before,
+html[data-ui-style='calm'] .metric-card::before,
+html[data-ui-style='calm'] .included-usage__block::before,
+html[data-ui-style='calm'] .included-usage__entry::before,
+html[data-ui-style='calm'] .included-usage__section-head::before {
+  content: none;
+}
+
+html[data-ui-style='calm'] .dashboard-summary {
+  background: var(--calm-card-2);
+  border-color: var(--calm-line);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .dashboard-summary__label {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__value {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__track {
+  background: #e4e9f1;
+}
+
+html[data-ui-style='calm'] .dashboard-summary__fill--ok {
+  background: var(--calm-ok);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__fill--warn {
+  background: #e0940b;
+}
+
+html[data-ui-style='calm'] .dashboard-summary__fill--danger {
+  background: var(--calm-bad);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__fill--unknown {
+  background: #94a3b8;
+}
+
+html[data-ui-style='calm'] .dashboard-summary__detail {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__billing {
+  border-top-color: #edf1f7;
+}
+
+html[data-ui-style='calm'] .dashboard-summary__billing-label,
+html[data-ui-style='calm'] .dashboard-summary__billing-tag {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__billing-date {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .meta-time__label {
+  color: #8a97a8;
+}
+
+html[data-ui-style='calm'] .meta-time__value {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .health-pill--green {
+  background: var(--calm-ok-soft);
+  color: #0b6e3d;
+}
+
+html[data-ui-style='calm'] .health-pill--yellow {
+  background: var(--calm-warn-soft);
+  color: #8f5406;
+}
+
+html[data-ui-style='calm'] .health-pill--blue {
+  background: var(--calm-info-soft);
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .health-pill--gray {
+  background: #eef1f6;
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .source-tag--official {
+  background: var(--calm-ok-soft);
+  color: #0b6e3d;
+}
+
+html[data-ui-style='calm'] .source-tag--cookie {
+  background: var(--calm-warn-soft);
+  color: #8f5406;
+}
+
+html[data-ui-style='calm'] .metric-card {
+  background: var(--calm-card);
+  border-color: var(--calm-line);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .metric-card--today {
+  background: #f4f8fe;
+  border-color: #d3e2f8;
+  border-top-color: #b7d0f4;
+}
+
+html[data-ui-style='calm'] .metric-card--period {
+  background: var(--calm-card);
+  border-color: var(--calm-line);
+  border-top-color: var(--calm-line);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .metric-card--today + .metric-card--period {
+  border-top-color: var(--calm-line-strong);
+}
+
+html[data-ui-style='calm'] .metric-card:hover {
+  background: var(--calm-card);
+  border-color: var(--calm-line-strong);
+}
+
+html[data-ui-style='calm'] .metric-card__label {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .metric-card__value--ok {
+  color: #0b6e3d;
+}
+
+html[data-ui-style='calm'] .metric-card__value--warn {
+  color: #8f5406;
+}
+
+html[data-ui-style='calm'] .metric-card__value--danger {
+  color: #a32e2e;
+}
+
+html[data-ui-style='calm'] .metric-card__value--unknown {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .metric-card__track {
+  background: #e4e9f1;
+}
+
+html[data-ui-style='calm'] .metric-card__fill--ok {
+  background: var(--calm-ok);
+}
+
+html[data-ui-style='calm'] .metric-card__fill--warn {
+  background: #e0940b;
+}
+
+html[data-ui-style='calm'] .metric-card__fill--danger {
+  background: var(--calm-bad);
+}
+
+html[data-ui-style='calm'] .metric-card__fill--unknown {
+  background: #94a3b8;
+}
+
+html[data-ui-style='calm'] .metric-card__detail {
+  color: var(--calm-ink-3);
+}
+
+/* 面板内「用量」视图的分组块 */
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage {
+  background: transparent;
+  border: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__body {
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--api {
+  background: var(--calm-ok-soft);
+  border-color: #b8e4cc;
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--auto {
+  background: var(--calm-info-soft);
+  border-color: #c3d6f7;
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--api .included-usage__section-head {
+  background: rgba(15, 138, 77, 0.08);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--auto .included-usage__section-head {
+  background: rgba(29, 95, 216, 0.07);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--api .included-usage__badge {
+  background: var(--calm-ok);
+  color: #ffffff;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--auto .included-usage__badge {
+  background: var(--calm-accent);
+  color: #ffffff;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__section-label {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__entry {
+  background: var(--calm-card);
+  border-color: #e8edf4;
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__entry:hover {
+  background: var(--calm-card-2);
+  border-color: var(--calm-line-strong);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__entry-name {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__entry-tokens {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__section-stats .included-usage__entry-tokens {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--api .included-usage__entry-usage {
+  color: #0b6e3d;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--auto .included-usage__entry-usage {
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .panel-view-switch {
+  background: #e9edf3;
+}
+
+html[data-ui-style='calm'] .panel-view-switch__tab {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .panel-view-switch__tab:hover {
+  color: var(--calm-ink);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+html[data-ui-style='calm'] .panel-view-switch__tab--active {
+  color: var(--calm-ink);
+  background: var(--calm-card);
+  border-color: var(--calm-line-strong);
+}
+
+html[data-ui-style='calm'] .panel-view-switch__tab:focus-visible {
+  outline-color: rgba(47, 107, 222, 0.5);
+}
+
+/* ── 提示与横幅 ── */
+
+html[data-ui-style='calm'] .error-hint {
+  background: var(--calm-bad-soft);
+  border-color: #f2c4c4;
+}
+
+html[data-ui-style='calm'] .error-hint__message {
+  color: #a32e2e;
+}
+
+html[data-ui-style='calm'] .error-hint__action {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .error-hint--info {
+  background: var(--calm-info-soft);
+  border-color: #c3d6f7;
+}
+
+html[data-ui-style='calm'] .error-hint--info .error-hint__icon {
+  background: rgba(29, 95, 216, 0.14);
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .error-hint--info .error-hint__message {
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .error-hint--warn {
+  background: var(--calm-warn-soft);
+  border-color: #efd9ae;
+}
+
+html[data-ui-style='calm'] .error-hint--warn .error-hint__icon {
+  background: rgba(178, 98, 5, 0.14);
+  color: #8f5406;
+}
+
+html[data-ui-style='calm'] .error-hint--warn .error-hint__message {
+  color: #8f5406;
+}
+
+html[data-ui-style='calm'] .error-hint--error {
+  background: var(--calm-bad-soft);
+  border-color: #f2c4c4;
+}
+
+html[data-ui-style='calm'] .error-hint--error .error-hint__icon {
+  background: rgba(212, 60, 60, 0.14);
+  color: #a32e2e;
+}
+
+html[data-ui-style='calm'] .error-hint--error .error-hint__message {
+  color: #a32e2e;
+}
+
+/* 浮动球面板内的深色覆盖同步换浅色 */
+html[data-ui-style='calm'] .floating-ball .error-hint,
+html[data-ui-style='calm'] .floating-ball__panel .error-hint {
+  background: var(--calm-bad-soft);
+  border-color: #f2c4c4;
+}
+
+html[data-ui-style='calm'] .floating-ball .error-hint__icon,
+html[data-ui-style='calm'] .floating-ball__panel .error-hint__icon {
+  background: transparent;
+  color: #a32e2e;
+}
+
+html[data-ui-style='calm'] .floating-ball .error-hint__message,
+html[data-ui-style='calm'] .floating-ball__panel .error-hint__message {
+  color: #a32e2e;
+}
+
+html[data-ui-style='calm'] .floating-ball .error-hint__action,
+html[data-ui-style='calm'] .floating-ball__panel .error-hint__action {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .status-banner--paused,
+html[data-ui-style='calm'] .status-banner--fetching {
+  background: var(--calm-info-soft);
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .floating-ball__tooltip {
+  background: var(--calm-card);
+  border-color: var(--calm-line);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+html[data-ui-style='calm'] .floating-ball__tooltip-line {
+  color: var(--calm-ink-2);
+}
+
+/* ── Included Usage 通用块（设置窗测试结果等处复用） ── */
+
+html[data-ui-style='calm'] .included-usage {
+  background: var(--calm-card-2);
+  border-color: var(--calm-line);
+}
+
+html[data-ui-style='calm'] .included-usage__title {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .included-usage__date-range {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .included-usage__head {
+  background: var(--calm-card-2);
+  border-bottom-color: var(--calm-line);
+}
+
+html[data-ui-style='calm'] .included-usage__group {
+  background: var(--calm-card);
+  border-color: var(--calm-line);
+}
+
+html[data-ui-style='calm'] .included-usage__model-list {
+  border-left-color: #b7d0f4;
+}
+
+html[data-ui-style='calm'] .included-usage__row:hover {
+  background: #f1f5fa;
+}
+
+html[data-ui-style='calm'] .included-usage__row-name,
+html[data-ui-style='calm'] .included-usage__cell--item {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .included-usage__head .included-usage__cell {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .included-usage__group .included-usage__cell--item {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .included-usage__cell--tokens {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .included-usage__cell--usage {
+  color: var(--calm-accent-deep);
+}
+
+html[data-ui-style='calm'] .included-usage__group .included-usage__cell--tokens,
+html[data-ui-style='calm'] .included-usage__group .included-usage__cell--usage {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .included-usage__hint {
+  border-top-color: #edf1f7;
+  color: var(--calm-ink-3);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   清爽纸面 · 视觉丰富度补层
+   原则不变：静态、无动效、高对比；这里只做「纸面质感」的加法 ——
+   · 数据条：渐变填充 + 凹槽轨道，替代纯色平条
+   · 胶囊/徽章：贴纸式内高光
+   · 表格：表头着色 + 斑马纹
+   · 悬浮球：白瓷渐变球体 + 静态健康色光环
+   · 数字：等宽数字对齐，读数更像「报表」
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 数据条：渐变填充（同色系由浅入深，保留状态语义） ── */
+
+html[data-ui-style='calm'] .dashboard-summary__fill--ok,
+html[data-ui-style='calm'] .metric-card__fill--ok {
+  background: linear-gradient(90deg, #3cbb82, #0f8a4d);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__fill--warn,
+html[data-ui-style='calm'] .metric-card__fill--warn {
+  background: linear-gradient(90deg, #f2b13e, #d98a06);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__fill--danger,
+html[data-ui-style='calm'] .metric-card__fill--danger {
+  background: linear-gradient(90deg, #ec7070, #d43c3c);
+}
+
+html[data-ui-style='calm'] .dashboard-summary__fill--unknown,
+html[data-ui-style='calm'] .metric-card__fill--unknown {
+  background: linear-gradient(90deg, #b6c2d1, #94a3b8);
+}
+
+/* 轨道凹槽：条形像嵌在纸面上 */
+html[data-ui-style='calm'] .dashboard-summary__track,
+html[data-ui-style='calm'] .metric-card__track,
+html[data-ui-style='calm'] .floating-ball__refresh-track,
+html[data-ui-style='calm'] .limit-chip__bar,
+html[data-ui-style='calm'] .sub-meter__seg {
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+html[data-ui-style='calm'] .limit-chip__fill--ok {
+  background: linear-gradient(90deg, #41c878, #16a34a);
+}
+
+html[data-ui-style='calm'] .limit-chip__fill--warn {
+  background: linear-gradient(90deg, #f2b13e, #e08c0a);
+}
+
+html[data-ui-style='calm'] .limit-chip__fill--bad {
+  background: linear-gradient(90deg, #ee7474, #dc4444);
+}
+
+html[data-ui-style='calm'] .sub-meter__seg--ok {
+  background: linear-gradient(180deg, #2fbf87, #12996a);
+}
+
+html[data-ui-style='calm'] .sub-meter__seg--warn {
+  background: linear-gradient(180deg, #f0ab35, #d9880a);
+}
+
+html[data-ui-style='calm'] .sub-meter__seg--bad {
+  background: linear-gradient(180deg, #ef6a6a, #d43c3c);
+}
+
+/* 今日卡片：淡蓝渐变纸片 */
+html[data-ui-style='calm'] .metric-card--today {
+  background: linear-gradient(180deg, #f8fbff, #edf4fe);
+  border-color: #d6e3f8;
+  border-top-color: #b7d0f4;
+}
+
+/* ── 订阅表格：表头着色 + 斑马纹 + 悬停行 ── */
+
+html[data-ui-style='calm'] .sub-table th {
+  background: #f4f7fb;
+  border-bottom-color: var(--calm-line-strong);
+}
+
+html[data-ui-style='calm'] .sub-table tbody tr:nth-child(odd) td {
+  background: #f9fbfd;
+}
+
+html[data-ui-style='calm'] .sub-table tbody tr:hover td {
+  background: #f1f5fb;
+}
+
+html[data-ui-style='calm'] .sub-table__total td {
+  background: #f4f7fb;
+}
+
+/* ── 胶囊/徽章：贴纸式内高光，白卡上有一层「印刷贴纸」的厚度 ── */
+
+html[data-ui-style='calm'] .health-pill,
+html[data-ui-style='calm'] .source-tag,
+html[data-ui-style='calm'] .sub-badge,
+html[data-ui-style='calm'] .account-card__plan,
+html[data-ui-style='calm'] .account-card__status,
+html[data-ui-style='calm'] .limit-chip {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* 展开的账户卡：顶部淡蓝染色，强调「正在查看」 */
+html[data-ui-style='calm'] .account-card--open {
+  background: linear-gradient(180deg, #f8fbff, #ffffff 42%);
+}
+
+/* ── 悬浮球：白瓷球体 + 静态健康色光环 ── */
+
+html[data-ui-style='calm'] .floating-ball__orb {
+  /* 左上高光 + 底部冷灰的瓷面渐变，替代纯白平涂 */
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(160deg, #ffffff 0%, #f3f6fa 58%, #e7ecf4 100%);
+  /* 追加一段极淡的健康色光环（静态）：颜色由各健康态的 --orb-glow-color 提供 */
+  --orb-shadow-a:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.85),
+    0 2px 6px rgba(15, 23, 42, 0.14),
+    0 8px 22px rgba(15, 23, 42, 0.1),
+    0 0 22px var(--orb-glow-color);
+  --orb-shadow-b: var(--orb-shadow-a);
+}
+
+html[data-ui-style='calm'] .floating-ball__orb-core {
+  background: linear-gradient(180deg, #fbfcfe, #f3f6fb);
+}
+
+/* 面板：白卡微渐变 + 品牌渐变缝压在头部下缘，与标题栏同语言 */
+html[data-ui-style='calm'] .floating-ball__panel {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 34%, #ffffff 100%);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel-header {
+  background: linear-gradient(
+      90deg,
+      rgba(47, 107, 222, 0.55),
+      rgba(13, 148, 136, 0.48) 52%,
+      rgba(139, 92, 246, 0.45)
+    )
+    bottom / 100% 1px no-repeat;
+}
+
+/* 面板内用量分组块：头部缝线 + 入口卡纸影 */
+html[data-ui-style='calm'] .included-usage__entry {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* ── 报表感：读数统一等宽数字 ── */
+
+html[data-ui-style='calm'] .floating-ball__total-value,
+html[data-ui-style='calm'] .dashboard-summary__value,
+html[data-ui-style='calm'] .dashboard-summary__detail,
+html[data-ui-style='calm'] .metric-card__value,
+html[data-ui-style='calm'] .metric-card__detail,
+html[data-ui-style='calm'] .sub-metric__value,
+html[data-ui-style='calm'] .sub-hero__amount,
+html[data-ui-style='calm'] .sub-table td,
+html[data-ui-style='calm'] .limit-chip__value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Toast：墨色微渐变，保留通知的分量感 ── */
+
+html[data-ui-style='calm'] .settings-toast {
+  background: linear-gradient(180deg, #24334e, #17202f);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 6px 18px rgba(15, 23, 42, 0.28);
+}
+
+/* ── 应用图标卡片：补齐 Aurora 漏覆盖的浅色文字与棋盘格 ──
+   基础层是深色主题配色（近白文字 + 深蓝棋盘底），
+   不覆盖就会变成浅底浅字，可读性全无。 */
+
+html[data-ui-style='calm'] .icon-pick__frame {
+  border-color: var(--calm-line-strong);
+  background:
+    linear-gradient(45deg, #edf1f7 25%, transparent 25%, transparent 75%, #edf1f7 75%),
+    linear-gradient(45deg, #edf1f7 25%, transparent 25%, transparent 75%, #edf1f7 75%),
+    #ffffff;
+  background-size: 12px 12px, 12px 12px, auto;
+  background-position: 0 0, 6px 6px, 0 0;
+}
+
+html[data-ui-style='calm'] .icon-pick:hover .icon-pick__frame {
+  transform: none;
+  border-color: var(--calm-accent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+html[data-ui-style='calm'] .icon-pick__empty {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .icon-pick__name {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .icon-pick__hint {
+  color: var(--calm-ink-3);
 }

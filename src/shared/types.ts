@@ -1,5 +1,8 @@
 export type DataSource = 'official' | 'cookie';
 
+/** 界面视觉风格：aurora = 深色玻璃极光；calm = 浅色实底高对比（护眼易读）。 */
+export type UiStyle = 'aurora' | 'calm';
+
 export interface TokenQuota {
   remaining: number | null;
   limit: number | null;
@@ -93,6 +96,8 @@ export interface AppSettings {
   /** When true, grok-bot-automation/default count toward local stats and flow. */
   includeGrokBotUsage: boolean;
   customIconPath?: string | null;
+  /** 界面风格，同时作用于悬浮球与设置窗口。 */
+  uiStyle: UiStyle;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -105,6 +110,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   edgeAutoDockEnabled: true,
   includeGrokBotUsage: false,
   customIconPath: null,
+  uiStyle: 'aurora',
 };
 
 /** Options for local usage aggregation (today %, model breakdown, flow filter). */
