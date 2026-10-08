@@ -9,7 +9,7 @@ export const UI_STYLE_OPTIONS: Array<{
 }> = [
   {
     value: 'aurora',
-    label: 'Aurora 玻璃',
+    label: '极光玻璃',
     description: '深色玻璃质感，极光流光动效，视觉华丽',
   },
   {

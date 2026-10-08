@@ -193,7 +193,7 @@ export function AppearancePrefs({
             onChange={(next) => {
               void window.electronAPI
                 .updateSettings({ uiStyle: next })
-                .then(() => onToast(next === 'calm' ? '已切换到清爽纸面' : '已切换到 Aurora 玻璃'));
+                .then(() => onToast(next === 'calm' ? '已切换到清爽纸面' : '已切换到极光玻璃'));
             }}
             ariaLabel="界面风格"
           />

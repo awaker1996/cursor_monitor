@@ -97,7 +97,8 @@ body.page-settings-tab * {
   overflow: hidden;
   /* Shared panel chrome size — overview and included must match. */
   --orb-panel-width: 276px;
-  --orb-panel-height: 380px;
+  /* 概览内容（总览卡 + 4 张指标卡 + 切换区）精确配平后的高度 */
+  --orb-panel-height: 402px;
   --orb-dock-hide: 28px;
   --orb-dock-hover: 7px;
 }
@@ -586,6 +587,51 @@ body.page-settings-tab * {
   margin-top: 2px;
 }
 
+/* ── 按钮悬停提示（data-tip）：替代原生 title 的系统气泡 ──
+   单伪元素气泡：现代 tooltip 语言——圆角、细描边、柔和投影，无拼接箭头，
+   在按钮下方浮现；hover / 键盘聚焦时延迟 0.3s 淡入并轻微上浮。
+   注意：气泡随 .floating-ball__panel-header 一起处于 header 的层叠上下文，
+   header 必须压过 panel-body（二者同为 z-index:1 的兄弟），否则气泡被内容盖住。 */
+.btn-icon[data-tip] {
+  position: relative;
+}
+
+.btn-icon[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: -2px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: #2a3550;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 6px 18px rgba(2, 6, 20, 0.5);
+  color: #eef2f8;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 0.16s ease 0.3s, transform 0.16s ease 0.3s;
+  pointer-events: none;
+}
+
+.btn-icon[data-tip]:hover::after,
+.btn-icon[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 纸面主题：白卡 + 墨色文字 + 纸影 */
+html[data-ui-style='calm'] .btn-icon[data-tip]::after {
+  background: #ffffff;
+  border-color: var(--calm-line-strong);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  color: var(--calm-ink);
+}
+
 .floating-ball__total {
   display: flex;
   flex-direction: column;
@@ -719,6 +765,12 @@ body.page-settings-tab * {
   z-index: 1;
 }
 
+/* header 必须高于 panel-body：按钮 data-tip 气泡从 header 下缘探出，
+   若两者同级，气泡会被后渲染的 body 内容遮住。 */
+.floating-ball__panel-header {
+  z-index: 3;
+}
+
 .floating-ball__panel:not(.floating-ball__panel--included) .dashboard-summary {
   padding: 6px 8px;
   margin-bottom: 4px;
@@ -746,13 +798,15 @@ body.page-settings-tab * {
 .floating-ball__panel:not(.floating-ball__panel--included) .metric-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
   margin-top: 4px;
 }
 
 .floating-ball__panel:not(.floating-ball__panel--included) .metric-card {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   padding: 5px 8px;
   min-width: 0;
 }
@@ -795,11 +849,6 @@ body.page-settings-tab * {
   line-height: 1.2;
 }
 
-.floating-ball__panel:not(.floating-ball__panel--included) .panel-view-switch {
-  margin-top: auto;
-  padding-top: 6px;
-}
-
 .floating-ball__panel:not(.floating-ball__panel--included) .floating-ball__panel-header {
   margin-bottom: 6px;
   font-size: 12px;
@@ -809,6 +858,25 @@ body.page-settings-tab * {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+/* 概览视图：面板高度按内容精确配平，内容与卡片用 flex 填满可视区，
+   杜绝任何滚动（滚轮/触控板都无法滚动）。 */
+.floating-ball__panel:not(.floating-ball__panel--included) .floating-ball__panel-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 总览卡固定高度，不参与伸缩 */
+.floating-ball__panel:not(.floating-ball__panel--included) .dashboard-summary {
+  flex-shrink: 0;
+}
+
+/* 指标列表吃掉 body 剩余空间，四张卡片等分填满，杜绝底部空隙与滚动 */
+.floating-ball__panel:not(.floating-ball__panel--included) .metric-list {
+  flex: 1;
+  min-height: 0;
 }
 
 .floating-ball__panel--included .floating-ball__panel-body {
@@ -1058,26 +1126,85 @@ body.page-settings-tab * {
   flex-shrink: 0;
 }
 
-.floating-ball__panel--included .panel-view-switch {
-  margin-top: auto;
-  padding-top: 6px;
-}
-
 .panel-view-switch {
   display: flex;
   gap: 4px;
-  margin-top: 10px;
+  margin-top: 8px;
   padding: 3px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 11px;
+  /* 凹陷玻璃槽：低透明度底 + 内阴影，让上方滑动的胶囊有「嵌进去」的体积感 */
+  background: rgba(8, 13, 30, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 1px 0 rgba(255, 255, 255, 0.04);
   flex-shrink: 0;
+  position: relative;
+  isolation: isolate;
+}
+
+/* 动态玻璃胶囊：在两个等宽标签间平滑滑移的高亮胶囊。
+   多层玻璃语汇——斜向高光渐变 + 顶部内高光 + 边缘细描边 + 蓝色外发光，
+   下方 ::before 承载一道周期性扫过的柔光，呼应面板卡片的玻璃扫光。
+   位置由 .panel-view-switch--included 决定（用量激活时右移 100%）。 */
+.panel-view-switch__thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: 8px;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08) 46%, rgba(56, 189, 248, 0.12) 100%),
+    linear-gradient(180deg, rgba(99, 102, 241, 0.28), rgba(56, 189, 248, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -6px 12px rgba(8, 13, 30, 0.35),
+    0 2px 8px rgba(2, 6, 20, 0.5),
+    0 0 14px rgba(56, 189, 248, 0.22);
+  transform: translateX(0);
+  transition: transform 0.34s cubic-bezier(0.34, 1.4, 0.5, 1);
+  will-change: transform;
+}
+
+/* 扫光：一道柔和高光带周期性掠过胶囊表面（与卡片玻璃扫光同一语汇） */
+.panel-view-switch__thumb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 68%
+  );
+  transform: translateX(-120%);
+  animation: switchThumbShine 4.8s ease-in-out 1.2s infinite;
+}
+
+@keyframes switchThumbShine {
+  0%,
+  100% { transform: translateX(-120%); }
+  42%  { transform: translateX(120%); }
+  55%  { transform: translateX(120%); }
+}
+
+.panel-view-switch--included .panel-view-switch__thumb {
+  transform: translateX(100%);
 }
 
 .panel-view-switch__tab {
   flex: 1;
+  position: relative;
+  z-index: 1;
   padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: none;
+  border-radius: 8px;
   background: transparent;
   color: #9ca3af;
   font-family: inherit;
@@ -1085,26 +1212,35 @@ body.page-settings-tab * {
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+  transition: color 0.25s ease;
 }
 
 .panel-view-switch__tab:hover {
   color: #d1d5db;
-  background: rgba(255, 255, 255, 0.04);
 }
 
+/* 激活态文字用微光提亮，浮在胶囊玻璃之上 */
 .panel-view-switch__tab--active {
-  color: #f3f4f6;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(2, 6, 20, 0.6);
 }
 
 .panel-view-switch__tab:focus-visible {
   outline: 2px solid rgba(96, 165, 250, 0.55);
-  outline-offset: 1px;
+  outline-offset: 2px;
+}
+
+/* 动效降级：胶囊瞬移到位、停掉扫光，玻璃质感保留。 */
+@media (prefers-reduced-motion: reduce) {
+  .panel-view-switch__thumb,
+  .panel-view-switch__thumb::before {
+    animation: none;
+    transition: none;
+  }
+
+  .panel-view-switch__thumb::before {
+    transform: translateX(-120%);
+  }
 }
 
 @property --electric-angle {
@@ -1235,6 +1371,12 @@ body.page-settings-tab * {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* 纸面水流降级：静止为一条固定的渐变环，仍能读出「刷新中」 */
+  html[data-ui-style='calm'] .floating-ball__panel-frame--refreshing::before {
+    animation: none;
+    opacity: 0.75;
+  }
+
   .floating-ball__panel::before {
     animation: none;
   }
@@ -1265,6 +1407,17 @@ body.page-settings-tab * {
       #60a5fa 86%,
       transparent 94% 100%
     );
+  }
+
+  /* 按钮 tooltip 降级：去掉上浮位移，只保留即时显隐（连 delay 一并去掉） */
+  .btn-icon[data-tip]::after {
+    transform: none;
+    transition: opacity 0.1s ease;
+  }
+
+  .btn-icon[data-tip]:hover::after,
+  .btn-icon[data-tip]:focus-visible::after {
+    transform: none;
   }
 }
 
@@ -5688,6 +5841,29 @@ html[data-ui-style='calm'] .floating-ball__panel-frame--open .floating-ball__pan
   content: none;
 }
 
+/* 刷新边框：纸面语的「水流环绕」——一条品牌蓝水头在前、渐隐尾迹在后的
+   连续光带沿边框顺时针环流，像水流的头部拖出渐弱尾迹；
+   conic 渐变首尾都落在 accent-soft 通道色上，任何相位接缝都自然。
+   无光晕、无电弧爆闪；3s 一圈，流速均匀。 */
+html[data-ui-style='calm'] .floating-ball__panel-frame--refreshing::before {
+  padding: 2px;
+  background: conic-gradient(
+    from var(--electric-angle),
+    var(--calm-accent) 0deg,
+    var(--calm-accent-deep) 55deg,
+    rgba(47, 107, 222, 0.55) 120deg,
+    rgba(47, 107, 222, 0.22) 200deg,
+    var(--calm-accent-soft) 290deg,
+    var(--calm-accent-soft) 360deg
+  );
+  filter: none;
+  animation: electric-orbit 3s linear infinite;
+}
+
+html[data-ui-style='calm'] .floating-ball__panel-frame--refreshing::after {
+  content: none;
+}
+
 html[data-ui-style='calm'] .floating-ball__panel-header {
   color: var(--calm-ink-2);
 }
@@ -5705,28 +5881,103 @@ html[data-ui-style='calm'] .btn-icon--toolbar:hover {
   color: var(--calm-ink);
 }
 
-/* 状态灯：从循环呼吸改为静态三色点，去装饰动效 */
-html[data-ui-style='calm'] .traffic-light,
-html[data-ui-style='calm'] .traffic-light--red,
-html[data-ui-style='calm'] .traffic-light--yellow,
-html[data-ui-style='calm'] .traffic-light--green {
-  animation: none;
+/* 状态灯：保留「红 → 黄 → 绿」依次轮播，但换成纸面语的哑光慢呼吸，
+   幅度更轻（无缩放到 1.05 的弹跳、无外发光晕），避免看完花哨。 */
+html[data-ui-style='calm'] .traffic-light {
+  /* 静态基底 = 各灯熄灭态：animation-delay 期间（首帧前）关键帧尚未生效，
+     若不覆盖极光基底的深蓝紫底 + 深色多层阴影，delay 里会显示成三个黑洞。 */
+  background: #e3e8f0;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  animation-duration: 3.6s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
   transform: none;
 }
 
 html[data-ui-style='calm'] .traffic-light--red {
-  background: #ef8f8f;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.14);
+  background: #e7c8c8;
+  animation-name: calmTrafficLightRed;
+  animation-delay: 0s;
 }
 
 html[data-ui-style='calm'] .traffic-light--yellow {
-  background: #ecc26e;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.14);
+  background: #e9dcbc;
+  animation-name: calmTrafficLightYellow;
+  animation-delay: 1.2s;
 }
 
 html[data-ui-style='calm'] .traffic-light--green {
-  background: #85c9a0;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.14);
+  background: #c9e2d4;
+  animation-name: calmTrafficLightGreen;
+  animation-delay: 2.4s;
+}
+
+/* 熄灭态：哑光淡色圆饼，接近纸面底色
+   点亮态：同色加深 + 一圈细描边取代玻璃罩高光 */
+@keyframes calmTrafficLightRed {
+  0%, 100% {
+    background: #e7c8c8;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+  22%, 40% {
+    background: #ef8f8f;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.16);
+  }
+  62%, 82% {
+    background: #e7c8c8;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+}
+
+@keyframes calmTrafficLightYellow {
+  0%, 100% {
+    background: #e9dcbc;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+  22%, 40% {
+    background: #ecc26e;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.16);
+  }
+  62%, 82% {
+    background: #e9dcbc;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+}
+
+@keyframes calmTrafficLightGreen {
+  0%, 100% {
+    background: #c9e2d4;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+  22%, 40% {
+    background: #85c9a0;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.16);
+  }
+  62%, 82% {
+    background: #c9e2d4;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+}
+
+/* 降级兜底：上方 prefers-reduced-motion 把 .traffic-light 底色压成极光深蓝紫，
+   纸面主题下需要还原成哑光静态三色点。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui-style='calm'] .traffic-light {
+    background: var(--calm-line-strong);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+  }
+
+  html[data-ui-style='calm'] .traffic-light--red {
+    background: #ef8f8f;
+  }
+
+  html[data-ui-style='calm'] .traffic-light--yellow {
+    background: #ecc26e;
+  }
+
+  html[data-ui-style='calm'] .traffic-light--green {
+    background: #85c9a0;
+  }
 }
 
 /* ── 面板数据卡 ── */
@@ -5919,6 +6170,16 @@ html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__body
   scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
 }
 
+/* 纸面主题滚动条：极光基底用白色半透明滑块，浅底上不可见；
+   这里改为中性灰，确保「用量」视图可滚动时滚动条清晰可见。 */
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__body::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.38);
+}
+
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__body::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.58);
+}
+
 html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--api {
   background: var(--calm-ok-soft);
   border-color: #b8e4cc;
@@ -5984,23 +6245,41 @@ html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__bloc
   color: var(--calm-accent-deep);
 }
 
+/* 纸面主题切换：清晰的分段控件。
+   底槽为中性浅灰凹槽（细描边 + 内阴影），选中胶囊用白底 + 品牌蓝色描边与柔和蓝色投影，
+   在纸面上形成「可点击、已选中」的明确层级，避免浅灰底槽 + 白胶囊糊在一起。 */
 html[data-ui-style='calm'] .panel-view-switch {
-  background: #e9edf3;
+  background: #eceff5;
+  border-color: #dde3ec;
+  box-shadow:
+    inset 0 1px 2px rgba(15, 23, 42, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+html[data-ui-style='calm'] .panel-view-switch__thumb {
+  background: linear-gradient(180deg, #ffffff, #f3f7ff);
+  border-color: #c3d6f7;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(15, 23, 42, 0.12),
+    0 2px 7px rgba(47, 107, 222, 0.16);
+}
+
+html[data-ui-style='calm'] .panel-view-switch__thumb::before {
+  content: none;
 }
 
 html[data-ui-style='calm'] .panel-view-switch__tab {
-  color: var(--calm-ink-3);
+  color: #7b8899;
 }
 
 html[data-ui-style='calm'] .panel-view-switch__tab:hover {
   color: var(--calm-ink);
-  background: rgba(255, 255, 255, 0.75);
 }
 
 html[data-ui-style='calm'] .panel-view-switch__tab--active {
-  color: var(--calm-ink);
-  background: var(--calm-card);
-  border-color: var(--calm-line-strong);
+  color: var(--calm-accent-deep);
+  text-shadow: none;
 }
 
 html[data-ui-style='calm'] .panel-view-switch__tab:focus-visible {
@@ -6294,22 +6573,16 @@ html[data-ui-style='calm'] .floating-ball__orb-core {
   background: linear-gradient(180deg, #fbfcfe, #f3f6fb);
 }
 
-/* 面板：白卡微渐变 + 品牌渐变缝压在头部下缘，与标题栏同语言 */
+/* 面板：白卡微渐变（头部下缘的品牌渐变缝已按反馈移除） */
 html[data-ui-style='calm'] .floating-ball__panel {
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 34%, #ffffff 100%);
 }
 
 html[data-ui-style='calm'] .floating-ball__panel-header {
-  background: linear-gradient(
-      90deg,
-      rgba(47, 107, 222, 0.55),
-      rgba(13, 148, 136, 0.48) 52%,
-      rgba(139, 92, 246, 0.45)
-    )
-    bottom / 100% 1px no-repeat;
+  background: none;
 }
 
-/* 面板内用量分组块：头部缝线 + 入口卡纸影 */
+/* 面板内用量分组块：入口卡纸影 */
 html[data-ui-style='calm'] .included-usage__entry {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }

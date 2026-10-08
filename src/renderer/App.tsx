@@ -529,7 +529,7 @@ export default function App() {
                   type="button"
                   className={`btn-icon btn-icon--toolbar${isRefreshing ? ' btn-icon--spinning' : ''}`}
                   aria-label="刷新"
-                  title={isRefreshing ? '刷新中…' : '刷新'}
+                  data-tip={isRefreshing ? '刷新中…' : '刷新'}
                   aria-busy={isRefreshing}
                   disabled={isRefreshing}
                   onClick={handleManualRefresh}
@@ -540,7 +540,7 @@ export default function App() {
                   type="button"
                   className="btn-icon btn-icon--toolbar"
                   aria-label="设置"
-                  title="设置"
+                  data-tip="设置"
                   onClick={() => window.electronAPI.openSettings()}
                 >
                   <IconSettings />
@@ -549,7 +549,7 @@ export default function App() {
                   type="button"
                   className="btn-icon btn-icon--toolbar btn-icon--close"
                   aria-label="收起"
-                  title="收起"
+                  data-tip="收起"
                   onClick={collapsePanel}
                 >
                   ×
@@ -621,7 +621,12 @@ export default function App() {
             </div>
 
             {showIncludedTab && (
-              <div className="panel-view-switch" role="tablist" aria-label="面板视图">
+              <div
+                className={`panel-view-switch${panelView === 'included' ? ' panel-view-switch--included' : ''}`}
+                role="tablist"
+                aria-label="面板视图"
+              >
+                <span className="panel-view-switch__thumb" aria-hidden />
                 <button
                   type="button"
                   role="tab"
