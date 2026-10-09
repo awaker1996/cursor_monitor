@@ -3,7 +3,10 @@ import MetricRow from './components/MetricRow';
 import IncludedUsageTable from './components/IncludedUsageTable';
 import ErrorHint from './components/ErrorHint';
 import { useUiStyleSync } from './uiStyle';
+import { useCountUp } from './useCountUp';
 import {
+  CURSOR_MODELS_LABEL,
+  OTHER_MODELS_LABEL,
   buildDashboardSummary,
   buildIncludedUsageDisplay,
   buildMetricItems,
@@ -12,6 +15,7 @@ import {
 import type { PollerState, TokenSnapshot, DockEdge } from '../shared/types';
 
 const DRAG_THRESHOLD = 4;
+const ORB_COUNTUP_MS = 300;
 const ORB_RING_RADIUS = 24;
 const ORB_RING_CIRCUMFERENCE = 2 * Math.PI * ORB_RING_RADIUS;
 const INTERACTIVE_SELECTOR =
@@ -51,6 +55,23 @@ function IconSettings() {
     >
       <circle cx="8" cy="8" r="2" />
       <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06" />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M4 4l8 8M12 4l-8 8" />
     </svg>
   );
 }
@@ -105,6 +126,7 @@ export default function App() {
   const [pollerState, setPollerState] = useState<PollerState | null>(null);
   const [pendingRefresh, setPendingRefresh] = useState(false);
   const [panelView, setPanelView] = useState<PanelView>('overview');
+  const [orbHovered, setOrbHovered] = useState(false);
   const draggingRef = useRef(false);
   const dragMovedRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -305,6 +327,10 @@ export default function App() {
   const includedUsageDisplay = buildIncludedUsageDisplay(snapshot);
   const metricItems = buildMetricItems(snapshot?.metrics);
   const showIncludedTab = includedUsageDisplay !== null;
+  // orb 中心的百分比做补间；无数据时直接落回 '--'，不参与动画。
+  const orbCountUpValue = useCountUp(orbSummary.percentValue, ORB_COUNTUP_MS);
+  const orbDisplayValue =
+    orbCountUpValue === null ? orbSummary.value : `${Math.round(orbCountUpValue)}%`;
 
   useEffect(() => {
     if (!showIncludedTab && panelView === 'included') {
@@ -379,8 +405,28 @@ export default function App() {
 
   const dockClass = dockedEdge ? `floating-ball--docked-${dockedEdge}` : '';
 
+  // 折叠态悬浮提示：仅在球体 hover、且未展开/未拖拽/未贴边时给出。
+  const showOrbTooltip = orbHovered && !expanded && !isDragging && !dockedEdge;
+  const cursorTodayPercent =
+    metricItems.find((item) => item.key === 'autoToday')?.percent ?? '--';
+  const otherTodayPercent = metricItems.find((item) => item.key === 'apiToday')?.percent ?? '--';
+  // 数字补间过程中 key 保持稳定，pulse 只在目标值真正变化时触发一次。
+  const orbPulseKey = orbSummary.percentValue === null ? 'none' : Math.round(orbSummary.percentValue);
+
   const orbNode = (
-    <div className="floating-ball__orb-wrap">
+    <div
+      className="floating-ball__orb-wrap"
+      onMouseEnter={() => setOrbHovered(true)}
+      onMouseLeave={() => setOrbHovered(false)}
+    >
+      {showOrbTooltip && (
+        <div className="floating-ball__tooltip" role="tooltip">
+          <div className="floating-ball__tooltip-line">{`状态 ${statusLabel}`}</div>
+          <div className="floating-ball__tooltip-line">{`今日 ${CURSOR_MODELS_LABEL} ${cursorTodayPercent}`}</div>
+          <div className="floating-ball__tooltip-line">{`今日 ${OTHER_MODELS_LABEL} ${otherTodayPercent}`}</div>
+          <div className="floating-ball__tooltip-line">{`${dashboardSummary?.sourceLabel ?? '无来源'} · ${dashboardSummary?.updatedAt ?? '--'}`}</div>
+        </div>
+      )}
       <div
         className={`floating-ball__orb floating-ball__orb--health-${health} ${orbMotionClass}`}
         style={orbRingStyle}
@@ -488,8 +534,8 @@ export default function App() {
         <div className="floating-ball__orb-core">
           <span className="floating-ball__total">
             <span className="floating-ball__total-label">{orbSummary.label}</span>
-            <span className="floating-ball__total-value" key={orbSummary.value}>
-              {orbSummary.value}
+            <span className="floating-ball__total-value" key={orbPulseKey}>
+              {orbDisplayValue}
             </span>
           </span>
         </div>
@@ -552,72 +598,82 @@ export default function App() {
                   data-tip="收起"
                   onClick={collapsePanel}
                 >
-                  ×
+                  <IconClose />
                 </button>
               </div>
             </div>
 
             <div className="floating-ball__panel-body">
-              {panelView === 'overview' ? (
-                <>
-                  {snapshot && dashboardSummary ? (
-                    <>
-                      <div
-                        className={`dashboard-summary dashboard-summary--${dashboardSummary.statusLevel}${isRefreshing ? ' dashboard-summary--refreshing' : ''}`}
-                      >
-                        <div className="dashboard-summary__main">
-                          <span className="dashboard-summary__label">总消耗</span>
-                          <span className="dashboard-summary__value">{dashboardSummary.totalPercent}</span>
-                        </div>
-                        {dashboardSummary.totalPercentValue !== null && (
-                          <div className="dashboard-summary__track" aria-hidden>
-                            <div
-                              className={`dashboard-summary__fill dashboard-summary__fill--${dashboardSummary.statusLevel}`}
-                              style={{ width: `${dashboardSummary.totalPercentValue}%` }}
-                            />
+              {/* key 变化 → 整个内容层重挂载 → 触发一次淡入位移过渡，
+                  与胶囊滑移形成整体节奏；过渡只走 opacity/transform，不改布局终态。 */}
+              <div className="panel-view-pane" key={panelView}>
+                {panelView === 'overview' ? (
+                  <>
+                    {snapshot && dashboardSummary ? (
+                      <>
+                        <div
+                          className={`dashboard-summary dashboard-summary--${dashboardSummary.statusLevel}${isRefreshing ? ' dashboard-summary--refreshing' : ''}`}
+                        >
+                          <div className="dashboard-summary__main">
+                            <span className="dashboard-summary__label">总消耗</span>
+                            <span className="dashboard-summary__value">{dashboardSummary.totalPercent}</span>
                           </div>
-                        )}
-                        <div className="dashboard-summary__detail">{dashboardSummary.totalTokens}</div>
-                        <div className="dashboard-summary__meta">
-                          <span className={`health-pill health-pill--${health}`}>{statusLabel}</span>
-                          <span className={`source-tag source-tag--${snapshot.source}`}>
-                            {dashboardSummary.sourceLabel}
-                          </span>
-                          <span className="meta-time">
-                            <span className="meta-time__label">{isRefreshing ? '状态' : '上次刷新'}</span>
-                            <span className="meta-time__value">
-                              {isRefreshing ? '刷新中…' : dashboardSummary.updatedAt}
+                          {dashboardSummary.totalPercentValue !== null && (
+                            <div className="dashboard-summary__track" aria-hidden>
+                              <div
+                                className={`dashboard-summary__fill dashboard-summary__fill--${dashboardSummary.statusLevel}`}
+                                style={{ width: `${dashboardSummary.totalPercentValue}%` }}
+                              />
+                            </div>
+                          )}
+                          <div className="dashboard-summary__detail">{dashboardSummary.totalTokens}</div>
+                          <div className="dashboard-summary__meta">
+                            <span className={`health-pill health-pill--${health}`}>{statusLabel}</span>
+                            <span className={`source-tag source-tag--${snapshot.source}`}>
+                              {dashboardSummary.sourceLabel}
                             </span>
-                          </span>
+                            <span className="meta-time">
+                              <span className="meta-time__label">{isRefreshing ? '状态' : '上次刷新'}</span>
+                              <span className="meta-time__value">
+                                {isRefreshing ? '刷新中…' : dashboardSummary.updatedAt}
+                              </span>
+                            </span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="metric-list">
-                        {metricItems.map((item) => (
-                          <MetricRow key={item.key} item={item} />
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <ErrorHint
-                      message="暂无数据"
-                      action="请在设置中配置 Cookie 后刷新"
-                    />
+                        <div className="metric-list">
+                          {metricItems.map((item, index) => (
+                            <MetricRow
+                              key={item.key}
+                              item={item}
+                              index={index}
+                              stagger={panelAnimOpen}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <ErrorHint
+                        message="暂无数据"
+                        actionLabel="打开设置"
+                        onAction={() => window.electronAPI.openSettings()}
+                      />
+                    )}
+
+                    {pollerState?.status === 'backoff' && (
+                      <ErrorHint
+                        message={`退避等待中 (${Math.round((pollerState.backoffMs ?? 0) / 1000)}s)`}
+                      />
                   )}
 
-                  {pollerState?.status === 'backoff' && (
-                    <ErrorHint
-                      message={`退避等待中 (${Math.round((pollerState.backoffMs ?? 0) / 1000)}s)`}
-                    />
-                  )}
-
-                  {pollerState?.status === 'paused' && (
-                    <div className="status-banner status-banner--paused">自动刷新已暂停</div>
-                  )}
-                </>
-              ) : (
-                includedUsageDisplay && <IncludedUsageTable display={includedUsageDisplay} />
-              )}
+                    {pollerState?.status === 'paused' && (
+                      <div className="status-banner status-banner--paused">自动刷新已暂停</div>
+                    )}
+                  </>
+                ) : (
+                  includedUsageDisplay && <IncludedUsageTable display={includedUsageDisplay} />
+                )}
+              </div>
             </div>
 
             {showIncludedTab && (

@@ -1,6 +1,7 @@
 ﻿import type {
   AppSettings,
   PollerState,
+  PowerMode,
   TestConnectionResult,
   TokenSnapshot,
 } from '../shared/types';
@@ -166,6 +167,9 @@ export function installBrowserMock(): void {
     settingsWindowControl: () => undefined,
     settingsWindowIsMaximized: async () => false,
     onSettingsWindowMaximized: () => () => undefined,
+    // 浏览器预览没有电源信息，按接电源处理（动效全开）
+    getPowerMode: async () => 'ac' as PowerMode,
+    onPowerMode: () => () => undefined,
   };
 
   window.electronAPI = api;

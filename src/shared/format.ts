@@ -101,6 +101,8 @@ export interface IncludedUsageModelRow {
   model: string;
   tokens: string;
   usage: string;
+  /** 该模型 tokens 占本分区最大模型 tokens 的百分比（0–100），用于行内 mini 占比条。 */
+  shareValue: number;
 }
 
 export interface IncludedUsageCategoryRow {
@@ -147,17 +149,29 @@ export function buildIncludedUsageDisplay(snapshot: TokenSnapshot | null): Inclu
     title: 'Included Usage',
     dateRange: formatIncludedUsageDateRange(snapshot.billingCycleStart, snapshot.billingCycleEnd),
     columns: ['Item', 'Tokens', 'Usage'],
-    categories: breakdown.categories.map((category) => ({
-      key: category.key,
-      label: category.label,
-      tokens: formatIncludedUsageTokens(category.totalTokens),
-      usage: formatUsedPercent(category.usagePercent),
-      models: category.models.map((model) => ({
-        model: model.model,
-        tokens: formatIncludedUsageTokens(model.tokens),
-        usage: formatUsedPercent(model.usagePercent),
-      })),
-    })),
+    categories: breakdown.categories.map((category) => {
+      // 分区内以「最大模型」为 100% 基准，其余模型按相对占比呈现，
+      // 这样占比条表达的是模型间的量级差异，而不是对套餐额度的消耗。
+      const maxModelTokens = category.models.reduce(
+        (max, model) => (model.tokens > max ? model.tokens : max),
+        0,
+      );
+      return {
+        key: category.key,
+        label: category.label,
+        tokens: formatIncludedUsageTokens(category.totalTokens),
+        usage: formatUsedPercent(category.usagePercent),
+        models: category.models.map((model) => ({
+          model: model.model,
+          tokens: formatIncludedUsageTokens(model.tokens),
+          usage: formatUsedPercent(model.usagePercent),
+          shareValue:
+            maxModelTokens > 0 && model.tokens > 0
+              ? Math.min(100, (model.tokens / maxModelTokens) * 100)
+              : 0,
+        })),
+      };
+    }),
     showIncompleteHint: breakdown.incomplete === true,
   };
 }

@@ -21,6 +21,7 @@ import type {
   SubscriptionUsageResult,
 } from '../../shared/subscriptionTypes';
 import type { AppSettings, TestConnectionResult } from '../../shared/types';
+import type { ToastTone } from './SettingsPage';
 
 type Health = 'green' | 'gray' | 'yellow';
 
@@ -49,7 +50,7 @@ export default function SubscriptionsPage() {
   const [providers, setProviders] = useState<SubscriptionProviderMeta[]>([]);
   const [cache, setCache] = useState<Partial<Record<SubscriptionProviderId, ProviderCacheEntry>>>({});
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [usageMonth, setUsageMonth] = useState(currentMonthValue());
   const [testing, setTesting] = useState(false);
@@ -65,8 +66,8 @@ export default function SubscriptionsPage() {
   const providersRef = useRef<SubscriptionProviderMeta[]>([]);
   const monthRef = useRef(usageMonth);
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
+  const showToast = useCallback((message: string, tone: ToastTone = 'ok') => {
+    setToast({ message, tone });
     setTimeout(() => setToast(null), 3000);
   }, []);
 
@@ -197,7 +198,7 @@ export default function SubscriptionsPage() {
   const handleRefreshAll = async () => {
     const unconfigured = providers.filter((p) => !p.configured);
     if (providers.length > 0 && unconfigured.length === providers.length) {
-      showToast('请先配置任一平台凭据');
+      showToast('请先配置任一平台凭据', 'error');
       return;
     }
     await refreshAll(providers, usageMonth);
@@ -207,7 +208,7 @@ export default function SubscriptionsPage() {
     if (!meta.configured) {
       setConfigOpen((prev) => ({ ...prev, [meta.id]: true }));
       setExpanded((prev) => ({ ...prev, [meta.id]: true }));
-      showToast(meta.id === 'cursor' ? '请先配置 Cookie' : '请先配置 API Key');
+      showToast(meta.id === 'cursor' ? '请先配置 Cookie' : '请先配置 API Key', 'error');
       return;
     }
     refreshingRef.current = true;
@@ -222,7 +223,7 @@ export default function SubscriptionsPage() {
 
   const handleSaveCookie = async () => {
     if (!cookieInput.trim()) {
-      showToast('Cookie 不能为空');
+      showToast('Cookie 不能为空', 'error');
       return;
     }
     try {
@@ -232,7 +233,7 @@ export default function SubscriptionsPage() {
       showToast('Cookie 已安全保存');
       await refreshAll(list, usageMonth);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showToast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
@@ -243,14 +244,14 @@ export default function SubscriptionsPage() {
       showToast('Cookie 已清除');
       await refreshAll(list, usageMonth);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showToast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
   const handleSaveKey = async (id: SubscriptionProviderId) => {
     const value = (keyInputs[id] ?? '').trim();
     if (!value) {
-      showToast('API Key 不能为空');
+      showToast('API Key 不能为空', 'error');
       return;
     }
     try {
@@ -260,7 +261,7 @@ export default function SubscriptionsPage() {
       showToast('API Key 已安全保存');
       await refreshAll(list, usageMonth);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showToast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
@@ -271,14 +272,14 @@ export default function SubscriptionsPage() {
       showToast('API Key 已清除');
       await refreshAll(list, usageMonth);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showToast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
   const handleSaveUsageToken = async (id: SubscriptionProviderId) => {
     const value = (usageTokenInputs[id] ?? '').trim();
     if (!value) {
-      showToast('用量 Token 不能为空');
+      showToast('用量 Token 不能为空', 'error');
       return;
     }
     try {
@@ -288,7 +289,7 @@ export default function SubscriptionsPage() {
       showToast('用量 Token 已安全保存');
       await refreshAll(list, usageMonth);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showToast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
@@ -303,7 +304,7 @@ export default function SubscriptionsPage() {
       showToast('用量 Token 已清除');
       await refreshAll(list, usageMonth);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showToast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
@@ -600,7 +601,14 @@ export default function SubscriptionsPage() {
         })}
       </div>
 
-      {toast && <p className="settings-toast">{toast}</p>}
+      {toast && (
+        <p className={`settings-toast settings-toast--${toast.tone}`}>
+          <span className="settings-toast__icon" aria-hidden>
+            {toast.tone === 'ok' ? '✓' : '!'}
+          </span>
+          {toast.message}
+        </p>
+      )}
     </div>
   );
 }

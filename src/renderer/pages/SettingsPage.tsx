@@ -8,6 +8,8 @@ import ProjectFeaturesCard from '../components/ProjectFeaturesCard';
 import SubscriptionsPage from './SubscriptionsPage';
 import { useUiStyleSync } from '../uiStyle';
 
+export type ToastTone = 'ok' | 'error';
+
 const SECTION_TITLES: Record<SettingsSectionId, string> = {
   accounts: '账户与订阅',
   data: '数据刷新',
@@ -27,11 +29,11 @@ export default function SettingsPage() {
   useUiStyleSync();
   const [active, setActive] = useState<SettingsSectionId>('accounts');
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
+  const showToast = useCallback((message: string, tone: ToastTone = 'ok') => {
+    setToast({ message, tone });
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   }, []);
@@ -116,7 +118,14 @@ export default function SettingsPage() {
           </SettingsPanel>
         </div>
       </div>
-      {toast && <p className="settings-toast">{toast}</p>}
+      {toast && (
+        <p className={`settings-toast settings-toast--${toast.tone}`}>
+          <span className="settings-toast__icon" aria-hidden>
+            {toast.tone === 'ok' ? '✓' : '!'}
+          </span>
+          {toast.message}
+        </p>
+      )}
     </div>
   );
 }

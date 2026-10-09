@@ -17,13 +17,9 @@ function categoryBadge(accent: CategoryAccent): string {
 export default function IncludedUsageTable({ display }: IncludedUsageTableProps) {
   return (
     <section className="included-usage included-usage--panel" aria-label={display.title}>
-      <div className="included-usage__header">
-        <h2 className="included-usage__title">{display.title}</h2>
-        {display.dateRange && (
-          <p className="included-usage__date-range">{display.dateRange}</p>
-        )}
-      </div>
-
+      {/* 面板内不渲染 __header（标题 / 订阅周期）：与「概览」视图同起跑线，
+          首个分组块直接顶到面板内容区上沿，切换前后不留落差。
+          display.title 仍作为 section 的可访问名保留。 */}
       <div className="included-usage__body">
         {display.categories.map((category) => {
           const accent = categoryAccent(category.key);
@@ -53,6 +49,12 @@ export default function IncludedUsageTable({ display }: IncludedUsageTableProps)
                     <span className="included-usage__entry-name">{model.model}</span>
                     <span className="included-usage__entry-tokens">{model.tokens}</span>
                     <span className="included-usage__entry-usage">{model.usage}</span>
+                    <span className="included-usage__entry-share" aria-hidden>
+                      <span
+                        className="included-usage__entry-share-fill"
+                        style={{ width: `${model.shareValue}%` }}
+                      />
+                    </span>
                   </div>
                 ))}
               </div>

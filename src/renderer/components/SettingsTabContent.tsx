@@ -7,6 +7,7 @@ import {
 import { SettingsRow, Segmented, SliderInput, Switch } from './SettingsControls';
 import { UI_STYLE_OPTIONS } from '../uiStyle';
 import type { UiStyle } from '../../shared/types';
+import type { ToastTone } from '../pages/SettingsPage';
 type CardAccent = 'data' | 'appearance' | 'ball' | 'icon' | 'about';
 
 const ACCENT_CLASS: Record<CardAccent, string> = {
@@ -43,7 +44,7 @@ export function DataRefreshPrefs({
   accent,
 }: {
   settings: AppSettings;
-  onToast: (message: string) => void;
+  onToast: (message: string, tone?: ToastTone) => void;
   accent?: CardAccent;
 }) {
   const [intervalInput, setIntervalInput] = useState('30');
@@ -172,7 +173,7 @@ export function AppearancePrefs({
   accent,
 }: {
   settings: AppSettings;
-  onToast: (message: string) => void;
+  onToast: (message: string, tone?: ToastTone) => void;
   accent?: CardAccent;
 }) {
   const current = UI_STYLE_OPTIONS.find((o) => o.value === settings.uiStyle);
@@ -210,7 +211,7 @@ export function BallPrefs({
   accent,
 }: {
   settings: AppSettings;
-  onToast: (message: string) => void;
+  onToast: (message: string, tone?: ToastTone) => void;
   accent?: CardAccent;
 }) {
   return (
@@ -242,7 +243,7 @@ export function IconPrefs({
   onToast,
   accent,
 }: {
-  onToast: (message: string) => void;
+  onToast: (message: string, tone?: ToastTone) => void;
   accent?: CardAccent;
 }) {
   const [iconPreview, setIconPreview] = useState<string | null>(null);
@@ -268,7 +269,7 @@ export function IconPrefs({
   const handleSelect = async () => {
     const result = await window.electronAPI.selectCustomIcon();
     if (result.preview !== undefined) setIconPreview(result.preview);
-    if (result.message) onToast(result.message);
+    if (result.message) onToast(result.message, result.success === false ? 'error' : 'ok');
   };
 
   const handleClear = async () => {

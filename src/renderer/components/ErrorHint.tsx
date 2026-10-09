@@ -3,6 +3,8 @@ type Tone = 'info' | 'warn' | 'error';
 interface ErrorHintProps {
   message: string;
   action?: string;
+  actionLabel?: string;
+  onAction?: () => void;
   tone?: Tone;
 }
 
@@ -12,7 +14,13 @@ const ICONS: Record<Tone, string> = {
   error: '!',
 };
 
-export default function ErrorHint({ message, action, tone = 'warn' }: ErrorHintProps) {
+export default function ErrorHint({
+  message,
+  action,
+  actionLabel,
+  onAction,
+  tone = 'warn',
+}: ErrorHintProps) {
   return (
     <div className={`error-hint error-hint--${tone}`} role="status">
       <span className="error-hint__icon" aria-hidden>
@@ -20,7 +28,13 @@ export default function ErrorHint({ message, action, tone = 'warn' }: ErrorHintP
       </span>
       <div className="error-hint__content">
         <p className="error-hint__message">{message}</p>
-        {action && <p className="error-hint__action">{action}</p>}
+        {actionLabel && onAction ? (
+          <button type="button" className="error-hint__button" onClick={onAction}>
+            {actionLabel}
+          </button>
+        ) : (
+          action && <p className="error-hint__action">{action}</p>
+        )}
       </div>
     </div>
   );

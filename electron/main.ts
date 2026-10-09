@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, screen } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SettingsStore } from '../src/settings/SettingsStore';
@@ -33,6 +33,7 @@ import {
   REFRESH_INTERVAL_MAX,
   REFRESH_INTERVAL_MIN,
   type AppSettings,
+  type PowerMode,
   type TestConnectionResult,
 } from '../src/shared/types';
 import type {
@@ -191,6 +192,37 @@ function broadcastDockState(edge: import('../src/shared/types').DockEdge | null)
   sendToFloatingBall('dock-state-changed', edge);
 }
 
+/** 当前供电模式：电池模式下渲染层会关停持续动效（见 styles.css [data-power='battery']）。 */
+let powerMode: PowerMode = readPowerMode();
+
+function readPowerMode(): PowerMode {
+  // isOnBatteryPower 在部分平台可能不可用（类型与运行时都可能缺），
+  // 缺失时按接电源处理：动效全开，不误伤正常用户。
+  const probe = powerMonitor as { isOnBatteryPower?: () => boolean };
+  const onBattery = typeof probe.isOnBatteryPower === 'function' ? probe.isOnBatteryPower() : false;
+  return onBattery ? 'battery' : 'ac';
+}
+
+function broadcastPowerMode(): void {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('power-mode', powerMode);
+  });
+}
+
+function setupPowerMonitor(): void {
+  powerMode = readPowerMode();
+  powerMonitor.on('on-battery', () => {
+    if (powerMode === 'battery') return;
+    powerMode = 'battery';
+    broadcastPowerMode();
+  });
+  powerMonitor.on('on-ac', () => {
+    if (powerMode === 'ac') return;
+    powerMode = 'ac';
+    broadcastPowerMode();
+  });
+}
+
 function resetFloatingBallVisibility(): void {
   let win = getFloatingBallWindow();
   if (!win || win.isDestroyed()) {
@@ -235,6 +267,8 @@ function setupIpc(): void {
   ipcMain.handle('get-snapshot', () => providerManager.getLastSnapshot());
 
   ipcMain.handle('get-poller-state', () => poller.getState());
+
+  ipcMain.handle('get-power-mode', () => powerMode);
 
   ipcMain.handle('get-settings', () => settingsStore.get());
 
@@ -518,6 +552,7 @@ app.whenReady().then(async () => {
 
   setupIpc();
   setupPollerEvents();
+  setupPowerMonitor();
 
   createFloatingBallWindow(isDev);
   broadcastSnapshot();

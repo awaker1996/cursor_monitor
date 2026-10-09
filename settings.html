@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>设置</title>
+    <script>
+      /* 首帧主题预设：真源仍是 IPC 返回的设置（useUiStyleSync 挂载后会覆盖纠偏），
+         这里只是读上次应用过的风格先上色，避免 calm 用户每次开窗都先闪一拍深色。 */
+      try {
+        var s = localStorage.getItem('ui-style');
+        if (s === 'aurora' || s === 'calm') document.documentElement.dataset.uiStyle = s;
+      } catch (e) {}
+    </script>
   </head>
   <body class="page-settings-tab">
     <div id="root"></div>

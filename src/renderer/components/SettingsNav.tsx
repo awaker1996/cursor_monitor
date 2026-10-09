@@ -1,5 +1,14 @@
-import type { ReactElement } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import pkg from '../../../package.json';
+
+/** 滑移指示器的实测矩形；未测到之前保持 null（指示器不渲染尺寸）。 */
+interface ThumbRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
 
 export default function SettingsNav({
   active,
@@ -61,15 +70,60 @@ export default function SettingsNav({
     },
   ];
 
+  const activeItemRef = useRef<HTMLButtonElement | null>(null);
+  const [thumb, setThumb] = useState<ThumbRect | null>(null);
+  // 过渡开关比几何晚一帧开启：否则首次测量会让指示器从 0×0「长」出来。
+  const [thumbReady, setThumbReady] = useState(false);
+
+  // 用实测的 offset* 而不是「索引 × 行高」推算：导航在 ≤640px 会翻成横排，
+  // 字号/内边距一旦调整也不会让指示器错位。
+  const measure = useCallback(() => {
+    const el = activeItemRef.current;
+    if (!el) return;
+    setThumb({
+      top: el.offsetTop,
+      left: el.offsetLeft,
+      width: el.offsetWidth,
+      height: el.offsetHeight,
+    });
+  }, []);
+
+  useLayoutEffect(measure, [active, measure]);
+
+  useEffect(() => {
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure]);
+
+  useEffect(() => {
+    if (!thumb || thumbReady) return;
+    const frameId = requestAnimationFrame(() => setThumbReady(true));
+    return () => cancelAnimationFrame(frameId);
+  }, [thumb, thumbReady]);
+
+  const thumbStyle: CSSProperties | undefined = thumb
+    ? { top: `${thumb.top}px`, left: `${thumb.left}px`, width: `${thumb.width}px`, height: `${thumb.height}px` }
+    : undefined;
+
   return (
     <nav className="settings-nav" aria-label="设置导航">
       <ul className="settings-nav__list">
+        {/* 滑移指示器：绝对定位覆盖整片列表，跟随激活项实测矩形滑动。
+            放在 li 里是为了保持 ul 的子元素合法。 */}
+        <li className="settings-nav__thumb-slot" aria-hidden>
+          <span
+            className="settings-nav__thumb"
+            style={thumbStyle}
+            data-ready={thumbReady ? 'true' : 'false'}
+          />
+        </li>
         {items.map((item) => {
           const isActive = active === item.id;
           return (
             <li key={item.id}>
               <button
                 type="button"
+                ref={isActive ? activeItemRef : null}
                 className={`settings-nav__item${isActive ? ' is-active' : ''}`}
                 aria-current={isActive}
                 onClick={() => onChange(item.id)}

@@ -4,6 +4,7 @@ import type {
   AppSettings,
   DockEdge,
   PollerState,
+  PowerMode,
   TestConnectionResult,
   TokenSnapshot,
 } from '../shared/types';
@@ -64,6 +65,8 @@ export interface ElectronAPI {
   settingsWindowControl: (action: 'minimize' | 'toggle-maximize' | 'close') => void;
   settingsWindowIsMaximized: () => Promise<boolean>;
   onSettingsWindowMaximized: (callback: (maximized: boolean) => void) => () => void;
+  getPowerMode: () => Promise<PowerMode>;
+  onPowerMode: (callback: (mode: PowerMode) => void) => () => void;
 }
 
 declare global {

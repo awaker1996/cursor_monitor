@@ -13,6 +13,9 @@ export type OrbWindowMode = 'collapsed' | 'hover' | 'expanded';
 
 export type DockEdge = 'left' | 'right' | 'top' | 'bottom';
 
+/** 供电模式：battery = 用电池（降动效省电）；ac = 接电源（动效全开）。 */
+export type PowerMode = 'battery' | 'ac';
+
 export interface ModelUsageItem {
   model: string;
   tokens: number;

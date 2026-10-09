@@ -3,6 +3,7 @@ import type {
   AppSettings,
   DockEdge,
   PollerState,
+  PowerMode,
   TestConnectionResult,
   TokenSnapshot,
 } from '../src/shared/types';
@@ -63,6 +64,8 @@ export interface ElectronAPI {
   settingsWindowControl: (action: 'minimize' | 'toggle-maximize' | 'close') => void;
   settingsWindowIsMaximized: () => Promise<boolean>;
   onSettingsWindowMaximized: (callback: (maximized: boolean) => void) => () => void;
+  getPowerMode: () => Promise<PowerMode>;
+  onPowerMode: (callback: (mode: PowerMode) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -126,6 +129,12 @@ const api: ElectronAPI = {
     const handler = (_: Electron.IpcRendererEvent, maximized: boolean) => callback(maximized);
     ipcRenderer.on('settings-window-maximized', handler);
     return () => ipcRenderer.removeListener('settings-window-maximized', handler);
+  },
+  getPowerMode: () => ipcRenderer.invoke('get-power-mode'),
+  onPowerMode: (callback) => {
+    const handler = (_: Electron.IpcRendererEvent, mode: PowerMode) => callback(mode);
+    ipcRenderer.on('power-mode', handler);
+    return () => ipcRenderer.removeListener('power-mode', handler);
   },
 };
 
