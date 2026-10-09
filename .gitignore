@@ -14,5 +14,6 @@ Thumbs.db
 .commandcode/
 .electron-cache/
 .openchamber/
+.workbuddy/
 # 本地布局验证页（临时）
 verify*.html
