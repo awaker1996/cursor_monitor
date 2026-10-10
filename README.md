@@ -544,8 +544,8 @@ OfficialProvider 请求
 | 措施 | 实现 |
 |---|---|
 | Cookie 存储 | Windows Credential Manager（keytar），失败时 safeStorage 加密本地文件 |
-| 订阅凭据存储 | API Key 与「用量 Token」同样走 `CredentialVault`，按账户名区分（如 `commandcode-api-key`、`deepseek-api-key`、`deepseek-usage-token`） |
-| Command Code Key 解析 | 三级优先级：手动录入（可覆盖）→ 环境变量 `COMMAND_CODE_API_KEY` / `COMMANDCODE_API_KEY` → 只读 `~/.commandcode/auth.json`；读取失败静默跳过，不记录凭据内容 |
+| 订阅凭据存储 | API Key 与「用量 Token」同样走 `CredentialVault`，按账户名区分（如 `commandcode-api-key`、`commandcode-session-token`、`deepseek-api-key`、`deepseek-usage-token`） |
+| Command Code Key 解析 | 四级优先级：手动录入（单凭据框，可贴控制台密钥完整内容或浏览器 Token）→ 环境变量 `COMMAND_CODE_API_KEY` / `COMMANDCODE_API_KEY` → 只读 `~/.commandcode/auth.json` → 浏览器会话 Token；401/403 自动切下一个候选；读取失败静默跳过，不记录凭据内容 |
 | 配置文件 | 仅存非敏感项（刷新间隔、端点 URL），不含 Cookie / API Key |
 | 日志脱敏 | `logger.ts` 对 cookie / authorization / session 等字段打码 |
 | 用户提示 | 设置窗口订阅分区说明凭据仅用于本人账号查询 |
@@ -591,7 +591,7 @@ OfficialProvider 请求
   - Cursor：周期用量（总用量、来源、账单周期、订阅套餐、Cursor Models / Other Models 百分比与模型明细）
   - Command Code：账户额度（剩余额度拆分、当期消耗 / 请求数 / Tokens、套餐与续期）+ 5 小时 / 每周 / 每月三段限额计量条
   - DeepSeek：各币种余额 + 按月模型用量表
-- 凭据配置区按卡片独立折叠：Cursor 填 `WorkosCursorSessionToken` 并可测试连接（结构化结果）；其余平台填 API Key；支持按月用量的平台另有独立的「用量 Token」
+- 凭据配置区按卡片独立折叠：Cursor 填 `WorkosCursorSessionToken` 并可测试连接（结构化结果）；Command Code 单凭据框二选一填控制台密钥完整内容或浏览器 Token（加密保存，保存后不再回显）；其余平台填 API Key；支持按月用量的平台另有独立的「用量 Token」
 - 打开即有缓存数据；查询失败保留上次成功结果并给出黄色提示
 
 **数据刷新**
@@ -829,7 +829,7 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 | 数据不完整 | `usage-summary` 字段变化，更新 normalizer 映射 |
 | 有百分比但无 token 明细 | `get-filtered-usage-events` 失败或 Cookie 中无法解析 userId；主汇总数据不受影响 |
 | 订阅一直显示缓存时间 | 点「刷新全部」或单卡片「刷新」重新查询；查询失败会保留上次成功结果并给出黄色提示 |
-| Command Code 报「API Key 无效或已过期」 | 检查手动录入的 Key；清除手动 Key 后会回退到环境变量 / `~/.commandcode/auth.json` |
+| Command Code 报「凭据无效或已过期」 | 单凭据框整体重贴控制台密钥完整内容（勿截断）或浏览器重拷 Bearer / Cookie；清除凭据会连历史浏览器 Token 一并清除 |
 | DeepSeek 有余额但没有月度用量 | 需要单独配置「用量 Token」（与 API Key 不同） |
 | 订阅页自动刷新不生效 | 检查运行行为区的自动刷新开关与刷新间隔 |
 | dev server 报端口 5180 被占用 | `strictPort` 下会直接报错退出；释放端口或调整 `src/shared/devServer.ts` 的 `DEV_SERVER_PORT` |

@@ -26,8 +26,8 @@ export interface DeepSeekSubscriptionData {
   balances: DeepSeekBalanceInfo[];
 }
 
-/** Command Code 凭据来源：manual 手动录入、env 环境变量、auth-file 自动读取 auth.json。 */
-export type CommandCodeCredentialSource = 'manual' | 'env' | 'auth-file';
+/** Command Code 凭据来源：manual 手动录入、env 环境变量、auth-file 自动读取 auth.json、session 浏览器会话 Token。 */
+export type CommandCodeCredentialSource = 'manual' | 'env' | 'auth-file' | 'session';
 
 /**
  * 用量限额窗口，供进度计量条直接渲染。

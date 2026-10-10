@@ -67,7 +67,7 @@ export class SubscriptionManager {
         configured: await provider.isConfigured(),
         usageSupported,
         usageConfigured:
-          usageSupported && provider.usageCredentialAccount
+          provider.usageCredentialAccount
             ? await credentialVault.hasSecret(provider.usageCredentialAccount)
             : false,
       });
@@ -125,6 +125,10 @@ export class SubscriptionManager {
     }
     const provider = this.getProvider(id);
     await credentialVault.clearSecret(this.resolveAccount(provider, kind));
+    // Command Code 已简化为单个凭据框：清凭据时把历史版本存的浏览器 Token 一并清掉，避免残留偷跑。
+    if (id === 'commandcode' && kind === 'apiKey' && provider.usageCredentialAccount) {
+      await credentialVault.clearSecret(provider.usageCredentialAccount);
+    }
     log.info('Subscription credential cleared', { provider: id, kind });
   }
 }

@@ -458,7 +458,9 @@ export default function SubscriptionsPage() {
                       <span className="sub-config-toggle__meta">
                         {isCursor
                           ? `Cookie ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`
-                          : `API Key ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`}
+                          : meta.id === 'commandcode'
+                            ? `凭据 ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`
+                            : `API Key ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`}
                         {!isCursor && meta.usageSupported &&
                           ` · 用量 Token ${meta.usageConfigured ? '已配置' : '未配置'}`}
                         <span className="sub-config-toggle__chevron">{isConfigOpen ? '▴' : '▾'}</span>
@@ -516,21 +518,24 @@ export default function SubscriptionsPage() {
                           <div className="sub-config-group">
                             <div className="form-group">
                               <label htmlFor={`subscription-key-${meta.id}`}>
-                                {meta.label} API Key
+                                {meta.id === 'commandcode'
+                                  ? 'Command Code 凭据'
+                                  : `${meta.label} API Key`}
                               </label>
                               <input
                                 id={`subscription-key-${meta.id}`}
                                 type="password"
                                 value={keyInputs[meta.id] ?? ''}
-                                placeholder={meta.id === 'commandcode' ? 'user_...' : 'sk-...'}
+                                placeholder={meta.id === 'commandcode' ? '粘贴 Studio 密钥完整内容或浏览器 Token' : 'sk-...'}
                                 onChange={(e) =>
                                   setKeyInputs((prev) => ({ ...prev, [meta.id]: e.target.value }))
                                 }
                               />
                               {meta.id === 'commandcode' ? (
                                 <p className="field-hint">
-                                  留空时自动读取 cmd login 写入的 ~/.commandcode/auth.json；手动保存的
-                                  Key 优先级更高，清除后回退为自动读取。
+                                  二选一：控制台密钥完整内容（user_ / sk 开头，整体复制勿截断），或浏览器登录 commandcode.ai 后
+                                  F12 在 Network 里找 api.commandcode.ai 请求、复制 Authorization Bearer 后面那段 / Cookie 整段。
+                                  加密保存在本机，保存后不再回显。
                                 </p>
                               ) : (
                                 <p className="field-hint">
@@ -540,7 +545,7 @@ export default function SubscriptionsPage() {
                             </div>
                             <div className="btn-row">
                               <button type="button" className="btn-primary" onClick={() => handleSaveKey(meta.id)}>
-                                保存 Key
+                                {meta.id === 'commandcode' ? '保存凭据' : '保存 Key'}
                               </button>
                               <button
                                 type="button"
@@ -548,7 +553,7 @@ export default function SubscriptionsPage() {
                                 onClick={() => handleClearKey(meta.id)}
                                 disabled={!meta.configured}
                               >
-                                清除 Key
+                                {meta.id === 'commandcode' ? '清除凭据' : '清除 Key'}
                               </button>
                             </div>
                           </div>
@@ -591,6 +596,7 @@ export default function SubscriptionsPage() {
                             </div>
                           </div>
                         )}
+
                       </div>
                     )}
                   </section>

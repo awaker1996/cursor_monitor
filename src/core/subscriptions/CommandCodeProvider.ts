@@ -29,6 +29,10 @@ const USAGE_SUMMARY_PATH = '/alpha/usage/summary';
 const AUTH_FILE_DIR = '.commandcode';
 const AUTH_FILE_NAME = 'auth.json';
 
+// 浏览器请求 UA：alpha 接口在慢网络下用默认 Electron UA 偶发超时，浏览器 UA 更稳。
+const BROWSER_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
 /**
  * 各套餐的月度积分上限。额度接口只返回剩余量与滚动窗口，
  * 月度上限不返回，只能按套餐映射（数值取自官方 Pricing & Limits）。
@@ -40,9 +44,22 @@ const PLAN_MONTHLY_CREDITS: Record<string, number> = {
   'max-10x': 150,
   'max-20x': 300,
   'team-pro': 40,
+  // 社区 CLI 映射补齐：与 auth-file / Studio Key 的 planId 口径对齐
+  'individual-go': 10,
+  'individual-goat': 70,
+  'individual-pro': 30,
+  'individual-pro-v1': 80,
+  'individual-provider': 15,
+  provider: 15,
+  'individual-max': 150,
+  max: 150,
+  'individual-ultra': 300,
+  ultra: 300,
+  'teams-pro': 40,
 };
 
 export const COMMANDCODE_CREDENTIAL_ACCOUNT = 'commandcode-api-key';
+export const COMMANDCODE_SESSION_ACCOUNT = 'commandcode-session-token';
 
 interface ResolvedApiKey {
   key: string;
@@ -234,26 +251,35 @@ export class CommandCodeProvider implements SubscriptionProvider {
   readonly id = 'commandcode' as const;
   readonly label = 'Command Code';
   readonly credentialAccount = COMMANDCODE_CREDENTIAL_ACCOUNT;
+  /** 浏览器会话 Token（与 API Key 不同），存放在独立 vault 账户，复用用量 Token 的存取链路。 */
+  readonly usageCredentialAccount = COMMANDCODE_SESSION_ACCOUNT;
 
   constructor(private getSettings: () => AppSettings) {}
 
   /**
-   * 三级解析：手动录入（可覆盖）→ 环境变量 → cmd login 写入的 ~/.commandcode/auth.json。
+   * 四级解析：手动录入（可覆盖）→ 环境变量 → ~/.commandcode/auth.json → 浏览器会话 Token。
+   * 后者免装 CLI：登录 commandcode.ai 后从 devtools 拷 Bearer / Cookie 贴进来即可。
    */
-  private async resolveApiKey(): Promise<ResolvedApiKey | null> {
+  private async resolveCandidates(): Promise<ResolvedApiKey[]> {
+    const candidates: ResolvedApiKey[] = [];
+    const seen = new Set<string>();
+
+    const push = (key: string | undefined, source: CommandCodeCredentialSource) => {
+      const normalized = nonEmptyString(key);
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      candidates.push({ key: normalized, source });
+    };
+
     const stored = await credentialVault.getSecret(this.credentialAccount);
-    const manual = nonEmptyString(stored);
-    if (manual) return { key: manual, source: 'manual' };
+    push(stored ?? undefined, 'manual');
 
-    const fromEnv =
-      nonEmptyString(process.env.COMMAND_CODE_API_KEY) ??
-      nonEmptyString(process.env.COMMANDCODE_API_KEY);
-    if (fromEnv) return { key: fromEnv, source: 'env' };
+    push(process.env.COMMAND_CODE_API_KEY, 'env');
+    push(process.env.COMMANDCODE_API_KEY, 'env');
+    push(await this.readAuthFileKey(), 'auth-file');
+    push((await credentialVault.getSecret(this.usageCredentialAccount)) ?? undefined, 'session');
 
-    const fromFile = await this.readAuthFileKey();
-    if (fromFile) return { key: fromFile, source: 'auth-file' };
-
-    return null;
+    return candidates;
   }
 
   /** 读取失败或结构不识别时静默返回 undefined，不记录凭据内容。 */
@@ -270,58 +296,93 @@ export class CommandCodeProvider implements SubscriptionProvider {
     }
   }
 
+  /** 浏览器拷出来的可能是纯 Bearer，也可能是整段 Cookie；两种都试一次。 */
+  private headerVariants(key: string): Array<Record<string, string>> {
+    const base = {
+      accept: 'application/json',
+      'User-Agent': BROWSER_USER_AGENT,
+    };
+    const variants: Array<Record<string, string>> = [{ ...base, Authorization: `Bearer ${key}` }];
+    if (/[=;]/.test(key)) {
+      variants.push({ ...base, Cookie: key });
+      const sessionMatch = key.match(/__Secure-authjs\.session-token=([^;\s]+)/);
+      if (sessionMatch?.[1]) {
+        variants.push({ ...base, Authorization: `Bearer ${sessionMatch[1]}` });
+      }
+    }
+    return variants;
+  }
+
   private async request(
     path: string,
     apiKey: string,
-    signal: AbortSignal,
+    timeoutMs: number,
   ): Promise<RequestOutcome> {
-    const response = await fetch(`${API_BASE}${path}`, {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      signal,
-    });
+    let lastFailure: RequestFailure | null = null;
+    for (const headers of this.headerVariants(apiKey)) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(`${API_BASE}${path}`, {
+          method: 'GET',
+          headers,
+          signal: controller.signal,
+        });
 
-    if (!response.ok) {
-      const blocking = response.status === 401 || response.status === 403;
-      return {
-        ok: false,
-        status: response.status,
-        blocking,
-        message: blocking
-          ? 'API Key 无效或已过期，请重新配置或运行 cmd login'
-          : `Command Code 接口返回 ${response.status}: ${response.statusText}（alpha 接口可能已变动）`,
-      };
+        if (!response.ok) {
+          const blocking = response.status === 401 || response.status === 403;
+          lastFailure = {
+            ok: false,
+            status: response.status,
+            blocking,
+            message: blocking
+              ? '凭据无效或已过期：API Key 请去 commandcode.ai/settings/keys 重建，浏览器 Token 请重新登录后重拷'
+              : `Command Code 接口返回 ${response.status}: ${response.statusText}（alpha 接口可能已变动）`,
+          };
+          if (!blocking) return lastFailure;
+          continue;
+        }
+
+        return { ok: true, body: await response.json().catch(() => null) };
+      } catch (err) {
+        const isAbort = err instanceof Error && err.name === 'AbortError';
+        return {
+          ok: false,
+          status: 0,
+          blocking: false,
+          message: isAbort
+            ? '请求超时，请检查网络后重试（可去数据刷新里调大超时）'
+            : `查询失败：${err instanceof Error ? err.message : String(err)}`,
+        };
+      } finally {
+        clearTimeout(timeout);
+      }
     }
-
-    return { ok: true, body: await response.json().catch(() => null) };
+    return (
+      lastFailure ?? {
+        ok: false,
+        status: 0,
+        blocking: false,
+        message: '查询失败：未知错误',
+      }
+    );
   }
 
   async isConfigured(): Promise<boolean> {
-    return (await this.resolveApiKey()) !== null;
+    return (await this.resolveCandidates()).length > 0;
   }
 
-  async fetchInfo(): Promise<SubscriptionInfoResult> {
-    const resolved = await this.resolveApiKey();
-    if (!resolved) {
-      return {
-        success: false,
-        providerId: this.id,
-        message: '未找到 Command Code 凭据：请先运行 cmd login，或在下方手动配置 API Key',
-      };
+  private async fetchWithKey(
+    resolved: ResolvedApiKey,
+    timeoutMs: number,
+  ): Promise<SubscriptionInfoResult> {
+    log.info('Fetching Command Code quota', { source: resolved.source });
+
+    const whoamiRes = await this.request(WHOAMI_PATH, resolved.key, timeoutMs);
+    if (!whoamiRes.ok) {
+      // 401/403 说明这个凭据不对，切下一个候选；超时/5xx 则直接报，不再换凭据碰运气。
+      return { success: false, providerId: this.id, message: whoamiRes.message, data: null };
     }
-
-    const settings = this.getSettings();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), settings.requestTimeoutSec * 1000);
-
-    try {
-      log.info('Fetching Command Code quota');
-
-      const whoamiRes = await this.request(WHOAMI_PATH, resolved.key, controller.signal);
-      if (!whoamiRes.ok) return { success: false, providerId: this.id, message: whoamiRes.message };
       const account = parseAccount(whoamiRes.body as RawCommandCodeWhoami);
       if (!account) {
         return {
@@ -333,8 +394,8 @@ export class CommandCodeProvider implements SubscriptionProvider {
 
       const accountQuery = buildQuery({ orgId: account.orgId ?? undefined });
       const [creditsRes, planRes] = await Promise.all([
-        this.request(`${CREDITS_PATH}${accountQuery}`, resolved.key, controller.signal),
-        this.request(`${SUBSCRIPTIONS_PATH}${accountQuery}`, resolved.key, controller.signal),
+        this.request(`${CREDITS_PATH}${accountQuery}`, resolved.key, timeoutMs),
+        this.request(`${SUBSCRIPTIONS_PATH}${accountQuery}`, resolved.key, timeoutMs),
       ]);
       for (const res of [creditsRes, planRes]) {
         if (!res.ok && res.blocking) return { success: false, providerId: this.id, message: res.message };
@@ -351,7 +412,7 @@ export class CommandCodeProvider implements SubscriptionProvider {
       const summaryRes = await this.request(
         `${USAGE_SUMMARY_PATH}${summaryQuery}`,
         resolved.key,
-        controller.signal,
+        timeoutMs,
       );
       if (!summaryRes.ok && summaryRes.blocking) {
         return { success: false, providerId: this.id, message: summaryRes.message };
@@ -388,6 +449,42 @@ export class CommandCodeProvider implements SubscriptionProvider {
           credentialSource: resolved.source,
         },
       };
+  }
+
+  async fetchInfo(): Promise<SubscriptionInfoResult> {
+    const candidates = await this.resolveCandidates();
+    if (candidates.length === 0) {
+      return {
+        success: false,
+        providerId: this.id,
+        message: '未找到 Command Code 凭据：在下方粘贴 Studio API Key 或浏览器会话 Token，无需安装 CLI',
+      };
+    }
+
+    const settings = this.getSettings();
+    // 之前单个超时管全部 4 个请求，弱网下必超时；现在每个请求独立占满配置超时。
+    const timeoutMs = Math.max(settings.requestTimeoutSec, 10) * 1000;
+
+    let lastAuthError: SubscriptionInfoResult | null = null;
+    try {
+      for (const resolved of candidates) {
+        const result = await this.fetchWithKey(resolved, timeoutMs);
+        if (result.success) return result;
+        const message = result.message ?? '';
+        const authFailed = /无效|过期|401|403/.test(message);
+        if (authFailed) {
+          lastAuthError = result;
+          continue;
+        }
+        return result;
+      }
+      return (
+        lastAuthError ?? {
+          success: false,
+          providerId: this.id,
+          message: 'Command Code 查询失败',
+        }
+      );
     } catch (err) {
       const isAbort = err instanceof Error && err.name === 'AbortError';
       const message = isAbort
@@ -395,8 +492,6 @@ export class CommandCodeProvider implements SubscriptionProvider {
         : `查询失败：${err instanceof Error ? err.message : String(err)}`;
       log.error('Command Code quota fetch failed', message);
       return { success: false, providerId: this.id, message };
-    } finally {
-      clearTimeout(timeout);
     }
   }
 }
