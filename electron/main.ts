@@ -284,12 +284,6 @@ function setupIpc(): void {
         partial.uiStyle === 'calm' ? '#f2f4f8' : '#0b1026',
       );
     }
-    if (partial.includeGrokBotUsage !== undefined) {
-      void poller.manualRefresh().then(() => {
-        broadcastSnapshot();
-        broadcastPollerState();
-      });
-    }
     if (partial.edgeAutoDockEnabled === false) {
       const floatWin = getFloatingBallWindow();
       if (floatWin && !floatWin.isDestroyed() && getDockState().docked) {

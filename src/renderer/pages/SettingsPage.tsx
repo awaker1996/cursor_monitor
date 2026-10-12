@@ -20,7 +20,7 @@ const SECTION_TITLES: Record<SettingsSectionId, string> = {
 const SECTION_DESCRIPTIONS: Record<SettingsSectionId, string> = {
   accounts:
     '配置 Cursor、Command Code、DeepSeek 的访问凭据；配置后自动查询订阅额度和用量，凭据仅保存在本机。',
-  data: '控制后台多久拉取一次数据，以及今日用量百分比是否计入 Grok Bot 调用。',
+  data: '控制后台多久拉取一次数据。',
   appearance: '界面风格、悬浮球显示与应用图标的个性化设置，改动立即生效，无需重启。',
   about: '本项目的功能范围与设计说明。',
 };

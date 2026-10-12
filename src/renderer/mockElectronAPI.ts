@@ -24,7 +24,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   cookieEndpoint: 'https://example.invalid/api/usage-summary',
   failureThreshold: 3,
   edgeAutoDockEnabled: true,
-  includeGrokBotUsage: false,
   customIconPath: null,
   uiStyle: 'aurora',
 };

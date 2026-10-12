@@ -102,3 +102,4 @@
 | 2026-10-09 | 视觉升级批次 D 高级感大招（噪点纹理 / 电池降动效 / 大屏适配 / 导航指示器 / 首帧闪烁） | feature, refactor, style | [2026-10-09-视觉升级批次D高级感大招.md](./2026-10-09-视觉升级批次D高级感大招.md) |
 | 2026-10-09 | 用量视图去头部（Included Usage / 订阅周期）并与概览对齐 | fix, style, refactor | [2026-10-09-用量视图去头部对齐.md](./2026-10-09-用量视图去头部对齐.md) |
 | 2026-10-10 | Command Code 单凭据与超时修复 | fix, feature, refactor | [2026-10-10-CommandCode单凭据与超时修复.md](./2026-10-10-CommandCode单凭据与超时修复.md) |
+| 2026-10-12 | 移除 Grok Bot 计入开关，固定剔除 | refactor, fix | [2026-10-12-移除GrokBot计入开关.md](./2026-10-12-移除GrokBot计入开关.md) |

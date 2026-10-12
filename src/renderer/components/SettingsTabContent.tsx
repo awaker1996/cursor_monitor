@@ -145,22 +145,6 @@ export function DataRefreshPrefs({
           />
         </SettingsRow>
         {intervalError && <p className="set-row__error">{intervalError}</p>}
-        <SettingsRow
-          title="计入 Grok Bot 用量"
-          description="开启后 grok-bot-* 模型的调用计入今日用量百分比与模型明细；账户订阅的官方周期占比始终不受影响"
-        >
-          <Switch
-            checked={settings.includeGrokBotUsage}
-            onChange={(next) => {
-              void window.electronAPI
-                .updateSettings({ includeGrokBotUsage: next })
-                .then(() =>
-                  onToast(next ? '已计入 Grok Bot 用量' : '已剔除 Grok Bot 用量'),
-                );
-            }}
-            label="计入 Grok Bot 用量"
-          />
-        </SettingsRow>
       </div>
     </GlassCard>
   );

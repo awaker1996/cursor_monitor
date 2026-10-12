@@ -96,8 +96,6 @@ export interface AppSettings {
   cookieEndpoint: string;
   failureThreshold: number;
   edgeAutoDockEnabled: boolean;
-  /** When true, grok-bot-automation/default count toward local stats and flow. */
-  includeGrokBotUsage: boolean;
   customIconPath?: string | null;
   /** 界面风格，同时作用于悬浮球与设置窗口。 */
   uiStyle: UiStyle;
@@ -111,15 +109,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cookieEndpoint: 'https://cursor.com/api/usage-summary',
   failureThreshold: 3,
   edgeAutoDockEnabled: true,
-  includeGrokBotUsage: false,
   customIconPath: null,
   uiStyle: 'aurora',
 };
-
-/** Options for local usage aggregation (today %, model breakdown, flow filter). */
-export interface UsageNormalizationOptions {
-  includeGrokBotUsage?: boolean;
-}
 
 export const REFRESH_INTERVAL_MIN = 30;
 export const REFRESH_INTERVAL_MAX = 3600;

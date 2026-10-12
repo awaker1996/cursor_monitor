@@ -1,9 +1,4 @@
-import type {
-  DataSource,
-  ProviderHealth,
-  TokenSnapshot,
-  UsageNormalizationOptions,
-} from '../../shared/types';
+import type { DataSource, ProviderHealth, TokenSnapshot } from '../../shared/types';
 import { normalize } from '../normalizer';
 import { SnapshotCache } from '../SnapshotCache';
 import { isEmptyUsageSnapshot, mergeCycleTokensFromCache, mergeTodayMetricsFromCache } from '../snapshotMerge';
@@ -57,11 +52,6 @@ export class ProviderManager {
     return this.lastSnapshot;
   }
 
-  private normalizationOptions(): UsageNormalizationOptions {
-    const { includeGrokBotUsage } = this.settingsStore.get();
-    return { includeGrokBotUsage };
-  }
-
   getHealth(): ProviderHealth[] {
     return Object.values(this.health);
   }
@@ -74,7 +64,7 @@ export class ProviderManager {
 
     try {
       const result = await provider.fetch();
-      const normalized = normalize(result.raw, result.source, undefined, this.normalizationOptions());
+      const normalized = normalize(result.raw, result.source);
       const snapshot = mergeCycleTokensFromCache(
         mergeTodayMetricsFromCache(normalized, this.lastSnapshot),
         this.lastSnapshot,
