@@ -477,12 +477,13 @@ function aggregateTokenEvents(
       result.apiTokens + result.autoTokens > 0 ? result.apiTokens + result.autoTokens : null,
     apiTokens: result.apiTokens > 0 ? result.apiTokens : null,
     autoTokens: result.autoTokens > 0 ? result.autoTokens : null,
-    apiTodayTokens: result.apiTodayTokens > 0 ? result.apiTodayTokens : null,
-    autoTodayTokens: result.autoTodayTokens > 0 ? result.autoTodayTokens : null,
-    apiTodayUsed:
-      result.apiTodayCostCents > 0 ? result.apiTodayCostCents / 100 : null,
-    autoTodayUsed:
-      result.autoTodayCostCents > 0 ? result.autoTodayCostCents / 100 : null,
+    // A complete today sample is authoritative: report a real 0 instead of null,
+    // otherwise `mergeTodayMetricsFromCache` reads the 0 as "could not compute",
+    // re-injects a cached nonzero value and latches `stale` on every refresh.
+    apiTodayTokens: todayComplete ? result.apiTodayTokens : null,
+    autoTodayTokens: todayComplete ? result.autoTodayTokens : null,
+    apiTodayUsed: todayComplete ? result.apiTodayCostCents / 100 : null,
+    autoTodayUsed: todayComplete ? result.autoTodayCostCents / 100 : null,
     apiTodayUsedPercent: todayUsedPercent({
       todayCostCents: result.apiTodayCostCents,
       cycleCostCents: result.apiCycleCostCents,

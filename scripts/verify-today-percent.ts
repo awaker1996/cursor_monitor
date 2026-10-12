@@ -505,6 +505,56 @@ console.log('mergeTodayMetricsFromCache');
   );
 }
 
+console.log('complete zero today is not resurrected from cache');
+
+{
+  const fetchedAt = new Date().toISOString();
+  // Complete today sample whose only events are excluded grok-bot calls:
+  // a real 0 must be reported as 0 (not null) so the merge below cannot read
+  // it as "could not compute" and latch stale on every refresh.
+  const zeroToday = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: { limit: 100, apiPercentUsed: 10, autoPercentUsed: 40, totalPercentUsed: 50 },
+        },
+      },
+      todayEvents: {
+        eventsComplete: true,
+        usageEventsDisplay: [
+          { model: 'grok-bot-default', tokenUsage: { inputTokens: 900_000 }, chargedCents: 90 },
+        ],
+      },
+      aggregatedUsage: {
+        aggregations: [
+          { modelIntent: 'composer-2.5-fast', inputTokens: '8000', totalCents: 800, tier: 2 },
+        ],
+      },
+    },
+    fetchedAt,
+  );
+
+  assert('complete zero today reports 0 tokens', zeroToday.metrics.autoTodayTokens === 0);
+  assert('complete zero today reports 0 percent', zeroToday.metrics.autoTodayUsedPercent === 0);
+
+  // Cached snapshot still holds a nonzero today value from an earlier refresh.
+  const cached = {
+    ...zeroToday,
+    metrics: {
+      ...zeroToday.metrics,
+      autoTodayTokens: 557_330,
+      autoTodayUsed: 5.5,
+      apiTodayTokens: 1_234,
+    },
+  };
+
+  const merged = mergeTodayMetricsFromCache(zeroToday, cached);
+  assert('zero today is not overwritten by cache', merged.metrics.autoTodayTokens === 0);
+  assert('zero today does not mark stale', merged.stale === false);
+}
+
 console.log('mergeCycleTokensFromCache');
 
 {
