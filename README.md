@@ -723,6 +723,22 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 
 当前典型体积（x64）：便携版 ~67 MB，安装包 ~67 MB（较初始 ~74 MB 减少约 7 MB）。
 
+### Electron 与打包工具链的来源
+
+`build.electronDist` 指向 `node_modules/electron/dist`，`electron-builder` 直接复用 `npm install` 已装好的 Electron，
+不再去 GitHub 下载 `electron-v<版本>-win32-x64.zip`（约 100 MB）。GitHub 不可达时这一步会超时并报
+`app-builder.exe process failed` / `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`。
+
+NSIS 工具链（`nsis`、`nsis-resources`）仍需**首次打包时下载一次**，解压到
+`%LOCALAPPDATA%\electron-builder\Cache`，之后离线可用。首次下载失败时指定镜像后重试一次即可：
+
+```
+set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+npm run dist
+```
+
+（`signAndEditExecutable: false` 已关闭代码签名改写，因此不需要 `winCodeSign`。）
+
 ### 打包前注意事项
 
 **残留的应用实例会被自动结束**：`scripts/dist.mjs` 会在打包前关闭已打包应用与 dev Electron 实例，无需手动处理。
@@ -842,6 +858,7 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 | dev server 报端口 5180 被占用 | `strictPort` 下会直接报错退出；释放端口或调整 `src/shared/devServer.ts` 的 `DEV_SERVER_PORT` |
 | keytar 安装失败 | 使用 safeStorage 回退；或安装 Windows Build Tools |
 | 打包时报 `Access is denied` | 已打包的应用正在运行，关闭后重试（托盘 → 退出，或用 `Stop-Process` 强制关闭） |
+| 打包报 `app-builder.exe process failed` / `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE` | 条尾的 `⨯ Get "https://github.com/electron/electron/..."` 才是真因：工具链下载失败，不是文件被占用。Electron 已由 `electronDist` 复用本地安装；若仍缺 NSIS 工具链，按上节设置 `ELECTRON_BUILDER_BINARIES_MIRROR` 后重试一次 |
 | 打包时报 `unable to read icon from file` | `build/icon.ico` 无效或缺失，执行 `scripts/create-icon.ps1` 重新生成 |
 
 ---

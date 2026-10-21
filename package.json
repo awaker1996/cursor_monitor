@@ -35,6 +35,7 @@
   "build": {
     "appId": "com.cursor.token.monitor",
     "productName": "Cursor Token Monitor",
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release",
       "buildResources": "build"
