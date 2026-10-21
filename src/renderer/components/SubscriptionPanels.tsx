@@ -9,7 +9,9 @@ import {
   parseMonthValue,
   limitPercent,
   limitTone,
+  clampPercent,
   formatLimitReset,
+  formatSandReset,
   LIMIT_LABELS,
   QUOTA_SECTION_LABELS,
 } from './SubscriptionUtils';
@@ -244,6 +246,27 @@ function CursorSections({ data }: { data: CursorSubscriptionData }) {
         />
       </Block>
 
+      {data.grokBot && (
+        <Block title="Grok Bot 周用量">
+          {data.grokBot.hasNonZeroIncludedLimit ? (
+            <MeterRow
+              label={data.grokBot.brand === 'grok' ? '每周用量（Grok）' : '每周用量'}
+              percent={data.grokBot.usedPercent}
+              resetText={`重置：${formatSandReset(data.grokBot.resetsAt)}`}
+              valueText={`已用 ${Math.round(clampPercent(data.grokBot.usedPercent ?? 0))}%，${formatSandReset(
+                data.grokBot.resetsAt,
+              )}`}
+            />
+          ) : (
+            <EmptyBlock text="当前套餐未包含 Grok Bot 周额度" />
+          )}
+          <p className="field-hint">
+            额度用尽后 Grok Bot 会暂停，直到重置。
+            {data.grokBot.onDemandEligible ? '可在控制台设置按需额度继续使用。' : ''}
+          </p>
+        </Block>
+      )}
+
       <Block title="用量明细">
         {modelCount === 0 ? (
           <EmptyBlock text="本计费周期内没有模型调用记录" />
@@ -274,12 +297,22 @@ function CursorSections({ data }: { data: CursorSubscriptionData }) {
 
 /* ── Command Code ── */
 
-function UsageLimitRow({ limit }: { limit: CommandCodeLimit }) {
-  const percent = limitPercent(limit);
-  const tone = limitTone(percent);
-  const label = LIMIT_LABELS[limit.key];
-  const filled = Math.min(METER_SEGMENTS, Math.round((percent / 100) * METER_SEGMENTS));
-  const rounded = Math.round(percent);
+/** 通用分段计量条：Command Code 限额与 Grok Bot 周用量共用同一套外观。 */
+function MeterRow({
+  label,
+  percent,
+  resetText,
+  valueText,
+}: {
+  label: string;
+  percent: number | null;
+  resetText?: string;
+  valueText?: string;
+}) {
+  const safe = clampPercent(percent ?? 0);
+  const tone = limitTone(safe);
+  const filled = Math.min(METER_SEGMENTS, Math.round((safe / 100) * METER_SEGMENTS));
+  const rounded = Math.round(safe);
 
   return (
     <div className="sub-meter">
@@ -294,7 +327,7 @@ function UsageLimitRow({ limit }: { limit: CommandCodeLimit }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={rounded}
-        aria-valuetext={`${rounded}%，已用 ${formatUsd(limit.used)} / ${formatUsd(limit.cap)}`}
+        aria-valuetext={valueText ?? `${rounded}%`}
       >
         {Array.from({ length: METER_SEGMENTS }, (_, index) => (
           <span
@@ -303,8 +336,22 @@ function UsageLimitRow({ limit }: { limit: CommandCodeLimit }) {
           />
         ))}
       </div>
-      <p className="sub-meter__reset">{formatLimitReset(limit)}</p>
+      {resetText ? <p className="sub-meter__reset">{resetText}</p> : null}
     </div>
+  );
+}
+
+function UsageLimitRow({ limit }: { limit: CommandCodeLimit }) {
+  const percent = limitPercent(limit);
+  const rounded = Math.round(percent);
+
+  return (
+    <MeterRow
+      label={LIMIT_LABELS[limit.key]}
+      percent={percent}
+      resetText={formatLimitReset(limit)}
+      valueText={`${rounded}%，已用 ${formatUsd(limit.used)} / ${formatUsd(limit.cap)}`}
+    />
   );
 }
 

@@ -28,7 +28,7 @@ export class SubscriptionManager {
     getSnapshot: () => TokenSnapshot | null,
   ) {
     // 新增订阅源时在此注册对应 Provider，注册顺序即弹窗 tab 顺序
-    this.register(new CursorProvider(getSnapshot));
+    this.register(new CursorProvider(getSnapshot, () => settingsStore.get()));
     this.register(new CommandCodeProvider(() => settingsStore.get()));
     this.register(new DeepSeekProvider(() => settingsStore.get()));
   }

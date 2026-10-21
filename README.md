@@ -47,7 +47,7 @@
 - Cursor Models / Other Models 余量与 Dashboard 用量指标展示（概览 / 用量切换）
 - 设置窗口侧边导航设置中心：账户与订阅 / 数据刷新 / 外观（界面风格 · 悬浮球 · 应用图标）/ 关于
 - 双主题界面风格：极光玻璃（深色）/ 清爽纸面（浅色），设置页切换即时生效于悬浮球与设置窗口
-- 订阅额度与用量查询：Cursor 周期用量（含订阅套餐）、Command Code 额度与 5 小时/每周/每月限额（含套餐）、DeepSeek 余额与按月模型用量
+- 订阅额度与用量查询：Cursor 周期用量（含订阅套餐与 Grok Bot 周用量）、Command Code 额度与 5 小时/每周/每月限额（含套餐）、DeepSeek 余额与按月模型用量
 - 系统托盘悬停展示概览用量摘要；右键提供设置 / 复位 / 退出
 - 自动刷新与间隔配置（订阅自动刷新共用同一份配置）
 - 双 Provider 故障切换（Official ⇄ Cookie）
@@ -198,7 +198,7 @@ npm run dist
 - 位于设置窗口「账户与订阅」区，以账户卡片纵向列表展示，默认全部收起只看一行摘要，点击头部展开明细、刷新与凭据配置
 - 收起态摘要：状态点 + 平台名 + 关键数值 + 精简状态（正常 / 未配置 / 异常）；Cursor 显示订阅套餐 pill（如 Pro，来自 `usage-summary` 的 `membershipType`）与今日 Cursor / Other 用量小条（快照缺今日口径时回退为周期口径并标注窗口），Command Code 显示套餐 pill（如 Go）与 5 小时 / 每周 / 每月限额小条
 - 三个提供方数据形态不同：
-  - **Cursor**：周期用量看板，复用主链路的 `TokenSnapshot`（本身不发独立请求）；展开态「周期与账户」首行展示订阅套餐
+  - **Cursor**：周期用量看板，复用主链路的 `TokenSnapshot`；展开态「周期与账户」首行展示订阅套餐，另有独立的「Grok Bot 周用量」区块（该数据不在快照里，由 `CursorProvider` 额外请求 `POST /api/dashboard/get-sand-usage-status` —— Grok Bot 在 Cursor 后端代号为 sand；未配置 Cookie 或请求失败时整块不渲染，不影响主体数据）
   - **Command Code**：额度看板——剩余额度（月度 / 购买 / 赠送）、当期消耗 / 请求数 / Tokens、套餐与续期日期，以及 5 小时 / 每周 / 每月三段限额计量条
   - **DeepSeek**：各币种余额，且支持按月查询模型用量明细（当前仅 DeepSeek 提供「用量」）
 - 凭据区按卡片独立折叠：Cursor 用 `WorkosCursorSessionToken`（Cookie，支持测试连接并展示结构化结果）；其余用 API Key；支持按月用量的提供方另有独立的「用量 Token」
@@ -279,7 +279,8 @@ flowchart TD
 | 标准化 | `src/core/normalizer.ts` | 统一字段映射（含 `membershipType` 提取） |
 | 订阅管理 | `src/core/subscriptions/SubscriptionManager.ts` | 订阅提供方注册、分发查询与凭据管理 |
 | 订阅缓存 | `src/core/subscriptions/SubscriptionCache.ts` | 订阅结果落盘（版本号 + 12h 有效期 + 失败保留） |
-| Cursor 订阅源 | `src/core/subscriptions/CursorProvider.ts` | 复用主链路快照构建周期用量（含订阅套餐） |
+| Cursor 订阅源 | `src/core/subscriptions/CursorProvider.ts` | 复用主链路快照构建周期用量（含订阅套餐），并额外请求 Grok Bot 周用量 |
+| Grok Bot 用量 | `src/core/subscriptions/sandUsage.ts` | sand 端点候选 + `parseSandUsageStatus` 纯解析 |
 | Command Code 订阅源 | `src/core/subscriptions/CommandCodeProvider.ts` | alpha 接口额度 / 套餐 / 三段限额 |
 | DeepSeek 订阅源 | `src/core/subscriptions/DeepSeekProvider.ts` | 余额 + 按月模型用量 |
 | 设置存储 | `src/settings/SettingsStore.ts` | JSON 持久化 |
@@ -331,7 +332,8 @@ cursor_monitor/
 │   │       ├── types.ts              # SubscriptionProvider 接口
 │   │       ├── SubscriptionManager.ts # 注册 / 分发 / 凭据
 │   │       ├── SubscriptionCache.ts   # 落盘缓存
-│   │       ├── CursorProvider.ts      # Cursor 周期用量（复用快照）
+│   │       ├── CursorProvider.ts      # Cursor 周期用量 + Grok Bot 周用量
+│   │       ├── sandUsage.ts           # Grok Bot（sand）用量解析
 │   │       ├── CommandCodeProvider.ts # Command Code 额度看板
 │   │       └── DeepSeekProvider.ts    # DeepSeek 余额 + 按月用量
 │   ├── settings/
@@ -751,6 +753,7 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 - [ ] 订阅「刷新全部」覆盖全部已配置提供方；打开设置窗口立即显示缓存
 - [ ] Command Code 收起态展示套餐与 5 小时/每周限额，展开可见额度与三段限额；DeepSeek 可按月查询模型用量
 - [ ] Cursor 收起态展示订阅套餐（如 Pro），展开明细「周期与账户」首行展示订阅套餐
+- [ ] Cursor 展开态在套餐含 Grok Bot 周额度时展示「Grok Bot 周用量」进度条与重置时间；未配置 Cookie 或接口失败时该区块隐藏且主体数据不受影响
 - [ ] 订阅查询失败时保留上次成功结果并给出黄色提示，不显示空白
 - [ ] 数据刷新分区改刷新间隔后，订阅自动刷新同步生效
 - [ ] 外观分区三卡等高、全部分区卡片风格统一（极光品牌流光 / 纸面中性染色）；关于页功能卡铺满面板区且内容与 README「范围内」清单一致
@@ -775,7 +778,7 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 
 1. **`src/core/subscriptions/CommandCodeProvider.ts`** — alpha 接口（whoami / billing / usage summary）与字段解析
 2. **`src/core/subscriptions/DeepSeekProvider.ts`** — 余额与按月用量接口
-3. **`src/core/subscriptions/CursorProvider.ts`** — Cursor 看板字段映射（数据来自主链路快照）
+3. **`src/core/subscriptions/CursorProvider.ts`** — Cursor 看板字段映射（数据来自主链路快照；Grok Bot 周用量走 `sandUsage.ts` 的独立请求）
 4. **`src/core/subscriptions/SubscriptionCache.ts`** — 结果结构变化时同步提升 `CACHE_VERSION`（版本不符会丢弃旧缓存）
 5. **`src/renderer/components/SubscriptionPanels.tsx`** — 展示字段与排版
 
@@ -864,10 +867,10 @@ ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、侧边导航设置中心（账户与订阅 / 数据刷新 / 外观 / 关于）、订阅额度与按月用量（Cursor / Command Code / DeepSeek，含套餐展示）、双主题界面风格（极光玻璃 / 清爽纸面）、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
+| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、侧边导航设置中心（账户与订阅 / 数据刷新 / 外观 / 关于）、订阅额度与按月用量（Cursor / Command Code / DeepSeek，含套餐与 Grok Bot 周用量展示）、双主题界面风格（极光玻璃 / 清爽纸面）、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 
 ---
 
-*文档版本：v1.9 | 最后更新：2026-10-12*
+*文档版本：v2.0 | 最后更新：2026-10-12*

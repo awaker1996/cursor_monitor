@@ -108,6 +108,29 @@ export type SubscriptionCacheSnapshot = Partial<
   Record<SubscriptionProviderId, SubscriptionCacheEntry>
 >;
 
+/**
+ * Cursor 侧 Grok Bot（后端代号 sand）周用量。
+ * 数据独立于 TokenSnapshot，来自 dashboard 的 get-sand-usage-status 接口。
+ */
+export interface CursorGrokBotUsage {
+  /** 本周已用百分比（0-100，接口原样返回，未做缩放）。 */
+  usedPercent: number | null;
+  /** 本周周期开始时间（ISO 原串）。 */
+  periodStart: string | null;
+  /** 下次重置时间（ISO 原串），展示层负责格式化。 */
+  resetsAt: string | null;
+  /** 是否仍有可用额度（接口 hasAvailableUsage）。 */
+  hasAvailableUsage: boolean;
+  /** 是否配置了非零的包含额度；false 时不展示进度条。 */
+  hasNonZeroIncludedLimit: boolean;
+  /** 是否可设置按需额度继续使用（接口 onDemandSettings.eligible）。 */
+  onDemandEligible: boolean;
+  /** Grok Bot 套餐标签（接口 grokPlanLabel）。 */
+  planLabel: string | null;
+  /** 账单品牌：cursor 为 Cursor 侧额度，grok 为 Grok 侧。 */
+  brand: 'cursor' | 'grok';
+}
+
 /** Cursor 平台周期用量数据，来源于 TokenSnapshot 的 metrics 与 includedUsage。 */
 export interface CursorSubscriptionData {
   providerId: 'cursor';
@@ -135,6 +158,8 @@ export interface CursorSubscriptionData {
   hasCookie: boolean;
   /** 订阅套餐类型（usage-summary 的 membershipType，如 pro），无数据时为 null。 */
   membershipType: string | null;
+  /** Grok Bot 周用量；未配置 Cookie、接口失败或套餐不含该额度时为 null。 */
+  grokBot: CursorGrokBotUsage | null;
 }
 
 export interface CursorModelItem {
@@ -152,6 +177,33 @@ export interface SubscriptionInfoResult {
   message?: string;
   fetchedAt?: string;
   data?: SubscriptionData | null;
+}
+
+/**
+ * Cursor dashboard `get-sand-usage-status` 原始响应结构（Grok Bot 周用量）。
+ * 内部接口，未公开、可能变动，全部字段可选并按需防御式解析。
+ */
+export interface RawSandUsageStatusResponse {
+  /** 本周周期开始时间（ISO）。 */
+  currentPeriodStart?: string | null;
+  /** 下次重置时间（ISO）。 */
+  nextResetTimestampUtc?: string | null;
+  /** 已用百分比（0-100）。实测 0.748597 对应控制台「1% used」。 */
+  usagePercent?: number | null;
+  hasAvailableUsage?: boolean | null;
+  /** 是否配置了非零的包含额度。 */
+  hasNonZeroIncludedLimit?: boolean | null;
+  onDemandSettings?: {
+    visible?: boolean | null;
+    eligible?: boolean | null;
+    dashboardUrl?: string | null;
+  } | null;
+  /** Grok Bot 套餐标签，如 "Grok Bot Plan"。 */
+  grokPlanLabel?: string | null;
+  /** Cursor 套餐名，如 "Pro"。 */
+  cursorPlanName?: string | null;
+  /** 账单品牌：SAND_BILLING_BRAND_CURSOR | SAND_BILLING_BRAND_GROK。 */
+  billingBrand?: string | null;
 }
 
 /** DeepSeek 官方余额接口原始响应结构。 */

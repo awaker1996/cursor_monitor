@@ -245,6 +245,19 @@ export function formatPeriodEnd(value: string | null): string | null {
   return `${date}（已续期）`;
 }
 
+/**
+ * Grok Bot 周重置文案：`M月D日（N 天后）`，与控制台「Resets 10月15日」同族但更紧凑。
+ * 时间不可解析时返回「重置时间未知」。
+ */
+export function formatSandReset(value: string | null): string {
+  const reset = parseTimestamp(value);
+  if (!reset) return '重置时间未知';
+  const label = `${reset.getMonth() + 1} 月 ${reset.getDate()} 日`;
+  const days = Math.ceil((reset.getTime() - Date.now()) / 86_400_000);
+  if (days > 0) return `${label}（${days} 天后）`;
+  return `${label}（已重置）`;
+}
+
 /** 百分比夹取到 0-100：防止异常口径把进度条撑破或显示负值。 */
 export function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;

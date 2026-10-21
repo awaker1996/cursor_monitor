@@ -48,7 +48,7 @@ function getBillingCycleRangeMs(summary: RawCookieResponse): { startDate: string
   return { startDate: String(now - 30 * 24 * 60 * 60 * 1000), endDate: String(now) };
 }
 
-function buildDashboardHeaders(cookieHeader: string): Record<string, string> {
+export function buildDashboardHeaders(cookieHeader: string): Record<string, string> {
   return {
     Accept: 'application/json',
     'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ function extractUserIdFromJwt(jwt: string): string | null {
   }
 }
 
-function normalizeWorkosCookie(input: string): string {
+export function normalizeWorkosCookie(input: string): string {
   const value = input.trim();
   const match = value.match(/(?:^|;\s*)WorkosCursorSessionToken=([^;]+)/);
   const token = match?.[1] ?? value;

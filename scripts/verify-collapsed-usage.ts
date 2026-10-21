@@ -40,6 +40,7 @@ function cursorData(overrides: Partial<CursorSubscriptionData> = {}): CursorSubs
     source: 'cookie',
     hasCookie: true,
     membershipType: 'pro',
+    grokBot: null,
     ...overrides,
   };
 }

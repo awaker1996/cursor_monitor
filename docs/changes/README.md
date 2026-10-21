@@ -104,3 +104,4 @@
 | 2026-10-10 | Command Code 单凭据与超时修复 | fix, feature, refactor | [2026-10-10-CommandCode单凭据与超时修复.md](./2026-10-10-CommandCode单凭据与超时修复.md) |
 | 2026-10-12 | 移除 Grok Bot 计入开关，固定剔除 | refactor, fix | [2026-10-12-移除GrokBot计入开关.md](./2026-10-12-移除GrokBot计入开关.md) |
 | 2026-10-12 | 修复今日用量归零导致「缓存数据」常驻 | fix | [2026-10-12-修复今日归零导致缓存数据常驻.md](./2026-10-12-修复今日归零导致缓存数据常驻.md) |
+| 2026-10-12 | Cursor 账户块补充 Grok Bot 周用量与重置时间 | feature | [2026-10-12-Cursor账户块补充GrokBot周用量.md](./2026-10-12-Cursor账户块补充GrokBot周用量.md) |

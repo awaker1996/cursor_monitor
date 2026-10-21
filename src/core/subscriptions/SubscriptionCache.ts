@@ -9,7 +9,7 @@ import type {
 } from '../../shared/subscriptionTypes';
 
 const CACHE_FILE = 'subscription-cache.json';
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 /** 超过该时长的缓存不再展示，避免把过期数据当成当前值。 */
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
