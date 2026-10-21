@@ -176,7 +176,9 @@ export default function App() {
   }, [pendingRefresh, pollerState?.fetching]);
 
   const setMousePassthrough = useCallback((ignore: boolean) => {
-    if (draggingRef.current || expandedRef.current) {
+    // 拖拽期间必须保持整窗可命中：鼠标一旦移出窗口仍要收到 mouseup 才能收尾。
+    // 展开态不再强制可命中，否则透明区会吞掉桌面/其他窗口的点击。
+    if (draggingRef.current) {
       if (mousePassthroughRef.current !== false) {
         mousePassthroughRef.current = false;
         window.electronAPI.setIgnoreMouseEvents(false);
@@ -211,17 +213,19 @@ export default function App() {
 
   useEffect(() => {
     if (expanded) {
+      // 展开瞬间先恢复整窗可点击，保证面板进场动画期间按钮可命中；
+      // 之后仍按光标位置判定，面板/球之外的透明区继续穿透给下层窗口。
       window.electronAPI.setIgnoreMouseEvents(false);
       mousePassthroughRef.current = false;
-      return;
     }
 
     const updateFromPoint = (clientX: number, clientY: number) => {
-      if (draggingRef.current || expandedRef.current) {
+      if (draggingRef.current) {
         setMousePassthrough(false);
         return;
       }
       if (dockedEdgeRef.current) {
+        // 贴边半隐球有一部分落在屏幕外，这里保持整窗可命中，避免 peek 条点不中。
         setMousePassthrough(false);
         return;
       }

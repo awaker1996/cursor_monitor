@@ -972,11 +972,17 @@ html[data-ui-style='calm'] .btn-icon[data-tip]::after {
   z-index: 1;
 }
 
+/* 分区头与模型行共用同一套左右规约（左内边距 8px、列间距 6px），
+   池名与下方模型名左对齐，统计值与模型行的 Tokens / Usage 列右对齐，
+   两区（Cursor / Other）结构一致，不再出现「徽标 + 名称」与「仅徽标」混排。 */
 .floating-ball__panel--included .included-usage__section-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
-  padding: 5px 6px;
+  /* 与 __entry 一样带 1px 边框（这里透明），左右内边距才对得上：
+     池名与模型名同一竖线，统计值与行的 Tokens / Usage 列右缘重合。 */
+  border: 1px solid transparent;
+  padding: 5px 8px;
   border-radius: var(--radius-chip);
   /* 流动光泽需要伪元素承载 */
   position: relative;
@@ -997,34 +1003,18 @@ html[data-ui-style='calm'] .btn-icon[data-tip]::after {
   z-index: 1;
 }
 
-.floating-ball__panel--included .included-usage__badge {
-  flex-shrink: 0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: var(--fs-mini);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1.2;
-}
-
-.floating-ball__panel--included .included-usage__block--api .included-usage__badge {
-  background: #34d399;
-  color: #052e1c;
-}
-
-.floating-ball__panel--included .included-usage__block--auto .included-usage__badge {
-  background: #60a5fa;
-  color: #0b1f3a;
-}
-
+/* 池名走常规省略：先按整词换行（Other Models 窄时折成两行，仍完整可读），
+   实在是单行塞不下才出省略号；不设 margin-left:auto，避免把池名挤成窄条。 */
 .floating-ball__panel--included .included-usage__section-label {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
   color: #e5e7eb;
-  font-size: var(--fs-mini);
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 700;
   line-height: 1.25;
-  white-space: nowrap;
+  letter-spacing: 0.01em;
+  white-space: normal;
+  overflow-wrap: anywhere;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1048,6 +1038,7 @@ html[data-ui-style='calm'] .btn-icon[data-tip]::after {
   grid-template-columns: minmax(0, 1fr) auto auto;
   column-gap: 6px;
   align-items: baseline;
+  /* 左右内边距与分区头一致（8px），池名 / 模型名、统计值 / Tokens·Usage 列上下对齐 */
   padding: 5px 8px;
   border-radius: var(--radius-chip);
   background:
@@ -6279,18 +6270,13 @@ html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__bloc
   background: rgba(29, 95, 216, 0.07);
 }
 
-html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--api .included-usage__badge {
-  background: var(--calm-ok);
-  color: #ffffff;
+/* 纸面主题没有徽标色块，池名直接用语义色承担分区识别：api 绿 / auto 蓝。 */
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--api .included-usage__section-label {
+  color: var(--calm-ok);
 }
 
-html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--auto .included-usage__badge {
-  background: var(--calm-accent);
-  color: #ffffff;
-}
-
-html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__section-label {
-  color: var(--calm-ink-2);
+html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__block--auto .included-usage__section-label {
+  color: var(--calm-accent);
 }
 
 html[data-ui-style='calm'] .floating-ball__panel--included .included-usage__entry {
