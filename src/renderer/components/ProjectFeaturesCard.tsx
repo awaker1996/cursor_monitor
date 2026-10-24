@@ -54,7 +54,7 @@ export default function ProjectFeaturesCard() {
   if (!INTRO && FEATURES.length === 0) return null;
 
   return (
-    <GlassCard accent="about">
+    <GlassCard>
       <div className="set-card__body project-features">
         {INTRO && <p className="project-features__intro">{renderInline(INTRO)}</p>}
         <ul className="project-features__list">

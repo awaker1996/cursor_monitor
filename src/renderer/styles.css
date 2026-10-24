@@ -2373,61 +2373,6 @@ html[data-ui-style='calm'] .btn-icon[data-tip]::after {
   font-size: var(--fs-mini);
 }
 
-/* ── Token Badge ── */
-
-.token-badge {
-  padding: 8px 10px;
-  border-radius: var(--radius-chip);
-  margin-bottom: 6px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.token-badge--auto {
-  border-left: 3px solid #818cf8;
-}
-
-.token-badge--api {
-  border-left: 3px solid #34d399;
-}
-
-.token-badge__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.token-badge__label {
-  color: #d1d5db;
-  font-size: var(--fs-body);
-  font-weight: 600;
-}
-
-.token-badge__percent {
-  color: #9ca3af;
-  font-size: var(--fs-caption);
-}
-
-.token-badge__values {
-  margin-top: 2px;
-}
-
-.token-badge__remaining {
-  color: #f3f4f6;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.token-badge__limit {
-  color: #6b7280;
-  font-size: var(--fs-body);
-}
-
-.token-badge__reset {
-  color: #6b7280;
-  font-size: var(--fs-mini);
-  margin-top: 2px;
-}
-
 /* ── Error Hint ──
    Aurora 深色玻璃主题下的三态提示（悬浮球面板沿用同一套，不再需要暗色覆盖）。 */
 
@@ -2687,7 +2632,7 @@ flex-shrink: 0;
 margin: 0 0 8px;
 font-size: 14px;
 font-weight: 600;
-color: rgba(200, 214, 245, 0.9);
+color: var(--pill-text-soft);
 }
 
 .page-shell__meta {
@@ -3096,8 +3041,16 @@ color: rgba(200, 214, 245, 0.9);
   margin-bottom: 10px;
 }
 
+/* 小节标题：与分区标题同族的胶囊，字号更小、底色更淡，
+   层级靠尺寸与深浅区分，而非另立一套形状。 */
 .sub-block__head .sub-section-title {
   margin: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--pill-bg-soft);
+  border: 1px solid var(--pill-border-soft);
+  box-shadow: var(--pill-shadow-soft);
+  color: var(--pill-text-soft);
 }
 
 .sub-block__head input[type='month'] {
@@ -3760,6 +3713,26 @@ color: rgba(200, 214, 245, 0.9);
   --glow-3: #a855f7;
   --glow-4: #34d399;
 
+  /* ── 胶囊标题令牌 ──
+     分区标题与小节标题统一用胶囊容器（取代原先贴在文字左侧的色带）。
+     极光玻璃用品牌三色低透明度渐变 + 内高光 + 微外发光；
+     清爽纸面主题在 html[data-ui-style='calm'] 内整体换值，组件侧零覆盖。 */
+  --pill-bg: linear-gradient(
+    115deg,
+    rgba(79, 124, 255, 0.26) 0%,
+    rgba(34, 211, 238, 0.14) 55%,
+    rgba(168, 85, 247, 0.16) 100%
+  );
+  --pill-bg-soft: rgba(148, 178, 255, 0.12);
+  --pill-border: rgba(148, 178, 255, 0.28);
+  --pill-border-soft: rgba(148, 178, 255, 0.18);
+  --pill-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 18px rgba(79, 124, 255, 0.16);
+  --pill-shadow-soft: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --pill-text: #eef3ff;
+  --pill-text-soft: rgba(200, 214, 245, 0.9);
+
   /* 极光玻璃的噪点层：feTurbulence 生成的 140×140 灰度噪点，
      以首层 background-image 平铺，给纯色渐变压上一层细微颗粒感。
      纸面主题把它置为 none —— 纸面本就是实色纸，不需要玻璃颗粒。 */
@@ -4163,23 +4136,11 @@ color: rgba(200, 214, 245, 0.9);
   outline-offset: -2px;
 }
 
-/* 激活态的底色交给滑移指示器，这里只留文字/字重与左侧索引条，
+/* 激活态的底色交给滑移指示器，这里只留文字/字重，
    避免指示器滑过时与静态底色叠成两层。 */
 .settings-nav__item.is-active {
   color: #cfe0ff;
   font-weight: 600;
-}
-
-/* 左侧彩色索引条：与纸面主题已有的实现对齐，消除两主题不对称 */
-.settings-nav__item.is-active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 22%;
-  bottom: 22%;
-  width: 3px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--glow-1), var(--glow-2));
 }
 
 .settings-nav__icon {
@@ -4322,15 +4283,27 @@ color: rgba(200, 214, 245, 0.9);
   margin-bottom: 12px;
 }
 
+/* 分区标题：胶囊容器取代原先贴在文字左侧的色带。
+   胶囊与侧边导航的滑移指示器同形（圆角 999px），
+   分区身份语言由此统一。 */
 .settings-panel__header h2 {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  box-shadow: var(--pill-shadow);
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #eef3ff;
+  color: var(--pill-text);
 }
 
 .settings-panel__header p {
-  margin-top: 2px;
+  margin-top: 0;
   font-size: var(--fs-body);
   color: rgba(165, 180, 220, 0.72);
 }
@@ -5194,6 +5167,16 @@ html[data-ui-style='calm'] {
   --set-accent: #2f6bde;
   --set-accent-soft: rgba(47, 107, 222, 0.1);
 
+  /* 胶囊标题令牌（纸面版）：白底 + 细描边 + 纸影，不发光、不动效 */
+  --pill-bg: linear-gradient(180deg, #ffffff, #f4f7fd);
+  --pill-bg-soft: #f4f7fc;
+  --pill-border: var(--calm-line-strong);
+  --pill-border-soft: var(--calm-line);
+  --pill-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --pill-shadow-soft: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --pill-text: var(--calm-ink);
+  --pill-text-soft: var(--calm-ink-2);
+
   /* 本主题专用令牌 */
   --calm-bg: #eef1f7;
   --calm-ink: #17202f;
@@ -5389,18 +5372,6 @@ html[data-ui-style='calm'] .settings-nav__thumb {
     0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
-/* 激活项左侧的彩色索引条，像纸上贴的彩色标签 */
-html[data-ui-style='calm'] .settings-nav__item.is-active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 22%;
-  bottom: 22%;
-  width: 3px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--calm-accent), #0d9488);
-}
-
 html[data-ui-style='calm'] .settings-nav__item.is-active .settings-nav__icon {
   color: var(--calm-accent);
   background: #ffffff;
@@ -5434,13 +5405,6 @@ html[data-ui-style='calm'] .settings-nav__footer-ver {
 html[data-ui-style='calm'] .settings-page__panels {
   background: transparent;
   backdrop-filter: none;
-}
-
-html[data-ui-style='calm'] .settings-panel__header h2 {
-  color: var(--calm-ink);
-  /* 标题前的渐变引导条：蓝→青，与导航索引条同语言 */
-  background: linear-gradient(180deg, var(--calm-accent), #0d9488) left center / 4px 14px no-repeat;
-  padding-left: 11px;
 }
 
 html[data-ui-style='calm'] .settings-panel__header p {
@@ -5704,10 +5668,6 @@ html[data-ui-style='calm'] .test-result__metrics .metric-card {
 
 html[data-ui-style='calm'] .save-message {
   color: var(--calm-accent-deep);
-}
-
-html[data-ui-style='calm'] .sub-section-title {
-  color: var(--calm-ink-2);
 }
 
 /* ── Toast / 骨架屏 ── */

@@ -8,44 +8,27 @@ import { SettingsRow, Segmented, SliderInput, Switch } from './SettingsControls'
 import { UI_STYLE_OPTIONS } from '../uiStyle';
 import type { UiStyle } from '../../shared/types';
 import type { ToastTone } from '../pages/SettingsPage';
-type CardAccent = 'data' | 'appearance' | 'ball' | 'icon' | 'about';
-
-const ACCENT_CLASS: Record<CardAccent, string> = {
-  data: 'set-card--accent-data',
-  appearance: 'set-card--accent-appearance',
-  ball: 'set-card--accent-ball',
-  icon: 'set-card--accent-icon',
-  about: 'set-card--accent-about',
-};
-
 function GlassCard({
-  accent,
   children,
   className,
 }: {
-  accent?: CardAccent;
   children: ReactNodeLike;
   className?: string;
 }) {
-  const classes = ['set-card', accent ? ACCENT_CLASS[accent] : '', className ?? '']
-    .filter(Boolean)
-    .join(' ');
+  const classes = ['set-card', className ?? ''].filter(Boolean).join(' ');
   return <div className={classes}>{children}</div>;
 }
 
 export { GlassCard };
-export type { CardAccent };
 
 /** 数据刷新与统计偏好。由 SettingsPage 挂在「数据刷新」分区下。
  * 保存逻辑与原实现一致：滑杆/输入 600ms 防抖后写盘。 */
 export function DataRefreshPrefs({
   settings,
   onToast,
-  accent,
 }: {
   settings: AppSettings;
   onToast: (message: string, tone?: ToastTone) => void;
-  accent?: CardAccent;
 }) {
   const [intervalInput, setIntervalInput] = useState('30');
   const [intervalError, setIntervalError] = useState<string | null>(null);
@@ -111,7 +94,7 @@ export function DataRefreshPrefs({
   };
 
   return (
-    <GlassCard accent={accent}>
+    <GlassCard>
       <div className="set-card__body">
         <SettingsRow
           title="自动刷新"
@@ -154,15 +137,13 @@ export function DataRefreshPrefs({
 export function AppearancePrefs({
   settings,
   onToast,
-  accent,
 }: {
   settings: AppSettings;
   onToast: (message: string, tone?: ToastTone) => void;
-  accent?: CardAccent;
 }) {
   const current = UI_STYLE_OPTIONS.find((o) => o.value === settings.uiStyle);
   return (
-    <GlassCard accent={accent}>
+    <GlassCard>
       <div className="set-card__body">
         <SettingsRow
           title="界面风格"
@@ -192,14 +173,12 @@ export function AppearancePrefs({
 export function BallPrefs({
   settings,
   onToast,
-  accent,
 }: {
   settings: AppSettings;
   onToast: (message: string, tone?: ToastTone) => void;
-  accent?: CardAccent;
 }) {
   return (
-    <GlassCard accent={accent}>
+    <GlassCard>
       <div className="set-card__body">
         <SettingsRow
           title="贴边自动收起"
@@ -225,10 +204,8 @@ export function BallPrefs({
 /** 托盘 / 窗口图标偏好：即时选择或恢复默认。 */
 export function IconPrefs({
   onToast,
-  accent,
 }: {
   onToast: (message: string, tone?: ToastTone) => void;
-  accent?: CardAccent;
 }) {
   const [iconPreview, setIconPreview] = useState<string | null>(null);
   const [hasCustom, setHasCustom] = useState(false);
@@ -263,7 +240,7 @@ export function IconPrefs({
   };
 
   return (
-    <GlassCard accent={accent}>
+    <GlassCard>
       <div className="set-card__body">
         <div className="icon-pick">
           <span className="icon-pick__frame">
