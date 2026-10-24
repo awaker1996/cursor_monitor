@@ -10,6 +10,7 @@
     "scripts/verify-cookie-summary.ts",
     "scripts/verify-collapsed-usage.ts",
     "scripts/verify-today-percent.ts",
+    "scripts/verify-today-range.ts",
     "scripts/verify-sand-usage.ts",
     "src/core/**/*",
     "src/renderer/components/SubscriptionUtils.ts",

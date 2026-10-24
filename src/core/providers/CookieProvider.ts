@@ -28,13 +28,35 @@ const DASHBOARD_AGGREGATED_ENDPOINTS = [
   'https://www.cursor.com/api/dashboard/get-aggregated-usage-events',
 ];
 
-function getTodayRangeMs(): { startDate: string; endDate: string } {
-  const now = new Date();
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
+/**
+ * 今日窗口起点 = 本地零点与计费周期起点的较晚者。
+ *
+ * 计费周期在周期起点重置，跨过周期起点的「今日」用量属于上一个周期。
+ * 若把这类用量算进今日，而周期侧暂时还没有可归属用量（周期内只有
+ * Grok Bot 等被排除的模型），今日/周期的份额就会失去分母，百分比
+ * 只能记为 null，UI 上「今日 Cursor」小条会被整根丢弃。
+ * 裁剪后今日窗口恒为周期窗口的子集，两个池都能给出百分比。
+ */
+export function getTodayRangeMs(
+  summary: Pick<RawCookieResponse, 'billingCycleStart'>,
+  nowMs: number = Date.now(),
+): { startDate: string; endDate: string } {
+  const localMidnight = new Date(nowMs);
+  localMidnight.setHours(0, 0, 0, 0);
+  let start = localMidnight.getTime();
+
+  const cycleStart = summary.billingCycleStart
+    ? new Date(summary.billingCycleStart).getTime()
+    : Number.NaN;
+  // 仅当周期起点落在「今天之内」且早于当前时刻时才裁剪；
+  // 周期起点缺失、非法或位于未来都退回本地零点。
+  if (Number.isFinite(cycleStart) && cycleStart > start && cycleStart < nowMs) {
+    start = cycleStart;
+  }
+
   return {
-    startDate: String(start.getTime()),
-    endDate: String(now.getTime()),
+    startDate: String(start),
+    endDate: String(nowMs),
   };
 }
 
@@ -291,7 +313,7 @@ export class CookieProvider implements TokenProvider {
             continue;
           }
 
-          const todayRange = getTodayRangeMs();
+          const todayRange = getTodayRangeMs(summary);
           const cycleRange = getBillingCycleRangeMs(summary);
           const todayEventsController = new AbortController();
           const cycleEventsController = new AbortController();
@@ -309,11 +331,10 @@ export class CookieProvider implements TokenProvider {
             Math.max(settings.requestTimeoutSec, 15) * 1000,
           );
 
-          let todayEvents: unknown | null = null;
-          let cycleEvents: unknown | null = null;
-          let aggregatedUsage: unknown | null = null;
           try {
-            [todayEvents, cycleEvents, aggregatedUsage] = await Promise.all([
+            // fetchUsageEvents 恒返回响应对象（失败体现在 eventsComplete），
+            // 只有聚合接口可能为 null，故无需预先声明可空变量。
+            const [todayEvents, cycleEvents, aggregatedUsage] = await Promise.all([
               fetchUsageEvents(
                 cookieHeader,
                 todayRange,
@@ -330,17 +351,17 @@ export class CookieProvider implements TokenProvider {
               ),
               fetchAggregatedUsage(cookieHeader, cycleRange, aggregatedController.signal),
             ]);
+
+            return {
+              raw: { summary, todayEvents, cycleEvents, aggregatedUsage },
+              source: 'cookie',
+              rawVersion: 'cookie:usage-summary+aggregated',
+            };
           } finally {
             clearTimeout(todayEventsTimeout);
             clearTimeout(cycleEventsTimeout);
             clearTimeout(aggregatedTimeout);
           }
-
-          return {
-            raw: { summary, todayEvents, cycleEvents, aggregatedUsage },
-            source: 'cookie',
-            rawVersion: 'cookie:usage-summary+aggregated',
-          };
         }
 
         lastError = new Error(
@@ -374,7 +395,7 @@ async function fetchUsageEvents(
   signal: AbortSignal,
   maxPages: number,
   userId: string | null,
-): Promise<RawUsageEventsResponse | null> {
+): Promise<RawUsageEventsResponse> {
   const events: unknown[] = [];
   let totalUsageEventsCount: number | null = null;
   const pageSize = 100;
@@ -417,13 +438,19 @@ async function fetchUsageEvents(
   }
 }
 
-function buildUsageEventsResponse(
+/**
+ * 事件响应封装。
+ *
+ * 「样本完整且确实没有用量」（窗口内一条事件都没有）与「样本不完整」
+ * （取数失败 / 分页截断）必须区分：前者今日口径就是 0，后者才是 null。
+ * 今日窗口裁剪到计费周期起点后，周期刚重置时窗口合法为空，若把空样本
+ * 记成 null，UI 会把「今日确实为 0」显示成「今日不可得」。
+ */
+export function buildUsageEventsResponse(
   events: unknown[],
   totalUsageEventsCount: number | null,
   fetchCompleted: boolean,
-): RawUsageEventsResponse | null {
-  if (events.length === 0) return null;
-
+): RawUsageEventsResponse {
   const fetched = events.length;
   const total = totalUsageEventsCount;
   const paginationComplete =
