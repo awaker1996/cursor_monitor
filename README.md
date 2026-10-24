@@ -100,6 +100,23 @@ npm run typecheck
 npm run dist
 ```
 
+### 验收脚本
+
+`scripts/verify-*.ts` 是纯内存 mock 的回归脚本（不需要 Cookie、不发网络请求），由 `tsconfig.verify.json` 统一编译后执行：
+
+```bash
+# 编译到 .tmp-verify/（已 gitignore），再逐个运行
+npx tsc -p tsconfig.verify.json
+node .tmp-verify/scripts/verify-today-range.js
+node .tmp-verify/scripts/verify-today-percent.js
+node .tmp-verify/scripts/verify-collapsed-usage.js
+node .tmp-verify/scripts/verify-cookie-summary.js
+node .tmp-verify/scripts/verify-included-usage.js
+node .tmp-verify/scripts/verify-sand-usage.js
+```
+
+`tsx` 不在依赖中，脚本注释里的 `npx tsx` 会在联网拉取时受本机 npm 缓存目录权限影响；本机不可用时统一走上面这条 tsc 编译路径。`scripts/diagnose-*.ts` 是真实请求的诊断脚本，不属于验收范围，不要放进 CI。
+
 ### 首次使用
 
 1. 启动应用，屏幕右下角出现悬浮球
@@ -209,6 +226,7 @@ npm run dist
 ### FR-11 设置窗口结构
 
 - 设置窗口 840×700（最小 720×560），侧边导航 + 分区面板：**账户与订阅 / 数据刷新 / 外观 / 关于** 四分区，无 Tab 切换；窗口标题为「设置」，底色跟随界面风格避免深浅闪变
+- 分区标题统一用玻璃胶囊（圆角胶囊容器，取代原先贴在文字左侧的色带），两主题结构一致、仅配色不同；订阅卡内小节标题用同族的小号胶囊；侧边导航激活态由滑移胶囊 + 字重 + 变色承担
 - 「账户与订阅」区：账户卡片纵向单列，工具栏含查询时间、自动刷新状态与「刷新全部」
 - 「数据刷新」区：自动刷新、刷新间隔（30–3600 秒，防抖自动保存）
 - 「外观」区：界面风格切换（极光玻璃 / 清爽纸面）、悬浮球贴边自动收起、应用图标选择 / 恢复默认（即时生效于托盘与设置窗口）
@@ -289,10 +307,12 @@ flowchart TD
 | 格式化 | `src/shared/format.ts` | 展示格式化、托盘 tooltip、概览/用量构建 |
 | 悬浮球 UI | `src/renderer/App.tsx` | 折叠/展开、概览/用量切换 |
 | 设置 UI | `src/renderer/pages/SettingsPage.tsx` | 侧边导航设置中心骨架（账户与订阅 / 数据刷新 / 外观 / 关于） |
+| 设置标题栏 | `src/renderer/components/SettingsTitleBar.tsx` | 设置窗自绘标题栏（整条可拖动 + 窗口控制按钮） |
 | 设置导航 | `src/renderer/components/SettingsNav.tsx` | 侧边导航（两字标签 + 底部品牌角标含版本号） |
 | 设置面板 | `src/renderer/components/SettingsPanel.tsx` | 分区面板骨架（标题 / 描述 / fill 铺满模式） |
 | 主题风格 | `src/renderer/uiStyle.ts` | 界面风格元数据与 `data-ui-style` 应用 / 跟随同步 |
-| 偏好设置 UI | `src/renderer/components/SettingsTabContent.tsx` | 数据刷新 / 界面风格 / 悬浮球行为 / 应用图标 / 关于说明 |
+| 偏好设置 UI | `src/renderer/components/SettingsTabContent.tsx` | 数据刷新 / 界面风格 / 悬浮球行为 / 应用图标 |
+| 设置控件 | `src/renderer/components/SettingsControls.tsx` | 设置通用控件（SettingsRow / Segmented / SliderInput / Switch） |
 | 核心功能卡 | `src/renderer/components/ProjectFeaturesCard.tsx` | 由 `README.md` 派生功能清单（`?raw`），默认折叠 |
 | 打包编排 | `scripts/dist.mjs` | 结束残留实例、工作区外打包、发布产物到 `release/` |
 | 订阅 UI | `src/renderer/pages/SubscriptionsPage.tsx` | 账户卡片列表：独立展开、独立刷新、独立凭据配置 |
@@ -356,23 +376,25 @@ cursor_monitor/
 │       │   ├── SettingsPage.tsx      # 侧边导航设置中心骨架
 │       │   └── SubscriptionsPage.tsx # 账户卡片列表
 │       └── components/
+│           ├── SettingsTitleBar.tsx     # 设置窗自绘标题栏（拖动 + 窗口控制）
 │           ├── SettingsNav.tsx          # 设置侧边导航（含品牌角标）
 │           ├── SettingsPanel.tsx        # 分区面板骨架（fill 铺满模式）
-│           ├── SettingsTabContent.tsx   # 偏好设置卡片（数据刷新/风格/悬浮球/图标）+ 关于说明
+│           ├── SettingsTabContent.tsx   # 偏好设置卡片（数据刷新/风格/悬浮球/图标）
+│           ├── SettingsControls.tsx     # 设置通用控件（行 / 分段 / 滑杆 / 开关）
 │           ├── ProjectFeaturesCard.tsx  # 关于与功能说明（读 README）
 │           ├── SubscriptionPanels.tsx
 │           ├── SubscriptionUtils.ts
 │           ├── IncludedUsageTable.tsx
 │           ├── TestConnectionResultPanel.tsx
 │           ├── ErrorHint.tsx
-│           ├── MetricRow.tsx
-│           └── TokenBadge.tsx
+│           └── MetricRow.tsx
 ├── docs/
 │   └── changes/                 # 代码变更归档（见 .cursor/rules/change-archive.mdc）
 ├── scripts/
 │   ├── dist.mjs                 # 打包编排（结束残留实例 / 工作区外打包 / 发布产物）
 │   ├── create-icon.ps1          # 生成 build/icon.ico
 │   ├── verify-*.ts              # 主链路 / 订阅验收脚本（内存 mock）
+│   ├── diagnose-*.ts            # 接口稳定性诊断脚本（真实请求，非验收）
 ├── .cursor/rules/               # 项目级规则（变更归档等）
 ├── .cursorignore                # 编辑器索引排除（构建产物）
 ├── .vscode/settings.json        # 编辑器 search / watcher 排除
@@ -381,8 +403,10 @@ cursor_monitor/
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tsconfig.electron.json
+├── tsconfig.verify.json         # 验收脚本编译配置（emit 到 .tmp-verify/）
 ├── electron-builder.yml
 ├── package.json
+├── package-lock.json
 └── release/                     # 打包产物
 ```
 
@@ -482,11 +506,13 @@ cursor_monitor/
 3. `https://cursor.com/api/dashboard/get-filtered-usage-events`（今日/周期 token 与 Included Usage 回退）
 4. `https://www.cursor.com/api/dashboard/get-filtered-usage-events`
 
-`get-aggregated-usage-events` 返回周期内按模型汇总的 tokens / cost，用于展开面板底部 **Included Usage**，与控制台 Billing 口径对齐，无需事件分页。
+`get-aggregated-usage-events` 返回周期内按模型汇总的 tokens / cost，用于展开面板底部 **Included Usage**，与控制台 Billing 口径对齐，无需事件分页。该端点在服务端已剔除 `grok-bot-*` 后台模型：当查询窗口内只剩这类调用时，响应体只含 `startDate` 而不含 `aggregations` 字段（HTTP 200），应用据此判定聚合不可用并回退到周期事件聚合。
 
 `get-filtered-usage-events` 用于补充周期内 token 总量和今日 token/消耗，并在聚合接口不可用时回退构建 Included Usage。该端点依赖 `WorkosCursorSessionToken` 中的 `userId`，应用会从 `userId::jwt`、URL 编码格式或 JWT `sub` 中提取。若事件接口失败、超时或无法提取 `userId`，应用仍会展示 `usage-summary` 的汇总百分比，并将 token 明细保持为 `null`。
 
 **今日口径的 `null` 与 `0` 语义**：今日事件样本完整（`eventsComplete`）时，今日的 token / 消耗即使为 0 也如实上报为 **0**，只有样本不完整或事件接口失败时才记为 `null`。二者不可混同——若把真实的 0 记为 `null`，快照合并会把「算不出今日指标」与「今日就是 0」混淆，从上次快照回填过期的今日数值并将 `stale` 置真，导致状态 pill 常驻「缓存数据」且今日数值停留旧值。
+
+**今日窗口裁剪到计费周期起点**：今日事件查询的起点取 `max(本地零点, billingCycleStart)`。额度在周期起点重置，跨过该起点的「今日」用量属于上一个周期；若把它算进今日，而周期侧暂时还没有可归属用量（周期内只有被剔除的 `grok-bot-*`），今日/周期的份额就失去分母，今日百分比只能记为 `null`，收起态的「今日 Cursor」小条会被整根丢弃。裁剪后今日窗口恒为周期窗口的子集，两个用量池都能给出百分比。周期起点缺失、非法或位于未来时退回本地零点。
 
 ### 异常处理规则
 
@@ -761,6 +787,7 @@ npm run dist
 - [ ] 清除凭据后停止敏感请求，UI 给出引导
 - [ ] 快照缓存在启动/失败时可展示 stale 数据（状态 pill 标识）
 - [ ] 当日无真实用量（今日事件样本完整且为 0）时显示 0.00% / `0 tokens`，不误报「缓存数据」
+- [ ] Cursor 收起态同时出现「今日 Cursor」「今日 Other」两根小条；计费周期刚重置、周期内只有被剔除的后台模型时，今日显示 0% 而不是缺条
 - [ ] 托盘悬停显示多行概览用量（模型名列对齐），随刷新更新
 - [ ] 托盘右键含设置、复位、退出；左键点击弹出同一菜单
 - [ ] 设置窗口侧边导航四分区（账户与订阅 / 数据刷新 / 外观 / 关于），无 Tab
@@ -851,6 +878,7 @@ npm run dist
 | 有百分比但无 token 明细 | `get-filtered-usage-events` 失败或 Cookie 中无法解析 userId；主汇总数据不受影响 |
 | 状态 pill 常驻「缓存数据」、今日数值不动 | 今日指标被误判为「不可得」并从上次快照回填。先点「刷新」重新拉取；若事件接口正常仍复现，检查今日 0 是否被记成了 `null`（见第 6 章今日口径语义） |
 | 今日一直显示 0 tokens / 0.00% | 当日只有被剔除的后台模型（`grok-bot-*`）调用时属正常：该模型恒不计入本地用量，今日实际用量即为 0 |
+| 收起态只有「今日 Other」一根条 | 该池的今日百分比算不出（口径不可得）时小条会被丢弃。若是周期刚重置、周期内只有被剔除的后台模型所致，等待周期内产生正常用量或跨日恢复；今日窗口已裁剪到周期起点，若仍缺条请检查事件接口是否失败（见第 6 章今日窗口口径） |
 | 订阅一直显示缓存时间 | 点「刷新全部」或单卡片「刷新」重新查询；查询失败会保留上次成功结果并给出黄色提示 |
 | Command Code 报「凭据无效或已过期」 | 单凭据框整体重贴控制台密钥完整内容（勿截断）或浏览器重拷 Bearer / Cookie；清除凭据会连历史浏览器 Token 一并清除 |
 | DeepSeek 有余额但没有月度用量 | 需要单独配置「用量 Token」（与 API Key 不同） |
