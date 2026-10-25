@@ -1,51 +1,21 @@
 import type { ReactNode } from 'react';
 import ErrorHint from './ErrorHint';
-import {
-  formatUsd,
-  formatCount,
-  formatCursorPlanLabel,
-  formatPlanLabel,
-  formatPeriodEnd,
-  parseMonthValue,
-  limitPercent,
-  limitTone,
-  clampPercent,
-  formatLimitReset,
-  formatSandReset,
-  LIMIT_LABELS,
-  QUOTA_SECTION_LABELS,
-} from './SubscriptionUtils';
-import {
-  formatIncludedUsageTokens,
-  formatBillingDate,
-  formatUsedPercent,
-  formatRemainingFromUsedPercent,
-} from '../../shared/format';
+import { formatCount, formatUsd, parseMonthValue } from './SubscriptionUtils';
+import { formatIncludedUsageTokens, formatUsedPercent } from '../../shared/format';
 import type {
-  CommandCodeLimit,
   CommandCodeSubscriptionData,
   CursorModelItem,
   CursorSubscriptionData,
-  DeepSeekSubscriptionData,
   DeepSeekUsageData,
   SubscriptionInfoResult,
-  SubscriptionProviderMeta,
   SubscriptionUsageResult,
 } from '../../shared/subscriptionTypes';
 
-const METER_SEGMENTS = 24;
+/* ── 展开区只剩「用量明细」 ──
+   套餐、计费周期、限额百分比与重置时间都已在卡片常显区呈现，
+   这里不再重复，避免同一组数字在一屏内出现两次。 */
 
-/* ── 通用骨架：三平台共用「概览 → 关键指标 → 周期与账户 → 用量明细」四段 ── */
-
-function AccountBadge({ available }: { available: boolean }) {
-  return (
-    <span className={available ? 'sub-badge sub-badge--ok' : 'sub-badge sub-badge--bad'}>
-      {available ? '可用' : '不可用'}
-    </span>
-  );
-}
-
-/** 统一区块：标题（可带右侧控件） + 内容。数据缺失时整块不渲染。 */
+/** 统一区块：标题（可带右侧控件） + 内容。 */
 function Block({
   title,
   action,
@@ -63,59 +33,6 @@ function Block({
       </div>
       {children}
     </section>
-  );
-}
-
-/** 关键指标网格：列数随条目数，三平台均为 3 项。 */
-function StatGrid({ items }: { items: Array<{ label: string; value: ReactNode }> }) {
-  const columns =
-    items.length >= 3 ? ' sub-metrics--3' : items.length === 2 ? ' sub-metrics--2' : '';
-  return (
-    <div className={`sub-metrics${columns}`}>
-      {items.map((item) => (
-        <div key={item.label}>
-          <div className="sub-metric__label">{item.label}</div>
-          <div className="sub-metric__value">{item.value}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** 周期 / 账户信息：键值行。 */
-function KeyValueRows({ rows }: { rows: Array<{ label: string; value: ReactNode }> }) {
-  return (
-    <div className="sub-rows">
-      {rows.map((row) => (
-        <div className="sub-row" key={row.label}>
-          <span className="sub-row__key">{row.label}</span>
-          <span className="sub-row__value">{row.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Hero({
-  available,
-  amount,
-  unit,
-  detail,
-}: {
-  available: boolean;
-  amount: ReactNode;
-  unit: string;
-  detail: ReactNode;
-}) {
-  return (
-    <div className="sub-hero">
-      <AccountBadge available={available} />
-      <div>
-        <span className="sub-hero__amount">{amount}</span>
-        <span className="sub-hero__unit">{unit}</span>
-        <span className="sub-hero__detail">{detail}</span>
-      </div>
-    </div>
   );
 }
 
@@ -204,165 +121,41 @@ function CursorModelTable({
   );
 }
 
-function CursorSections({ data }: { data: CursorSubscriptionData }) {
-  const cycleStart = formatBillingDate(data.billingCycleStart);
-  const cycleEnd = formatBillingDate(data.billingCycleEnd);
-  const cycleLabel = cycleStart && cycleEnd ? `${cycleStart} ~ ${cycleEnd}` : null;
+function CursorDetails({ data }: { data: CursorSubscriptionData }) {
   const modelCount = data.cursorModels.length + data.otherModels.length;
 
   return (
-    <>
-      <Hero
-        available={data.hasCookie}
-        amount={formatRemainingFromUsedPercent(data.totalUsedPercent)}
-        unit="周期剩余"
-        detail={
-          <>
-            已用 {formatUsedPercent(data.totalUsedPercent)}
-            {` · 来源 ${data.source === 'official' ? '官方' : 'Cookie'}`}
-            {cycleLabel ? ` · ${cycleLabel}` : ''}
-          </>
-        }
-      />
-
-      <Block title="关键指标">
-        <StatGrid
-          items={[
-            { label: 'Cursor Models 已用', value: formatUsedPercent(data.cursorModelsUsedPercent) },
-            { label: 'Other Models 已用', value: formatUsedPercent(data.otherModelsUsedPercent) },
-            { label: '明细模型数', value: formatCount(modelCount) },
-          ]}
-        />
-      </Block>
-
-      <Block title="周期与账户">
-        <KeyValueRows
-          rows={[
-            { label: '订阅套餐', value: formatCursorPlanLabel(data.membershipType) ?? '-' },
-            { label: '计费周期', value: cycleLabel ?? '-' },
-            { label: '数据来源', value: data.source === 'official' ? '官方接口' : 'Dashboard Cookie' },
-            { label: '凭据状态', value: data.hasCookie ? '已配置 Cookie' : '未配置 Cookie' },
-          ]}
-        />
-      </Block>
-
-      {data.grokBot && (
-        <Block title="Grok Bot 周用量">
-          {data.grokBot.hasNonZeroIncludedLimit ? (
-            <MeterRow
-              label={data.grokBot.brand === 'grok' ? '每周用量（Grok）' : '每周用量'}
-              percent={data.grokBot.usedPercent}
-              resetText={`重置：${formatSandReset(data.grokBot.resetsAt)}`}
-              valueText={`已用 ${Math.round(clampPercent(data.grokBot.usedPercent ?? 0))}%，${formatSandReset(
-                data.grokBot.resetsAt,
-              )}`}
+    <Block title="用量明细">
+      {modelCount === 0 ? (
+        <EmptyBlock text="本计费周期内没有模型调用记录" />
+      ) : (
+        <>
+          {data.cursorModels.length > 0 && (
+            <CursorModelTable
+              caption="Cursor Models"
+              models={data.cursorModels}
+              totalTokens={sumModelTokens(data.cursorModels)}
+              totalPercent={data.cursorModelsUsedPercent}
             />
-          ) : (
-            <EmptyBlock text="当前套餐未包含 Grok Bot 周额度" />
           )}
-          <p className="field-hint">
-            额度用尽后 Grok Bot 会暂停，直到重置。
-            {data.grokBot.onDemandEligible ? '可在控制台设置按需额度继续使用。' : ''}
-          </p>
-        </Block>
+          {data.otherModels.length > 0 && (
+            <CursorModelTable
+              caption="Other Models"
+              models={data.otherModels}
+              totalTokens={sumModelTokens(data.otherModels)}
+              totalPercent={data.otherModelsUsedPercent}
+            />
+          )}
+        </>
       )}
-
-      <Block title="用量明细">
-        {modelCount === 0 ? (
-          <EmptyBlock text="本计费周期内没有模型调用记录" />
-        ) : (
-          <>
-            {data.cursorModels.length > 0 && (
-              <CursorModelTable
-                caption="Cursor Models"
-                models={data.cursorModels}
-                totalTokens={sumModelTokens(data.cursorModels)}
-                totalPercent={data.cursorModelsUsedPercent}
-              />
-            )}
-            {data.otherModels.length > 0 && (
-              <CursorModelTable
-                caption="Other Models"
-                models={data.otherModels}
-                totalTokens={sumModelTokens(data.otherModels)}
-                totalPercent={data.otherModelsUsedPercent}
-              />
-            )}
-          </>
-        )}
-      </Block>
-    </>
+    </Block>
   );
 }
 
 /* ── Command Code ── */
 
-/** 通用分段计量条：Command Code 限额与 Grok Bot 周用量共用同一套外观。 */
-function MeterRow({
-  label,
-  percent,
-  resetText,
-  valueText,
-}: {
-  label: string;
-  percent: number | null;
-  resetText?: string;
-  valueText?: string;
-}) {
-  const safe = clampPercent(percent ?? 0);
-  const tone = limitTone(safe);
-  const filled = Math.min(METER_SEGMENTS, Math.round((safe / 100) * METER_SEGMENTS));
-  const rounded = Math.round(safe);
-
-  return (
-    <div className="sub-meter">
-      <div className="sub-meter__head">
-        <span className="sub-meter__label">{label}</span>
-        <span className="sub-meter__percent">{rounded}%</span>
-      </div>
-      <div
-        className="sub-meter__track"
-        role="meter"
-        aria-label={`${label} 已用 ${rounded}%`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={rounded}
-        aria-valuetext={valueText ?? `${rounded}%`}
-      >
-        {Array.from({ length: METER_SEGMENTS }, (_, index) => (
-          <span
-            key={index}
-            className={index < filled ? `sub-meter__seg sub-meter__seg--${tone}` : 'sub-meter__seg'}
-          />
-        ))}
-      </div>
-      {resetText ? <p className="sub-meter__reset">{resetText}</p> : null}
-    </div>
-  );
-}
-
-function UsageLimitRow({ limit }: { limit: CommandCodeLimit }) {
-  const percent = limitPercent(limit);
-  const rounded = Math.round(percent);
-
-  return (
-    <MeterRow
-      label={LIMIT_LABELS[limit.key]}
-      percent={percent}
-      resetText={formatLimitReset(limit)}
-      valueText={`${rounded}%，已用 ${formatUsd(limit.used)} / ${formatUsd(limit.cap)}`}
-    />
-  );
-}
-
-function CommandCodeSections({ data }: { data: CommandCodeSubscriptionData }) {
-  const { credits, plan, summary, account, credentialSource, limits, unavailable } = data;
-  const available = plan ? plan.status === 'active' : (credits?.remainingCredits ?? 0) > 0;
-  const periodEnd = formatPeriodEnd(plan?.currentPeriodEnd ?? null);
-  const periodStart = formatBillingDate(plan?.currentPeriodStart ?? null);
-  const periodEndDate = formatBillingDate(plan?.currentPeriodEnd ?? null);
-  const cycleLabel = periodStart && periodEndDate ? `${periodStart} ~ ${periodEndDate}` : null;
-
+function CommandCodeDetails({ data }: { data: CommandCodeSubscriptionData }) {
+  const { summary } = data;
   const requestsValue =
     summary == null
       ? null
@@ -371,132 +164,57 @@ function CommandCodeSections({ data }: { data: CommandCodeSubscriptionData }) {
         : formatCount(summary.totalCount);
 
   return (
-    <>
-      <Hero
-        available={available}
-        amount={formatUsd(credits?.remainingCredits ?? 0)}
-        unit="剩余额度"
-        detail={
-          credits ? (
-            <>
-              月度 {formatUsd(credits.monthlyCredits)} · 购买 {formatUsd(credits.purchasedCredits)} · 赠送{' '}
-              {formatUsd(credits.freeCredits)}
-            </>
-          ) : (
-            '额度数据不可用'
-          )
-        }
-      />
-
-      {summary && (
-        <Block title="关键指标">
-          <StatGrid
-            items={[
-              { label: '当期消耗', value: formatUsd(summary.totalCost) },
-              { label: '请求数', value: formatCount(summary.totalCount) },
-              {
-                label: 'Tokens',
-                value:
-                  summary.totalTokens === undefined
-                    ? '-'
-                    : formatIncludedUsageTokens(summary.totalTokens),
-              },
+    <Block title="用量明细">
+      {!summary ? (
+        <EmptyBlock text="用量汇总暂时无法获取，可能是 alpha 接口已变动，稍后刷新再试" />
+      ) : (
+        <table className="sub-table">
+          <thead>
+            <tr>
+              <th>指标</th>
+              <th className="sub-table__value">数值</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="sub-table__model">输入 Tokens</td>
+              <td className="sub-table__value">
+                {formatIncludedUsageTokens(summary.totalTokensIn ?? null)}
+              </td>
+            </tr>
+            <tr>
+              <td className="sub-table__model">输出 Tokens</td>
+              <td className="sub-table__value">
+                {formatIncludedUsageTokens(summary.totalTokensOut ?? null)}
+              </td>
+            </tr>
+            <tr>
+              <td className="sub-table__model">请求数</td>
+              <td className="sub-table__value">{requestsValue ?? '-'}</td>
+            </tr>
+            <tr>
+              <td className="sub-table__model">成功率</td>
+              <td className="sub-table__value">{formatPercent1(summary.successRate)}</td>
+            </tr>
+            <tr>
+              <td className="sub-table__model">平均单次成本</td>
+              <td className="sub-table__value">
+                {summary.averageCost === undefined ? '-' : `$${summary.averageCost.toFixed(4)}`}
+              </td>
+            </tr>
+          </tbody>
+          <TableTotal
+            label="合计"
+            cellClass="sub-table__value"
+            cells={[
+              `${formatUsd(summary.totalCost)} · ${formatIncludedUsageTokens(
+                summary.totalTokens ?? null,
+              )} Tokens`,
             ]}
           />
-        </Block>
+        </table>
       )}
-
-      <Block title="周期与账户">
-        <KeyValueRows
-          rows={[
-            {
-              label: '套餐',
-              value: `${formatPlanLabel(plan?.planId ?? null)}${
-                plan?.status ? `（${plan.status}）` : ''
-              }${periodEnd ? ` · 续期 ${periodEnd}` : ''}`,
-            },
-            { label: '计费周期', value: cycleLabel ?? '-' },
-            {
-              label: '账号',
-              value: `${account.keyName ?? account.login}${
-                credentialSource === 'auth-file' ? '（凭据自动读取）' : ''
-              }`,
-            },
-            {
-              label: '统计口径',
-              value: summary?.periodBasis === 'billing-period' ? '计费周期' : (summary?.periodBasis ?? '-'),
-            },
-          ]}
-        />
-        {unavailable.length > 0 && (
-          <p className="field-hint">
-            以下数据本次未能获取，稍后刷新可能恢复：
-            {unavailable.map((section) => QUOTA_SECTION_LABELS[section]).join('、')}
-          </p>
-        )}
-      </Block>
-
-      {limits.length > 0 && (
-        <Block title="用量限额">
-          {limits.map((limit) => (
-            <UsageLimitRow key={limit.key} limit={limit} />
-          ))}
-          <p className="field-hint">限额按美元计价，用满后需等待周期重置。</p>
-        </Block>
-      )}
-
-      <Block title="用量明细">
-        {!summary ? (
-          <EmptyBlock text="用量汇总暂时无法获取，可能是 alpha 接口已变动，稍后刷新再试" />
-        ) : (
-          <table className="sub-table">
-            <thead>
-              <tr>
-                <th>指标</th>
-                <th className="sub-table__value">数值</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="sub-table__model">输入 Tokens</td>
-                <td className="sub-table__value">
-                  {formatIncludedUsageTokens(summary.totalTokensIn ?? null)}
-                </td>
-              </tr>
-              <tr>
-                <td className="sub-table__model">输出 Tokens</td>
-                <td className="sub-table__value">
-                  {formatIncludedUsageTokens(summary.totalTokensOut ?? null)}
-                </td>
-              </tr>
-              <tr>
-                <td className="sub-table__model">请求数</td>
-                <td className="sub-table__value">{requestsValue ?? '-'}</td>
-              </tr>
-              <tr>
-                <td className="sub-table__model">成功率</td>
-                <td className="sub-table__value">{formatPercent1(summary.successRate)}</td>
-              </tr>
-              <tr>
-                <td className="sub-table__model">平均单次成本</td>
-                <td className="sub-table__value">
-                  {summary.averageCost === undefined ? '-' : `$${summary.averageCost.toFixed(4)}`}
-                </td>
-              </tr>
-            </tbody>
-            <TableTotal
-              label="合计"
-              cellClass="sub-table__value"
-              cells={[
-                `${formatUsd(summary.totalCost)} · ${formatIncludedUsageTokens(
-                  summary.totalTokens ?? null,
-                )} Tokens`,
-              ]}
-            />
-          </table>
-        )}
-      </Block>
-    </>
+    </Block>
   );
 }
 
@@ -546,8 +264,7 @@ function DeepSeekModelRows({ usage }: { usage: DeepSeekUsageData }) {
   );
 }
 
-function DeepSeekSections({
-  data,
+function DeepSeekDetails({
   usage,
   usageMonth,
   onUsageMonthChange,
@@ -555,7 +272,6 @@ function DeepSeekSections({
   usageError,
   refreshing,
 }: {
-  data: DeepSeekSubscriptionData;
   usage: SubscriptionUsageResult | null;
   usageMonth: string;
   onUsageMonthChange: (value: string) => void;
@@ -563,9 +279,7 @@ function DeepSeekSections({
   usageError: string | null;
   refreshing: boolean;
 }) {
-  const balance = data.balances[0] ?? null;
-  const cached =
-    usage?.data?.providerId === 'deepseek' && usage.success ? usage.data : null;
+  const cached = usage?.data?.providerId === 'deepseek' && usage.success ? usage.data : null;
   const selected = parseMonthValue(usageMonth);
   const matchesSelected =
     cached !== null &&
@@ -613,135 +327,62 @@ function DeepSeekSections({
   }
 
   return (
-    <>
-      <Hero
-        available={data.isAvailable}
-        amount={balance ? balance.totalBalance : '-'}
-        unit={balance?.currency ?? ''}
-        detail={
-          balance ? (
-            <>
-              充值余额 {balance.toppedUpBalance} · 赠送余额 {balance.grantedBalance}
-            </>
-          ) : (
-            '平台未返回余额明细'
-          )
-        }
-      />
-
-      {current && (
-        <Block title="关键指标">
-          <StatGrid
-            items={[
-              {
-                label: `${current.month} 月 Token`,
-                value: formatIncludedUsageTokens(current.totalTokens),
-              },
-              { label: `${current.month} 月请求`, value: formatCount(current.totalRequests) },
-              {
-              label: '缓存命中率',
-              value: formatPercent1(current.cacheHitRatePercent),
-            },
-            ]}
-          />
-        </Block>
-      )}
-
-      <Block title="周期与账户">
-        <KeyValueRows
-          rows={[
-            { label: '账户状态', value: data.isAvailable ? '可用' : '不可用' },
-            ...data.balances.map((item) => ({
-              label: `${item.currency} 余额`,
-              value: `总计 ${item.totalBalance} · 充值 ${item.toppedUpBalance} · 赠送 ${item.grantedBalance}`,
-            })),
-            {
-              label: '查询月份',
-              value: selected ? `${selected.year} 年 ${selected.month} 月` : usageMonth,
-            },
-          ]}
+    <Block
+      title="用量明细"
+      action={
+        <input
+          type="month"
+          value={usageMonth}
+          aria-label="查询月份"
+          onChange={(event) => onUsageMonthChange(event.target.value)}
         />
-      </Block>
-
-      <Block
-        title="用量明细"
-        action={
-          <input
-            type="month"
-            value={usageMonth}
-            aria-label="查询月份"
-            onChange={(event) => onUsageMonthChange(event.target.value)}
-          />
-        }
-      >
-        {usageBody}
-      </Block>
-    </>
+      }
+    >
+      {usageBody}
+    </Block>
   );
 }
 
 /* ── 分发表 ── */
 
 export interface SubscriptionPanelProps {
-  meta: SubscriptionProviderMeta;
   info: SubscriptionInfoResult | null;
   usage: SubscriptionUsageResult | null;
-  infoError: string | null;
   usageError: string | null;
   refreshing: boolean;
   usageMonth: string;
   onUsageMonthChange: (value: string) => void;
+  usageConfigured: boolean;
 }
 
 export default function SubscriptionPanel({
-  meta,
   info,
   usage,
-  infoError,
   usageError,
   refreshing,
   usageMonth,
   onUsageMonthChange,
+  usageConfigured,
 }: SubscriptionPanelProps) {
   const data = info?.data ?? null;
+  if (!data) return null;
 
-  let body: ReactNode;
-  if (!meta.configured) {
-    body = (
-      <ErrorHint
-        tone="info"
-        message={meta.id === 'cursor' ? '尚未配置 Cookie，无法查询该账户' : '尚未配置 API Key，无法查询该账户'}
-        action="在下方「凭据配置」中完成配置，保存后自动开始查询"
-      />
-    );
-  } else if (!data) {
-    body = infoError ? (
-      <ErrorHint tone="error" message={infoError} />
-    ) : (
-      <ErrorHint tone="info" message={refreshing ? '正在查询，请稍候…' : '暂无数据，点击右上角「刷新」立即查询'} />
-    );
-  } else if (data.providerId === 'cursor') {
-    body = <CursorSections data={data} />;
-  } else if (data.providerId === 'commandcode') {
-    body = <CommandCodeSections data={data} />;
-  } else {
-    body = (
-      <DeepSeekSections
-        data={data}
-        usage={usage}
-        usageMonth={usageMonth}
-        onUsageMonthChange={onUsageMonthChange}
-        usageConfigured={meta.usageConfigured}
-        usageError={usageError}
-        refreshing={refreshing}
-      />
-    );
+  if (data.providerId === 'cursor') {
+    return <CursorDetails data={data} />;
+  }
+
+  if (data.providerId === 'commandcode') {
+    return <CommandCodeDetails data={data} />;
   }
 
   return (
-    <section className="settings-section">
-      <h2>{meta.label}</h2>
-      {body}
-    </section>
+    <DeepSeekDetails
+      usage={usage}
+      usageMonth={usageMonth}
+      onUsageMonthChange={onUsageMonthChange}
+      usageConfigured={usageConfigured}
+      usageError={usageError}
+      refreshing={refreshing}
+    />
   );
 }

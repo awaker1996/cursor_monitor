@@ -3041,8 +3041,8 @@ color: var(--pill-text-soft);
   margin-bottom: 10px;
 }
 
-/* 小节标题：与分区标题同族的胶囊，字号更小、底色更淡，
-   层级靠尺寸与深浅区分，而非另立一套形状。 */
+/* 小节标签：卡片内的分组标签，用最淡一档的胶囊底，
+   只做「分组」提示，不与页头标题争层级。 */
 .sub-block__head .sub-section-title {
   margin: 0;
   padding: 3px 10px;
@@ -3079,174 +3079,6 @@ color: var(--pill-text-soft);
   font-size: var(--fs-body);
   font-weight: 600;
   color: rgba(165, 180, 220, 0.72);
-}
-
-/* 状态徽标：文案与颜色同时表达状态，不依赖颜色单独承载 */
-.sub-badge {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: var(--fs-caption);
-  font-weight: 600;
-}
-
-.sub-badge--ok {
-  background: var(--ok-soft);
-  color: var(--ok-fg);
-  border: 1px solid var(--ok-border);
-}
-
-.sub-badge--bad {
-  background: var(--bad-soft);
-  color: var(--bad-fg);
-  border: 1px solid var(--bad-border);
-}
-
-/* 主数值区 */
-.sub-hero {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.sub-hero__amount {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #f1f5ff;
-  text-shadow: 0 0 22px rgba(79, 124, 255, 0.4);
-  font-variant-numeric: tabular-nums;
-}
-
-.sub-hero__unit {
-  margin-left: 6px;
-  font-size: var(--fs-body);
-  font-weight: 500;
-  color: rgba(165, 180, 220, 0.7);
-}
-
-.sub-hero__detail {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--fs-body);
-  color: rgba(165, 180, 220, 0.66);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 指标栏：显式列数，避免 auto-fit 在窄窗口下产生多余空轨道 */
-.sub-metrics {
-  display: grid;
-  gap: 12px;
-}
-
-.sub-metrics--2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.sub-metrics--3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.sub-metric__label {
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  color: rgba(165, 180, 220, 0.66);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.sub-metric__value {
-  margin-top: 2px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #e8eeff;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 键值行 */
-.sub-rows {
-  display: grid;
-  gap: 6px;
-}
-
-.sub-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: var(--fs-title);
-}
-
-.sub-row__key {
-  flex: none;
-  color: rgba(165, 180, 220, 0.66);
-}
-
-.sub-row__value {
-  color: rgba(210, 222, 248, 0.92);
-  font-weight: 500;
-  text-align: right;
-}
-
-/* 分段用量计量条 */
-.sub-meter + .sub-meter {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
-}
-
-.sub-meter__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.sub-meter__label {
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  color: rgba(165, 180, 220, 0.75);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.sub-meter__percent {
-  font-size: var(--fs-title);
-  font-weight: 700;
-  color: #e8eeff;
-  font-variant-numeric: tabular-nums;
-}
-
-.sub-meter__track {
-  display: flex;
-  gap: 2px;
-  margin-bottom: 8px;
-}
-
-.sub-meter__seg {
-  flex: 1 1 0;
-  height: 14px;
-  border-radius: 2px;
-  background: rgba(148, 178, 255, 0.16);
-}
-
-.sub-meter__seg--ok {
-  background: #10b981;
-}
-
-.sub-meter__seg--warn {
-  background: #f59e0b;
-}
-
-.sub-meter__seg--bad {
-  background: #ef4444;
-}
-
-.sub-meter__reset {
-  font-size: var(--fs-body);
-  color: rgba(165, 180, 220, 0.6);
 }
 
 /* 无边框表格：靠行分隔线分组；固定布局确保窄窗口下收敛而非撑破面板 */
@@ -3401,9 +3233,10 @@ color: var(--pill-text-soft);
 }
 
 .account-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 12px;
+  align-items: start;
 }
 
 .account-card {
@@ -3425,6 +3258,8 @@ color: var(--pill-text-soft);
 }
 
 .account-card--open {
+  /* 展开卡横跨整行：明细表在 300px 窄列里会被挤爆 */
+  grid-column: 1 / -1;
   border-color: rgba(148, 178, 255, 0.42);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
@@ -3484,13 +3319,117 @@ color: var(--pill-text-soft);
   white-space: nowrap;
 }
 
+/* ── 卡片常显区：套餐周期 + 关键额度指标 + 更新时间 ──
+   指标条与参考图一致：左侧口径、右侧「剩余 X%」，条下一行重置/到期时间。
+   数值与注释都用等宽数字，两列对齐后扫读不会跳动。 */
 .account-card__summary {
-  color: rgba(165, 180, 220, 0.75);
-  font-size: var(--fs-body);
-  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+.account-card__period {
+  margin: 0;
+  color: rgba(165, 180, 220, 0.72);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.account-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+/* 只有一条指标时铺满整行（如 DeepSeek 余额） */
+.account-metrics--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.account-metric {
+  min-width: 0;
+}
+
+.account-metric__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.account-metric__label {
+  min-width: 0;
+  color: rgba(165, 180, 220, 0.72);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-metric__value {
+  flex: none;
+  color: #e8eeff;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.account-metric__track {
+  margin-top: 5px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 178, 255, 0.16);
+  overflow: hidden;
+}
+
+.account-metric__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.account-metric__fill--ok {
+  background: var(--ok-bg);
+}
+
+.account-metric__fill--warn {
+  background: var(--warn-bg);
+}
+
+.account-metric__fill--bad {
+  background: var(--bad-bg);
+}
+
+.account-metric__note {
+  margin: 4px 0 0;
+  color: rgba(165, 180, 220, 0.6);
+  font-size: var(--fs-mini);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-card__today,
+.account-card__note,
+.account-card__updated {
+  margin: 0;
+  color: rgba(165, 180, 220, 0.6);
+  font-size: var(--fs-mini);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-card__updated {
+  color: rgba(165, 180, 220, 0.5);
+}
+
+/* 未配置 / 无数据：常显区空出来，只留引导卡片 */
+.account-card__placeholder {
+  padding: 0 12px 12px;
 }
 
 .account-card__header-actions {
@@ -3528,81 +3467,6 @@ color: var(--pill-text-soft);
 .account-card__chevron {
   color: rgba(165, 180, 220, 0.6);
   font-size: var(--fs-title);
-}
-
-.account-card__limits {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.limit-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: var(--fs-caption);
-  line-height: 1.4;
-  border: 1px solid var(--neutral-border);
-  background: rgba(20, 28, 58, 0.55);
-  color: rgba(200, 214, 245, 0.85);
-  white-space: nowrap;
-}
-
-.limit-chip--ok {
-  border-color: var(--ok-border);
-  background: var(--ok-soft);
-  color: var(--ok-fg);
-}
-
-.limit-chip--warn {
-  border-color: var(--warn-border);
-  background: var(--warn-soft);
-  color: var(--warn-fg);
-}
-
-.limit-chip--bad {
-  border-color: var(--bad-border);
-  background: var(--bad-soft);
-  color: var(--bad-fg);
-}
-
-.limit-chip__label {
-  font-weight: 600;
-}
-
-.limit-chip__bar {
-  width: 44px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.limit-chip__fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-}
-
-.limit-chip__fill--ok {
-  background: var(--ok-bg);
-}
-
-.limit-chip__fill--warn {
-  background: var(--warn-bg);
-}
-
-.limit-chip__fill--bad {
-  background: var(--bad-bg);
-}
-
-.limit-chip__value {
-  font-variant-numeric: tabular-nums;
 }
 
 .account-card__body {
@@ -3713,8 +3577,10 @@ color: var(--pill-text-soft);
   --glow-3: #a855f7;
   --glow-4: #34d399;
 
-  /* ── 胶囊标题令牌 ──
-     分区标题与小节标题统一用胶囊容器（取代原先贴在文字左侧的色带）。
+  /* ── 胶囊标签令牌 ──
+     仅用于卡片内的小节标签（.sub-block__head .sub-section-title）。
+     分区页头已改为排版式标题（色条 + 墨色文字 + 渐隐细线），
+     不再共用这套令牌 —— 页面级标题和导航胶囊撞形的观感太像按钮。
      极光玻璃用品牌三色低透明度渐变 + 内高光 + 微外发光；
      清爽纸面主题在 html[data-ui-style='calm'] 内整体换值，组件侧零覆盖。 */
   --pill-bg: linear-gradient(
@@ -4279,39 +4145,65 @@ color: var(--pill-text-soft);
   }
 }
 
+/* ── 分区页头：排版式标题 ──
+   分区标题原先做成「白底胶囊 + 描边 + 加粗深色字」，与左侧导航的激活
+   胶囊同形同重，一眼看过去分不清「哪个是导航项、哪个是标题」；
+   胶囊在多色主题下还会随 --pill-* 换色，进一步和导航抢注意力。
+   这里回到纯文字层级：一小截品牌色标记 + 无底色标题 + 下方渐隐细线，
+   让分区读成「页面标题」，把「可点击」的语义完整留给左侧导航。 */
 .settings-panel__header {
-  margin-bottom: 12px;
+  position: relative;
+  margin-bottom: 14px;
+  padding-bottom: 11px;
 }
 
-/* 分区标题：胶囊容器取代原先贴在文字左侧的色带。
-   胶囊与侧边导航的滑移指示器同形（圆角 999px），
-   分区身份语言由此统一。 */
+/* 分隔线右端渐隐：不横切整块面板，视觉上更轻 */
+.settings-panel__header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(148, 178, 255, 0.24), rgba(148, 178, 255, 0) 78%);
+}
+
 .settings-panel__header h2 {
-  display: flex;
-  width: fit-content;
-  align-items: center;
-  margin-bottom: 8px;
-  padding: 4px 14px;
+  position: relative;
+  margin-bottom: 5px;
+  padding-left: 11px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  color: #eaf1ff;
+}
+
+/* 标记：一小段品牌渐变竖条，与导航激活态的蓝同源，不抢标题的墨色 */
+.settings-panel__header h2::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 15px;
+  margin-top: -7.5px;
   border-radius: 999px;
-  background: var(--pill-bg);
-  border: 1px solid var(--pill-border);
-  box-shadow: var(--pill-shadow);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--pill-text);
+  background: linear-gradient(180deg, var(--glow-1), var(--glow-2));
 }
 
 .settings-panel__header p {
   margin-top: 0;
+  padding-left: 11px;
+  max-width: 68ch;
   font-size: var(--fs-body);
+  line-height: 1.55;
   color: rgba(165, 180, 220, 0.72);
 }
 
-/* ── 外观页：三张单行卡片等高 ──
-   以最高的卡（图标卡/两行描述）为基准统一 min-height，
-   卡体纵向居中，内容不足时上下留白对称；
-   窗口收窄导致描述多折一行时卡片仍可自动长高，不裁切。 */
+/* ── 外观页：卡片高度下限 ──
+   min-height 保证内容较少的卡片不至于塌成一窄条；
+   风格卡随分段控件与时段行按内容自然长高，三卡不再强制等高。 */
 
 #settings-panel-appearance .set-card {
   min-height: 94px;
@@ -4638,6 +4530,228 @@ color: var(--pill-text-soft);
 .segmented__item:focus-visible {
   outline: 2px solid var(--set-accent);
   outline-offset: 1px;
+}
+
+/* ── 分段控件：撑满整行 + 分组 ──
+   界面风格的四个档位分「自动跟随 / 手动固定」两组，组间一道细线；
+   四段等宽铺满卡片，让"选风格"成为这张卡最显眼的操作。 */
+
+.segmented--wide {
+  display: flex;
+  width: 100%;
+}
+
+.segmented--wide .segmented__item {
+  flex: 1;
+  padding: 7px 10px;
+  text-align: center;
+}
+
+.segmented__divider {
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: rgba(148, 178, 255, 0.24);
+  flex-shrink: 0;
+}
+
+/* ── 界面风格卡 ──
+   自上而下：标题 + 当前生效胶囊 → 分段控件 →（自动档）弱化的时段子区。 */
+
+.set-card__body--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.set-card__body--stacked .set-row__text {
+  width: 100%;
+}
+
+.set-card__body--stacked .set-row__control {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.style-card {
+  width: 100%;
+  gap: 14px;
+}
+
+.style-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+
+/* 标题与「当前生效」胶囊同一行，描述独占下一行：窄窗下描述不会被胶囊挤成碎行 */
+.style-card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 分段控件下方的作用范围注脚 */
+.style-card__note {
+  margin-top: -6px;
+  font-size: var(--fs-caption);
+  color: rgba(165, 180, 220, 0.6);
+}
+
+/* 当前生效胶囊：一眼看清实际在用的皮肤；自动档附带时段 / 系统深浅说明 */
+.style-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  padding: 4px 11px;
+  border: 1px solid rgba(148, 178, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(120, 150, 255, 0.1);
+  color: rgba(214, 226, 255, 0.92);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.style-card__status em {
+  font-style: normal;
+  color: rgba(165, 180, 220, 0.68);
+}
+
+.style-card__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: linear-gradient(120deg, #4f7cff, #22d3ee);
+  box-shadow: 0 0 8px rgba(79, 124, 255, 0.6);
+}
+
+.style-card__status[data-effective='calm'] .style-card__status-dot {
+  background: #cbd7ee;
+  box-shadow: 0 0 8px rgba(203, 215, 238, 0.45);
+}
+
+/* ── 自动切换时段（次级设置）──
+   弱化：缩进 + 左侧细线 + 低对比小字，不再抢风格切换的视觉焦点。 */
+
+.style-schedule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 10px 12px 10px 14px;
+  border-left: 2px solid rgba(148, 178, 255, 0.22);
+  border-radius: 0 var(--radius-chip) var(--radius-chip) 0;
+  background: rgba(11, 16, 38, 0.28);
+}
+
+.style-schedule__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.style-schedule__title {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(200, 214, 245, 0.78);
+}
+
+.style-schedule__hint {
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  color: rgba(165, 180, 220, 0.62);
+}
+
+/* ── 时段下拉 ──
+   两个「时 : 分」下拉替代原生 time 输入：点开即列表，不再弹系统时钟。 */
+
+.time-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.time-select__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-select__caption {
+  font-size: var(--fs-caption);
+  color: rgba(165, 180, 220, 0.7);
+}
+
+.time-select__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  border: 1px solid rgba(148, 178, 255, 0.24);
+  border-radius: var(--radius-chip);
+  background: rgba(11, 16, 38, 0.6);
+}
+
+.time-select__part {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 3px 18px 3px 7px;
+  border: none;
+  border-radius: calc(var(--radius-chip) - 2px);
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a5b4dc' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 8px;
+  color: #e8eeff;
+  color-scheme: dark;
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--set-ease);
+}
+
+.time-select__part:hover {
+  background-color: rgba(120, 150, 255, 0.14);
+}
+
+.time-select__part:focus-visible {
+  outline: 2px solid var(--set-accent);
+  outline-offset: 0;
+}
+
+.time-select__colon {
+  color: rgba(165, 180, 220, 0.6);
+  font-size: var(--fs-body);
+}
+
+.time-select__arrow {
+  color: rgba(165, 180, 220, 0.55);
+  font-size: var(--fs-caption);
+}
+
+.time-select.is-invalid .time-select__pill {
+  border-color: var(--bad-fg);
+}
+
+.time-select__badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(148, 178, 255, 0.14);
+  color: rgba(214, 226, 255, 0.92);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
 }
 
 /* ── 滑杆 ── */
@@ -5083,6 +5197,11 @@ color: var(--pill-text-soft);
     padding: 18px 16px 30px;
   }
 
+  /* 窄屏单列后展开卡不再横跨（本来就是一列） */
+  .account-card--open {
+    grid-column: auto;
+  }
+
   .slider-input {
     width: 100%;
     align-items: stretch;
@@ -5407,6 +5526,19 @@ html[data-ui-style='calm'] .settings-page__panels {
   backdrop-filter: none;
 }
 
+html[data-ui-style='calm'] .settings-panel__header::after {
+  background: linear-gradient(90deg, var(--calm-line-strong), rgba(203, 213, 225, 0) 78%);
+}
+
+html[data-ui-style='calm'] .settings-panel__header h2 {
+  color: var(--calm-ink);
+}
+
+/* 纸面：标记改实色墨蓝，取消发光 */
+html[data-ui-style='calm'] .settings-panel__header h2::before {
+  background: var(--calm-accent);
+}
+
 html[data-ui-style='calm'] .settings-panel__header p {
   color: var(--calm-ink-3);
 }
@@ -5572,6 +5704,80 @@ html[data-ui-style='calm'] .segmented__item.is-active {
     0 1px 3px rgba(15, 23, 42, 0.22);
 }
 
+html[data-ui-style='calm'] .segmented__divider {
+  background: var(--calm-line-strong);
+}
+
+/* ── 控件：界面风格状态胶囊与时段子区 ── */
+
+html[data-ui-style='calm'] .style-card__status {
+  border-color: var(--calm-line);
+  background: var(--calm-card-2);
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .style-card__note {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .style-card__status em {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .style-card__status-dot {
+  background: linear-gradient(120deg, #4a80ef, #2f6bde);
+  box-shadow: none;
+}
+
+html[data-ui-style='calm'] .style-card__status[data-effective='calm'] .style-card__status-dot {
+  background: #9db4d6;
+}
+
+html[data-ui-style='calm'] .style-schedule {
+  border-left-color: var(--calm-line-strong);
+  background: var(--calm-card-2);
+}
+
+html[data-ui-style='calm'] .style-schedule__title {
+  color: var(--calm-ink-2);
+}
+
+html[data-ui-style='calm'] .style-schedule__hint {
+  color: var(--calm-ink-3);
+}
+
+/* ── 控件：时段下拉 ── */
+
+html[data-ui-style='calm'] .time-select__caption,
+html[data-ui-style='calm'] .time-select__colon,
+html[data-ui-style='calm'] .time-select__arrow {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .time-select__pill {
+  border-color: var(--calm-line-strong);
+  background: var(--calm-card);
+}
+
+html[data-ui-style='calm'] .time-select__part {
+  color: var(--calm-ink);
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2364748b' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+html[data-ui-style='calm'] .time-select__part:hover {
+  background-color: var(--calm-accent-soft);
+}
+
+html[data-ui-style='calm'] .time-select.is-invalid .time-select__pill {
+  border-color: var(--calm-bad);
+}
+
+html[data-ui-style='calm'] .time-select__badge {
+  background: var(--calm-accent-soft);
+  color: var(--calm-ink-2);
+}
+
 /* ── 按钮 ── */
 
 html[data-ui-style='calm'] .btn-primary {
@@ -5733,7 +5939,23 @@ html[data-ui-style='calm'] .account-card__plan {
   color: var(--calm-accent-deep);
 }
 
-html[data-ui-style='calm'] .account-card__summary {
+html[data-ui-style='calm'] .account-card__period,
+html[data-ui-style='calm'] .account-metric__label {
+  color: var(--calm-ink-3);
+}
+
+html[data-ui-style='calm'] .account-metric__value {
+  color: var(--calm-ink);
+}
+
+html[data-ui-style='calm'] .account-metric__track {
+  background: #eef1f6;
+}
+
+html[data-ui-style='calm'] .account-metric__note,
+html[data-ui-style='calm'] .account-card__today,
+html[data-ui-style='calm'] .account-card__note,
+html[data-ui-style='calm'] .account-card__updated {
   color: var(--calm-ink-3);
 }
 
@@ -5750,16 +5972,6 @@ html[data-ui-style='calm'] .account-card__config {
   border-color: var(--calm-line);
 }
 
-html[data-ui-style='calm'] .limit-chip {
-  background: var(--calm-card-2);
-  border-color: var(--calm-line);
-  color: var(--calm-ink-2);
-}
-
-html[data-ui-style='calm'] .limit-chip__bar {
-  background: rgba(15, 23, 42, 0.1);
-}
-
 /* ── 订阅数据区：表格 / 指标 / 计量条 ── */
 
 html[data-ui-style='calm'] .sub-block + .sub-block {
@@ -5770,52 +5982,6 @@ html[data-ui-style='calm'] .sub-table__caption {
   color: var(--calm-ink-3);
 }
 
-
-html[data-ui-style='calm'] .sub-hero__amount {
-  color: var(--calm-ink);
-  text-shadow: none;
-}
-
-html[data-ui-style='calm'] .sub-hero__unit,
-html[data-ui-style='calm'] .sub-hero__detail {
-  color: var(--calm-ink-3);
-}
-
-html[data-ui-style='calm'] .sub-metric__label {
-  color: var(--calm-ink-3);
-}
-
-html[data-ui-style='calm'] .sub-metric__value {
-  color: var(--calm-ink);
-}
-
-html[data-ui-style='calm'] .sub-row__key {
-  color: var(--calm-ink-3);
-}
-
-html[data-ui-style='calm'] .sub-row__value {
-  color: var(--calm-ink-2);
-}
-
-html[data-ui-style='calm'] .sub-meter + .sub-meter {
-  border-top-color: #edf1f7;
-}
-
-html[data-ui-style='calm'] .sub-meter__label {
-  color: var(--calm-ink-3);
-}
-
-html[data-ui-style='calm'] .sub-meter__percent {
-  color: var(--calm-ink);
-}
-
-html[data-ui-style='calm'] .sub-meter__seg {
-  background: #e4e9f1;
-}
-
-html[data-ui-style='calm'] .sub-meter__reset {
-  color: var(--calm-ink-3);
-}
 
 html[data-ui-style='calm'] .sub-table th {
   color: var(--calm-ink-3);
@@ -6487,34 +6653,8 @@ html[data-ui-style='calm'] .metric-card__fill--unknown {
 /* 轨道凹槽：条形像嵌在纸面上 */
 html[data-ui-style='calm'] .dashboard-summary__track,
 html[data-ui-style='calm'] .metric-card__track,
-html[data-ui-style='calm'] .floating-ball__refresh-track,
-html[data-ui-style='calm'] .limit-chip__bar,
-html[data-ui-style='calm'] .sub-meter__seg {
+html[data-ui-style='calm'] .floating-ball__refresh-track {
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-html[data-ui-style='calm'] .limit-chip__fill--ok {
-  background: linear-gradient(90deg, #41c878, #16a34a);
-}
-
-html[data-ui-style='calm'] .limit-chip__fill--warn {
-  background: linear-gradient(90deg, #f2b13e, #e08c0a);
-}
-
-html[data-ui-style='calm'] .limit-chip__fill--bad {
-  background: linear-gradient(90deg, #ee7474, #dc4444);
-}
-
-html[data-ui-style='calm'] .sub-meter__seg--ok {
-  background: linear-gradient(180deg, #2fbf87, #12996a);
-}
-
-html[data-ui-style='calm'] .sub-meter__seg--warn {
-  background: linear-gradient(180deg, #f0ab35, #d9880a);
-}
-
-html[data-ui-style='calm'] .sub-meter__seg--bad {
-  background: linear-gradient(180deg, #ef6a6a, #d43c3c);
 }
 
 /* 今日卡片：淡蓝渐变纸片 */
@@ -6547,10 +6687,8 @@ html[data-ui-style='calm'] .sub-table__total td {
 
 html[data-ui-style='calm'] .health-pill,
 html[data-ui-style='calm'] .source-tag,
-html[data-ui-style='calm'] .sub-badge,
 html[data-ui-style='calm'] .account-card__plan,
-html[data-ui-style='calm'] .account-card__status,
-html[data-ui-style='calm'] .limit-chip {
+html[data-ui-style='calm'] .account-card__status {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
@@ -6600,10 +6738,7 @@ html[data-ui-style='calm'] .dashboard-summary__value,
 html[data-ui-style='calm'] .dashboard-summary__detail,
 html[data-ui-style='calm'] .metric-card__value,
 html[data-ui-style='calm'] .metric-card__detail,
-html[data-ui-style='calm'] .sub-metric__value,
-html[data-ui-style='calm'] .sub-hero__amount,
-html[data-ui-style='calm'] .sub-table td,
-html[data-ui-style='calm'] .limit-chip__value {
+html[data-ui-style='calm'] .sub-table td {
   font-variant-numeric: tabular-nums;
 }
 

@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 
 /** 一行「标题 + 描述 + 控件」的设置行，hover 时整行高亮。 */
 export function SettingsRow({
@@ -51,35 +51,145 @@ export function Switch({
   );
 }
 
-/** 分段控件：在少量互斥选项间切换（预留，当前设置项均为开关/滑杆）。 */
+/** 分段控件：在少量互斥选项间切换。
+ *  group 变化处画一道细分隔线（把自动跟随与手动固定分开）；
+ *  wide 让控件撑满整行、各段等宽，用于界面风格这类主操作。 */
 export function Segmented<T extends string | number>({
   value,
   options,
   onChange,
   ariaLabel,
+  wide,
 }: {
   value: T;
-  options: Array<{ value: T; label: string }>;
+  options: Array<{ value: T; label: string; group?: string }>;
   onChange: (next: T) => void;
   ariaLabel: string;
+  wide?: boolean;
 }) {
   return (
-    <div className="segmented" role="radiogroup" aria-label={ariaLabel}>
-      {options.map((opt) => {
+    <div
+      className={`segmented${wide ? ' segmented--wide' : ''}`}
+      role="radiogroup"
+      aria-label={ariaLabel}
+    >
+      {options.map((opt, index) => {
         const isActive = opt.value === value;
+        const startsGroup = index > 0 && opt.group !== options[index - 1].group;
         return (
-          <button
-            key={String(opt.value)}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
-            className={`segmented__item${isActive ? ' is-active' : ''}`}
-            onClick={() => onChange(opt.value)}
-          >
-            {opt.label}
-          </button>
+          <Fragment key={String(opt.value)}>
+            {startsGroup && <span className="segmented__divider" aria-hidden />}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isActive}
+              className={`segmented__item${isActive ? ' is-active' : ''}`}
+              onClick={() => onChange(opt.value)}
+            >
+              {opt.label}
+            </button>
+          </Fragment>
         );
       })}
+    </div>
+  );
+}
+
+/** 时段选择的小时项：00–23。 */
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => hour);
+/** 分钟步长：选项按 5 分钟一档，已存的非整 5 分钟值会单独保留一项。 */
+const MINUTE_STEP = 5;
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+function splitTime(value: string): { hour: number; minute: number } {
+  const [hour, minute] = value.split(':').map((part) => Number(part));
+  return {
+    hour: Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 0,
+    minute: Number.isInteger(minute) && minute >= 0 && minute <= 59 ? minute : 0,
+  };
+}
+
+/** 分钟候选项：5 分钟一档 + 当前值（避免已存的 07:03 被下拉框悄悄改掉）。 */
+function minuteOptions(current: number): number[] {
+  const list: number[] = [];
+  for (let minute = 0; minute < 60; minute += MINUTE_STEP) list.push(minute);
+  if (!list.includes(current)) list.push(current);
+  return list.sort((a, b) => a - b);
+}
+
+/** 时段选择：两个「时 : 分」原生下拉，取代原来的 time 输入（免去系统时钟弹窗），
+ *  跨零点时给出提示徽标。 */
+export function TimeRangeSelect({
+  start,
+  end,
+  overnight,
+  invalid,
+  onChange,
+}: {
+  start: string;
+  end: string;
+  overnight: boolean;
+  invalid?: boolean;
+  onChange: (next: { start: string; end: string }) => void;
+}) {
+  const startParts = splitTime(start);
+  const endParts = splitTime(end);
+
+  const renderPickers = (
+    parts: { hour: number; minute: number },
+    label: string,
+    commit: (next: { hour: number; minute: number }) => void,
+  ) => (
+    <span className="time-select__pill">
+      <select
+        className="time-select__part"
+        aria-label={`${label}小时`}
+        value={parts.hour}
+        onChange={(e) => commit({ ...parts, hour: Number(e.target.value) })}
+      >
+        {HOUR_OPTIONS.map((hour) => (
+          <option key={hour} value={hour}>
+            {pad2(hour)}
+          </option>
+        ))}
+      </select>
+      <span className="time-select__colon" aria-hidden>
+        :
+      </span>
+      <select
+        className="time-select__part"
+        aria-label={`${label}分钟`}
+        value={parts.minute}
+        onChange={(e) => commit({ ...parts, minute: Number(e.target.value) })}
+      >
+        {minuteOptions(parts.minute).map((minute) => (
+          <option key={minute} value={minute}>
+            {pad2(minute)}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+
+  return (
+    <div className={`time-select${invalid ? ' is-invalid' : ''}`}>
+      <label className="time-select__field">
+        <span className="time-select__caption">从</span>
+        {renderPickers(startParts, '开始时间', ({ hour, minute }) =>
+          onChange({ start: `${pad2(hour)}:${pad2(minute)}`, end }),
+        )}
+      </label>
+      <span className="time-select__arrow" aria-hidden>
+        →
+      </span>
+      <label className="time-select__field">
+        <span className="time-select__caption">到</span>
+        {renderPickers(endParts, '结束时间', ({ hour, minute }) =>
+          onChange({ start, end: `${pad2(hour)}:${pad2(minute)}` }),
+        )}
+      </label>
+      {overnight && <span className="time-select__badge">跨零点</span>}
     </div>
   );
 }

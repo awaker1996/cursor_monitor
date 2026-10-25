@@ -6,10 +6,34 @@
     <title>Cursor Token</title>
     <script>
       /* 首帧主题预设：真源仍是 IPC 返回的设置（useUiStyleSync 挂载后会覆盖纠偏），
-         这里只是读上次应用过的风格先上色，避免 calm 用户每次开窗都先闪一拍深色。 */
+         这里只是读上次应用过的风格先上色，避免 calm 用户每次开窗都先闪一拍深色。
+         档位镜像在 ui-style-mode：system 按系统深浅色，auto 按时段（ui-style-auto = "起点-终点"，
+         单位分钟）即时算出生效风格，手动档读上次的生效值。边界语义与
+         src/shared/uiStyle.ts 的 isDayTime / resolveEffectiveUiStyle 保持一致。 */
       try {
-        var s = localStorage.getItem('ui-style');
-        if (s === 'aurora' || s === 'calm') document.documentElement.dataset.uiStyle = s;
+        var mode = localStorage.getItem('ui-style-mode');
+        var auto = localStorage.getItem('ui-style-auto');
+        if (mode === 'system') {
+          var dark =
+            !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.dataset.uiStyle = dark ? 'aurora' : 'calm';
+        } else if (auto) {
+          var parts = auto.split('-');
+          var start = parseInt(parts[0], 10);
+          var end = parseInt(parts[1], 10);
+          var now = new Date();
+          var cur = now.getHours() * 60 + now.getMinutes();
+          var day =
+            start === end
+              ? false
+              : start < end
+                ? cur >= start && cur < end
+                : cur >= start || cur < end;
+          document.documentElement.dataset.uiStyle = day ? 'calm' : 'aurora';
+        } else {
+          var s = localStorage.getItem('ui-style');
+          if (s === 'aurora' || s === 'calm') document.documentElement.dataset.uiStyle = s;
+        }
       } catch (e) {}
     </script>
   </head>

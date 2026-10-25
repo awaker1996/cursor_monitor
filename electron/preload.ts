@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppSettings,
   DockEdge,
+  EffectiveUiStyle,
   PollerState,
   PowerMode,
   TestConnectionResult,
@@ -22,6 +23,8 @@ export interface ElectronAPI {
   getPollerState: () => Promise<PollerState>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (partial: Partial<AppSettings>) => Promise<AppSettings>;
+  /** 告知主进程当前生效的界面风格，用于同步设置窗底色（不落盘）。 */
+  setEffectiveUiStyle: (style: EffectiveUiStyle) => void;
   saveCookie: (cookie: string) => Promise<void>;
   clearCookie: () => Promise<boolean>;
   hasCookie: () => Promise<boolean>;
@@ -73,6 +76,7 @@ const api: ElectronAPI = {
   getPollerState: () => ipcRenderer.invoke('get-poller-state'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (partial) => ipcRenderer.invoke('update-settings', partial),
+  setEffectiveUiStyle: (style) => ipcRenderer.send('effective-ui-style-changed', style),
   saveCookie: (cookie) => ipcRenderer.invoke('save-cookie', cookie),
   clearCookie: () => ipcRenderer.invoke('clear-cookie'),
   hasCookie: () => ipcRenderer.invoke('has-cookie'),

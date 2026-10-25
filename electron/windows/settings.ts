@@ -1,8 +1,9 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, nativeTheme } from 'electron';
 import os from 'os';
 import path from 'path';
 import { loadWindowIcon } from '../iconManager';
 import type { AppSettings } from '../../src/shared/types';
+import { resolveEffectiveUiStyle, uiStyleBackgroundColor } from '../../src/shared/uiStyle';
 import { devServerUrl } from '../../src/shared/devServer';
 
 let settingsWindow: BrowserWindow | null = null;
@@ -27,8 +28,18 @@ export function createSettingsWindow(isDev: boolean, settings?: AppSettings): Br
     resizable: true,
     autoHideMenuBar: true,
     frame: false,
-    // 底色跟随界面风格，避免加载与拉伸窗口时出现深浅色闪变
-    backgroundColor: settings?.uiStyle === 'calm' ? '#f2f4f8' : '#0b1026',
+    // 底色跟随实际生效的界面风格（时段档按当前时刻、跟随系统档按系统深浅色解析），
+    // 避免加载与拉伸窗口时出现深浅色闪变
+    backgroundColor: settings
+      ? uiStyleBackgroundColor(
+          resolveEffectiveUiStyle(
+            settings.uiStyle,
+            settings.uiStyleDayStartMin,
+            settings.uiStyleDayEndMin,
+            nativeTheme.shouldUseDarkColors,
+          ),
+        )
+      : uiStyleBackgroundColor(nativeTheme.shouldUseDarkColors ? 'aurora' : 'calm'),
     backgroundMaterial: isWin11 ? 'mica' : undefined,
     ...(icon && !icon.isEmpty() ? { icon } : {}),
     webPreferences: {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, screen } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, screen } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SettingsStore } from '../src/settings/SettingsStore';
@@ -33,9 +33,11 @@ import {
   REFRESH_INTERVAL_MAX,
   REFRESH_INTERVAL_MIN,
   type AppSettings,
+  type EffectiveUiStyle,
   type PowerMode,
   type TestConnectionResult,
 } from '../src/shared/types';
+import { resolveEffectiveUiStyle, uiStyleBackgroundColor } from '../src/shared/uiStyle';
 import type {
   SubscriptionCredentialKind,
   SubscriptionProviderId,
@@ -279,10 +281,19 @@ function setupIpc(): void {
     }
     const settings = settingsStore.update(partial);
     poller.applySettingsChange();
-    if (partial.uiStyle !== undefined) {
-      getSettingsWindow()?.setBackgroundColor(
-        partial.uiStyle === 'calm' ? '#f2f4f8' : '#0b1026',
+    if (
+      partial.uiStyle !== undefined ||
+      partial.uiStyleDayStartMin !== undefined ||
+      partial.uiStyleDayEndMin !== undefined
+    ) {
+      // 自动档要按当前时刻解析出生效风格，取归一化后的完整设置而非 partial
+      const effective = resolveEffectiveUiStyle(
+        settings.uiStyle,
+        settings.uiStyleDayStartMin,
+        settings.uiStyleDayEndMin,
+        nativeTheme.shouldUseDarkColors,
       );
+      getSettingsWindow()?.setBackgroundColor(uiStyleBackgroundColor(effective));
     }
     if (partial.edgeAutoDockEnabled === false) {
       const floatWin = getFloatingBallWindow();
@@ -296,6 +307,13 @@ function setupIpc(): void {
       win.webContents.send('settings-changed', settings);
     });
     return settings;
+  });
+
+  // 渲染层切换生效风格时同步设置窗底色：不写盘、不广播 settings-changed，
+  // 避免每分钟一次的自动 tick 把设置页整页重渲染。
+  ipcMain.on('effective-ui-style-changed', (_event, style: EffectiveUiStyle) => {
+    if (style !== 'aurora' && style !== 'calm') return;
+    getSettingsWindow()?.setBackgroundColor(uiStyleBackgroundColor(style));
   });
 
   ipcMain.handle('save-cookie', async (_event, cookie: string) => {
@@ -532,6 +550,22 @@ function setupPollerEvents(): void {
   });
 }
 
+/** 跟随系统档位：系统深浅色切换时同步设置窗底色。
+ *  渲染层自己也在监听 prefers-color-scheme，这里兜住窗口挂起 / 未聚焦时的那一拍。 */
+function setupNativeThemeSync(): void {
+  nativeTheme.on('updated', () => {
+    const settings = settingsStore.get();
+    if (settings.uiStyle !== 'system') return;
+    const effective = resolveEffectiveUiStyle(
+      settings.uiStyle,
+      settings.uiStyleDayStartMin,
+      settings.uiStyleDayEndMin,
+      nativeTheme.shouldUseDarkColors,
+    );
+    getSettingsWindow()?.setBackgroundColor(uiStyleBackgroundColor(effective));
+  });
+}
+
 app.whenReady().then(async () => {
   credentialVault.setFallbackPath(app.getPath('userData'));
   settingsStore = new SettingsStore();
@@ -547,6 +581,7 @@ app.whenReady().then(async () => {
   setupIpc();
   setupPollerEvents();
   setupPowerMonitor();
+  setupNativeThemeSync();
 
   createFloatingBallWindow(isDev);
   broadcastSnapshot();

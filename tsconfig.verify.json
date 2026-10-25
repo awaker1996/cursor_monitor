@@ -12,6 +12,7 @@
     "scripts/verify-today-percent.ts",
     "scripts/verify-today-range.ts",
     "scripts/verify-sand-usage.ts",
+    "scripts/verify-ui-style-schedule.ts",
     "src/core/**/*",
     "src/renderer/components/SubscriptionUtils.ts",
     "src/shared/**/*"

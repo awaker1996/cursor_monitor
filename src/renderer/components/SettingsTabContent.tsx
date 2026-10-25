@@ -4,9 +4,16 @@ import {
   REFRESH_INTERVAL_MIN,
   type AppSettings,
 } from '../../shared/types';
-import { SettingsRow, Segmented, SliderInput, Switch } from './SettingsControls';
-import { UI_STYLE_OPTIONS } from '../uiStyle';
-import type { UiStyle } from '../../shared/types';
+import { SettingsRow, Segmented, SliderInput, Switch, TimeRangeSelect } from './SettingsControls';
+import { UI_STYLE_LABELS, UI_STYLE_OPTIONS, useSystemPrefersDark } from '../uiStyle';
+import type { UiStyleMode } from '../../shared/types';
+import {
+  describeDayWindow,
+  formatMinutes,
+  isOvernightWindow,
+  parseTimeToMinutes,
+  resolveEffectiveUiStyle,
+} from '../../shared/uiStyle';
 import type { ToastTone } from '../pages/SettingsPage';
 function GlassCard({
   children,
@@ -133,7 +140,8 @@ export function DataRefreshPrefs({
   );
 }
 
-/** 界面风格切换：同时作用于悬浮球与设置窗口，改动即时生效。 */
+/** 界面风格：自动跟随（跟随系统 / 跟随时间）与手动固定（清爽纸面 / 极光玻璃）分组排列，
+ *  切换即作用于悬浮球与设置窗口；「跟随时间」的时段设置收在卡片底部弱化子区里。 */
 export function AppearancePrefs({
   settings,
   onToast,
@@ -141,29 +149,120 @@ export function AppearancePrefs({
   settings: AppSettings;
   onToast: (message: string, tone?: ToastTone) => void;
 }) {
+  const isAuto = settings.uiStyle === 'auto';
+  const isSystem = settings.uiStyle === 'system';
+  const startMin = settings.uiStyleDayStartMin;
+  const endMin = settings.uiStyleDayEndMin;
+  const [draft, setDraft] = useState(() => ({
+    start: formatMinutes(startMin),
+    end: formatMinutes(endMin),
+  }));
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const systemDark = useSystemPrefersDark();
+
+  useEffect(() => {
+    setDraft({ start: formatMinutes(startMin), end: formatMinutes(endMin) });
+  }, [startMin, endMin]);
+
+  // 离开「跟随时间」档时清掉校验错误并把草稿拉回已保存值：
+  // 时段行随之隐藏，留着报错会挂在别的档位下面，回来时也不该看到未保存的半截时间
+  useEffect(() => {
+    if (isAuto) return;
+    setError(null);
+    setDraft({ start: formatMinutes(startMin), end: formatMinutes(endMin) });
+  }, [isAuto, startMin, endMin]);
+
+  // 自动档的状态胶囊要跟着时段边界走：每分钟重算一次「当前生效」
+  useEffect(() => {
+    if (!isAuto) return;
+    setNow(new Date());
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [isAuto]);
+
+  const effective = resolveEffectiveUiStyle(settings.uiStyle, startMin, endMin, systemDark, now);
   const current = UI_STYLE_OPTIONS.find((o) => o.value === settings.uiStyle);
+  const statusNote = isSystem
+    ? systemDark
+      ? '系统深色'
+      : '系统浅色'
+    : isAuto
+      ? describeDayWindow(startMin, endMin)
+      : null;
+
+  const styleToast: Record<UiStyleMode, string> = {
+    system: '已改为跟随系统',
+    auto: '已按时间自动切换',
+    calm: '已切换到清爽纸面',
+    aurora: '已切换到极光玻璃',
+  };
+
+  const handleRangeChange = (next: { start: string; end: string }) => {
+    setDraft(next);
+    const start = parseTimeToMinutes(next.start);
+    const end = parseTimeToMinutes(next.end);
+    if (start === null || end === null) {
+      setError(null);
+      return;
+    }
+    if (start === end) {
+      setError('起止时间不能相同');
+      return;
+    }
+    setError(null);
+    if (start === startMin && end === endMin) return;
+    void window.electronAPI
+      .updateSettings({ uiStyleDayStartMin: start, uiStyleDayEndMin: end })
+      .then(() => onToast('自动切换时段已保存'));
+  };
+
   return (
     <GlassCard>
-      <div className="set-card__body">
-        <SettingsRow
-          title="界面风格"
-          description={
-            current
-              ? `当前：${current.label} —— ${current.description}。切换同时作用于悬浮球与设置窗口`
-              : '切换同时作用于悬浮球与设置窗口'
-          }
-        >
-          <Segmented<UiStyle>
-            value={settings.uiStyle}
-            options={UI_STYLE_OPTIONS.map(({ value, label }) => ({ value, label }))}
-            onChange={(next) => {
-              void window.electronAPI
-                .updateSettings({ uiStyle: next })
-                .then(() => onToast(next === 'calm' ? '已切换到清爽纸面' : '已切换到极光玻璃'));
-            }}
-            ariaLabel="界面风格"
-          />
-        </SettingsRow>
+      <div className="set-card__body set-card__body--stacked style-card">
+        <div className="style-card__head">
+          <div className="style-card__title-row">
+            <span className="set-row__title">界面风格</span>
+            <span className="style-card__status" data-effective={effective}>
+              <span className="style-card__status-dot" aria-hidden />
+              当前 {UI_STYLE_LABELS[effective]}
+              {statusNote && <em>{statusNote}</em>}
+            </span>
+          </div>
+          <span className="set-row__desc">
+            {current ? current.description : '选择界面的配色方案'}
+          </span>
+        </div>
+        <Segmented<UiStyleMode>
+          value={settings.uiStyle}
+          wide
+          options={UI_STYLE_OPTIONS.map(({ value, label, group }) => ({ value, label, group }))}
+          onChange={(next) => {
+            void window.electronAPI
+              .updateSettings({ uiStyle: next })
+              .then(() => onToast(styleToast[next]));
+          }}
+          ariaLabel="界面风格"
+        />
+        <span className="style-card__note">改动即时生效，悬浮球与设置窗口同步</span>
+        {isAuto && (
+          <div className="style-schedule">
+            <div className="style-schedule__text">
+              <span className="style-schedule__title">自动切换时段</span>
+              <span className="style-schedule__hint">
+                时段内用清爽纸面，其余时间用极光玻璃
+              </span>
+            </div>
+            <TimeRangeSelect
+              start={draft.start}
+              end={draft.end}
+              overnight={isOvernightWindow(startMin, endMin)}
+              invalid={error !== null}
+              onChange={handleRangeChange}
+            />
+          </div>
+        )}
+        {error && <p className="set-row__error">{error}</p>}
       </div>
     </GlassCard>
   );

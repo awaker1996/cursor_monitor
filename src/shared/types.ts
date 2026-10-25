@@ -1,7 +1,12 @@
 export type DataSource = 'official' | 'cookie';
 
-/** 界面视觉风格：aurora = 深色玻璃极光；calm = 浅色实底高对比（护眼易读）。 */
-export type UiStyle = 'aurora' | 'calm';
+/** 用户选择的界面风格档位：aurora = 深色玻璃极光；calm = 浅色实底高对比（护眼易读）；
+ *  auto = 按白天时段自动切换（白天 calm，夜间 aurora）；
+ *  system = 跟随系统深浅色（系统深色 aurora，系统浅色 calm）。 */
+export type UiStyleMode = 'system' | 'aurora' | 'calm' | 'auto';
+
+/** 实际生效的界面风格，永远只有两种 —— DOM 上的 data-ui-style 只允许这两个值。 */
+export type EffectiveUiStyle = 'aurora' | 'calm';
 
 export interface TokenQuota {
   remaining: number | null;
@@ -97,8 +102,12 @@ export interface AppSettings {
   failureThreshold: number;
   edgeAutoDockEnabled: boolean;
   customIconPath?: string | null;
-  /** 界面风格，同时作用于悬浮球与设置窗口。 */
-  uiStyle: UiStyle;
+  /** 界面风格档位，同时作用于悬浮球与设置窗口；auto 表示按白天时段自动切换。 */
+  uiStyle: UiStyleMode;
+  /** 白天时段起点（自 00:00 起的分钟数），仅 auto 档生效。 */
+  uiStyleDayStartMin: number;
+  /** 白天时段终点（自 00:00 起的分钟数），仅 auto 档生效。 */
+  uiStyleDayEndMin: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -111,6 +120,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   edgeAutoDockEnabled: true,
   customIconPath: null,
   uiStyle: 'aurora',
+  uiStyleDayStartMin: 420,
+  uiStyleDayEndMin: 1140,
 };
 
 export const REFRESH_INTERVAL_MIN = 30;

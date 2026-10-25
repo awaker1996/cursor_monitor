@@ -26,6 +26,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   edgeAutoDockEnabled: true,
   customIconPath: null,
   uiStyle: 'aurora',
+  uiStyleDayStartMin: 420,
+  uiStyleDayEndMin: 1140,
 };
 
 /** 浏览器预览悬浮球时的示例数据（仅 mock，Electron 走真实快照）。 */
@@ -107,6 +109,7 @@ export function installBrowserMock(): void {
       listeners.forEach((fn) => fn(settings));
       return settings;
     },
+    setEffectiveUiStyle: () => undefined,
     saveCookie: async () => undefined,
     clearCookie: async () => true,
     hasCookie: async () => false,

@@ -1,12 +1,13 @@
 import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import type { AppSettings } from '../shared/types';
+import type { AppSettings, UiStyleMode } from '../shared/types';
 import {
   DEFAULT_SETTINGS,
   REFRESH_INTERVAL_MAX,
   REFRESH_INTERVAL_MIN,
 } from '../shared/types';
+import { normalizeDayMinutes } from '../shared/uiStyle';
 
 const SETTINGS_FILE = 'settings.json';
 
@@ -26,7 +27,7 @@ export class SettingsStore {
         const raw = JSON.parse(fs.readFileSync(this.filePath, 'utf-8')) as Partial<AppSettings>;
         const merged = { ...DEFAULT_SETTINGS, ...raw };
         const normalized = this.normalize(merged);
-        if (normalized.refreshIntervalSec !== merged.refreshIntervalSec) {
+        if (JSON.stringify(normalized) !== JSON.stringify(merged)) {
           this.settings = normalized;
           this.save();
           return normalized;
@@ -39,18 +40,39 @@ export class SettingsStore {
     return { ...DEFAULT_SETTINGS };
   }
 
+  /** 逐字段夹紧脏值：旧配置、磁盘损坏或外部写入的非法值都不允许流到业务层。 */
   private normalize(settings: AppSettings): AppSettings {
     const sec = settings.refreshIntervalSec;
-    if (!Number.isInteger(sec) || sec < REFRESH_INTERVAL_MIN || sec > REFRESH_INTERVAL_MAX) {
-      return {
-        ...settings,
-        refreshIntervalSec: Math.min(
-          REFRESH_INTERVAL_MAX,
-          Math.max(REFRESH_INTERVAL_MIN, Number.isFinite(sec) ? Math.round(sec) : DEFAULT_SETTINGS.refreshIntervalSec),
-        ),
-      };
-    }
-    return settings;
+    const refreshIntervalSec =
+      Number.isInteger(sec) && sec >= REFRESH_INTERVAL_MIN && sec <= REFRESH_INTERVAL_MAX
+        ? sec
+        : Math.min(
+            REFRESH_INTERVAL_MAX,
+            Math.max(
+              REFRESH_INTERVAL_MIN,
+              Number.isFinite(sec) ? Math.round(sec) : DEFAULT_SETTINGS.refreshIntervalSec,
+            ),
+          );
+    const uiStyle: UiStyleMode =
+      settings.uiStyle === 'system' ||
+      settings.uiStyle === 'aurora' ||
+      settings.uiStyle === 'calm' ||
+      settings.uiStyle === 'auto'
+        ? settings.uiStyle
+        : DEFAULT_SETTINGS.uiStyle;
+    return {
+      ...settings,
+      refreshIntervalSec,
+      uiStyle,
+      uiStyleDayStartMin: normalizeDayMinutes(
+        settings.uiStyleDayStartMin,
+        DEFAULT_SETTINGS.uiStyleDayStartMin,
+      ),
+      uiStyleDayEndMin: normalizeDayMinutes(
+        settings.uiStyleDayEndMin,
+        DEFAULT_SETTINGS.uiStyleDayEndMin,
+      ),
+    };
   }
 
   private save(): void {
@@ -63,7 +85,7 @@ export class SettingsStore {
   }
 
   update(partial: Partial<AppSettings>): AppSettings {
-    this.settings = { ...this.settings, ...partial };
+    this.settings = this.normalize({ ...this.settings, ...partial });
     this.save();
     this.listeners.forEach((fn) => fn(this.get()));
     return this.get();

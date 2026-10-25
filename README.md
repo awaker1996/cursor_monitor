@@ -1,6 +1,6 @@
 # Cursor Token Monitor — 项目参考文档
 
-> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口为侧边导航 + 分区面板的设置中心，按「账户与订阅 / 数据刷新 / 外观 / 关于」组织，支持极光玻璃与清爽纸面双主题。
+> Windows 桌面悬浮球，定期显示 Cursor 账号 **Cursor Models / Other Models** 用量与余量；设置窗口为侧边导航 + 分区面板的设置中心，按「账户与订阅 / 数据刷新 / 外观 / 关于」组织，支持跟随系统、按时间自动切换、极光玻璃与清爽纸面四档主题。
 > 本文档整合需求说明、架构设计、实现细节、使用与维护指南，便于后续查阅。
 
 ---
@@ -46,7 +46,7 @@
 - Windows 悬浮球（拖拽、置顶、贴边半隐收起、托盘）
 - Cursor Models / Other Models 余量与 Dashboard 用量指标展示（概览 / 用量切换）
 - 设置窗口侧边导航设置中心：账户与订阅 / 数据刷新 / 外观（界面风格 · 悬浮球 · 应用图标）/ 关于
-- 双主题界面风格：极光玻璃（深色）/ 清爽纸面（浅色），设置页切换即时生效于悬浮球与设置窗口
+- 四档界面风格：跟随系统（随 Windows 深色 / 浅色设置）/ 跟随时间（白天浅色、夜间深色，可自定义白天时段）/ 清爽纸面（浅色）/ 极光玻璃（深色），设置页切换即时生效于悬浮球与设置窗口
 - 订阅额度与用量查询：Cursor 周期用量（含订阅套餐与 Grok Bot 周用量）、Command Code 额度与 5 小时/每周/每月限额（含套餐）、DeepSeek 余额与按月模型用量
 - 系统托盘悬停展示概览用量摘要；右键提供设置 / 复位 / 退出
 - 自动刷新与间隔配置（订阅自动刷新共用同一份配置）
@@ -113,6 +113,7 @@ node .tmp-verify/scripts/verify-collapsed-usage.js
 node .tmp-verify/scripts/verify-cookie-summary.js
 node .tmp-verify/scripts/verify-included-usage.js
 node .tmp-verify/scripts/verify-sand-usage.js
+node .tmp-verify/scripts/verify-ui-style-schedule.js
 ```
 
 `tsx` 不在依赖中，脚本注释里的 `npx tsx` 会在联网拉取时受本机 npm 缓存目录权限影响；本机不可用时统一走上面这条 tsc 编译路径。`scripts/diagnose-*.ts` 是真实请求的诊断脚本，不属于验收范围，不要放进 CI。
@@ -229,7 +230,7 @@ node .tmp-verify/scripts/verify-sand-usage.js
 - 分区标题统一用玻璃胶囊（圆角胶囊容器，取代原先贴在文字左侧的色带），两主题结构一致、仅配色不同；订阅卡内小节标题用同族的小号胶囊；侧边导航激活态由滑移胶囊 + 字重 + 变色承担
 - 「账户与订阅」区：账户卡片纵向单列，工具栏含查询时间、自动刷新状态与「刷新全部」
 - 「数据刷新」区：自动刷新、刷新间隔（30–3600 秒，防抖自动保存）
-- 「外观」区：界面风格切换（极光玻璃 / 清爽纸面）、悬浮球贴边自动收起、应用图标选择 / 恢复默认（即时生效于托盘与设置窗口）
+- 「外观」区：界面风格切换（跟随系统 / 跟随时间 | 清爽纸面 / 极光玻璃，分段控件撑满卡片并按「自动 / 手动」分组；卡片右上角显示当前生效风格；选「跟随时间」后卡片底部展开弱化的时段子区，两个「时 : 分」下拉可选择白天时段，支持跨零点）、悬浮球贴边自动收起、应用图标选择 / 恢复默认（即时生效于托盘与设置窗口）
 - 「关于」区：功能范围卡片纵向铺满面板区，内容由 `README.md` 构建期 `?raw` 派生
 - 面板区内容超出时纵向滚动；横向一律裁剪（装饰性光斑溢出不产生横滚条）
 
@@ -310,9 +311,10 @@ flowchart TD
 | 设置标题栏 | `src/renderer/components/SettingsTitleBar.tsx` | 设置窗自绘标题栏（整条可拖动 + 窗口控制按钮） |
 | 设置导航 | `src/renderer/components/SettingsNav.tsx` | 侧边导航（两字标签 + 底部品牌角标含版本号） |
 | 设置面板 | `src/renderer/components/SettingsPanel.tsx` | 分区面板骨架（标题 / 描述 / fill 铺满模式） |
-| 主题风格 | `src/renderer/uiStyle.ts` | 界面风格元数据与 `data-ui-style` 应用 / 跟随同步 |
+| 主题风格 | `src/renderer/uiStyle.ts` | 界面风格元数据、`data-ui-style` 应用与按分钟对齐的自动切换调度 |
+| 风格时段 | `src/shared/uiStyle.ts` | 白天时段解析与生效风格推导（主进程与渲染层共用） |
 | 偏好设置 UI | `src/renderer/components/SettingsTabContent.tsx` | 数据刷新 / 界面风格 / 悬浮球行为 / 应用图标 |
-| 设置控件 | `src/renderer/components/SettingsControls.tsx` | 设置通用控件（SettingsRow / Segmented / SliderInput / Switch） |
+| 设置控件 | `src/renderer/components/SettingsControls.tsx` | 设置通用控件（SettingsRow / Segmented / SliderInput / Switch / TimeRangeSelect） |
 | 核心功能卡 | `src/renderer/components/ProjectFeaturesCard.tsx` | 由 `README.md` 派生功能清单（`?raw`），默认折叠 |
 | 打包编排 | `scripts/dist.mjs` | 结束残留实例、工作区外打包、发布产物到 `release/` |
 | 订阅 UI | `src/renderer/pages/SubscriptionsPage.tsx` | 账户卡片列表：独立展开、独立刷新、独立凭据配置 |
@@ -364,6 +366,7 @@ cursor_monitor/
 │   │   ├── types.ts             # 类型定义
 │   │   ├── subscriptionTypes.ts # 订阅相关类型
 │   │   ├── format.ts            # 展示格式化 / 托盘 tooltip
+│   │   ├── uiStyle.ts           # 界面风格时段解析（主进程与渲染层共用）
 │   │   └── devServer.ts         # 开发态 dev server 端口与 URL
 │   ├── utils/
 │   │   └── logger.ts            # 脱敏日志
@@ -371,7 +374,7 @@ cursor_monitor/
 │       ├── App.tsx              # 悬浮球
 │       ├── main.tsx             # 悬浮球入口
 │       ├── settings-main.tsx    # 设置窗入口
-│       ├── uiStyle.ts           # 界面风格元数据与 data-ui-style 同步
+│       ├── uiStyle.ts           # 界面风格元数据、data-ui-style 同步与自动切换调度
 │       ├── pages/
 │       │   ├── SettingsPage.tsx      # 侧边导航设置中心骨架
 │       │   └── SubscriptionsPage.tsx # 账户卡片列表
@@ -678,7 +681,8 @@ OfficialProvider 请求
 | failureThreshold | 3 | 切换 Provider 的失败次数阈值 |
 | edgeAutoDockEnabled | true | 贴边缘自动收起 |
 | customIconPath | null | 自定义图标路径（null 为默认） |
-| uiStyle | aurora | 界面风格：aurora（深色玻璃极光）/ calm（浅色清爽纸面），同时作用于悬浮球与设置窗口，设置页「外观」分区可切换 |
+| uiStyle | aurora | 界面风格：system（跟随系统深浅色）/ auto（按白天时段切换）/ calm（浅色清爽纸面）/ aurora（深色玻璃极光），同时作用于悬浮球与设置窗口，设置页「外观」分区可切换 |
+| uiStyleDayStartMin / uiStyleDayEndMin | 420 / 1140 | 自动切换的白天时段起止（自 00:00 起的分钟数），仅 auto 档生效，支持跨零点 |
 
 修改端点或映射逻辑见 [维护与扩展](#13-维护与扩展)。
 
@@ -915,10 +919,10 @@ npm run dist
 
 | 版本 | 内容 |
 |---|---|
-| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、侧边导航设置中心（账户与订阅 / 数据刷新 / 外观 / 关于）、订阅额度与按月用量（Cursor / Command Code / DeepSeek，含套餐与 Grok Bot 周用量展示）、双主题界面风格（极光玻璃 / 清爽纸面）、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
+| **v1（当前）** | 单账号、自动刷新、双 Provider 回退、Dashboard 概览/用量、侧边导航设置中心（账户与订阅 / 数据刷新 / 外观 / 关于）、订阅额度与按月用量（Cursor / Command Code / DeepSeek，含套餐与 Grok Bot 周用量展示）、双主题界面风格（跟随系统 / 跟随时间自动切换 / 极光玻璃 / 清爽纸面）、贴边半隐、托盘悬停用量、自定义图标、快照与订阅缓存、连接测试详情 |
 | v1.1 | 开机自启、主题适配、简易历史趋势 |
 | v1.2 | 多账号、告警阈值通知 |
 
 ---
 
-*文档版本：v2.0 | 最后更新：2026-10-12*
+*文档版本：v2.0 | 最后更新：2026-10-25*

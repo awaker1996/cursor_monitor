@@ -1,13 +1,15 @@
 import {
   CURSOR_MODELS_LABEL,
   OTHER_MODELS_LABEL,
-  formatRemainingFromUsedPercent,
+  formatIncludedUsageTokens,
+  formatUsedPercent,
 } from '../../shared/format';
 import type {
   CommandCodeLimit,
   CommandCodeQuotaSection,
   CommandCodeSubscriptionData,
   CursorSubscriptionData,
+  DeepSeekSubscriptionData,
   SubscriptionInfoResult,
   SubscriptionProviderId,
   SubscriptionUsageResult,
@@ -28,124 +30,375 @@ export const EMPTY_PROVIDER_ENTRY: ProviderCacheEntry = {
   usageError: null,
 };
 
-/** 卡片收起态的一根用量小条：短标签 + 进度条 + 百分比，百分比已夹取到 0-100。 */
-export interface CollapsedUsageChip {
+/* ── 账户卡片视图模型 ──
+   收起态常显的「套餐 + 周期 + 关键额度」由这里组装成纯数据，页面只负责渲染。
+   所有时间格式化都接受 now 参数，便于回归脚本注入固定时间。 */
+
+export type MetricTone = 'ok' | 'warn' | 'bad';
+
+export interface AccountMetric {
   key: string;
+  /** 左侧口径名，如「5 小时限额」「Cursor 模型」「积分」 */
   label: string;
-  percent: number;
-  /** 悬停提示，展开为完整口径名称。 */
-  title: string;
+  /** 右侧主值，如「剩余 98.9%」「剩余 $37.54」 */
+  value: string;
+  /** 0-100；null 表示不画进度条（余额类） */
+  percent: number | null;
+  tone: MetricTone;
+  /** 条下注释：重置时间 + 剩余天数 */
+  note?: string;
+  /** 悬停的完整口径 */
+  title?: string;
 }
 
-const COMMAND_CODE_CHIP_LABELS = { fiveHour: '5h', weekly: '周', monthly: '月' } as const;
+export interface AccountCardView {
+  planLabel: string | null;
+  planMeta: string | null;
+  metrics: AccountMetric[];
+  todayLine: string | null;
+  footnote: string | null;
+  sourceLabel: string;
+}
 
-/** CommandCode 收起态限额摘要：5 小时 / 每周 / 每月限额百分比，缺哪项就不出哪根。 */
-function commandCodeCollapsedChips(data: CommandCodeSubscriptionData): CollapsedUsageChip[] {
-  const chips: CollapsedUsageChip[] = [];
-  for (const key of ['fiveHour', 'weekly', 'monthly'] as const) {
-    const limit = data.limits.find((item) => item.key === key);
-    if (!limit) continue;
-    const percent = limitPercent(limit);
-    chips.push({
-      key,
-      label: COMMAND_CODE_CHIP_LABELS[key],
-      percent,
-      title: `${LIMIT_LABELS[key]}已用 ${Math.round(percent)}%`,
-    });
+export interface AccountCardViewOptions {
+  now?: number;
+  /** 当前选中的查询月份（YYYY-MM），用于 DeepSeek 月度用量摘要 */
+  usageMonth?: string;
+}
+
+/** 统一把 ISO / unix 秒 / unix 毫秒解析为 Date；不可解析返回 null。 */
+function toDate(value: string | number | null | undefined): Date | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') {
+    // 0 是接口「无重置时间」的常见哨兵值，按未知处理，避免显示 1970 年
+    if (!Number.isFinite(value) || value <= 0) return null;
+    const date = new Date(value >= 1e12 ? value : value * 1000);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
-  return chips;
+  if (/^0+$/.test(value.trim())) return null;
+  return parseTimestamp(value);
 }
 
-/** Cursor 收起态摘要：今日 Cursor / 今日 Other 两个用量池。
- *  快照缺今日口径时（官方额度源、今日事件不完整）回退为周期口径，
- *  标签明确标注窗口——不把「无今日数据」误读成「没用量」，也不再整块留白。 */
-function cursorCollapsedChips(data: CursorSubscriptionData): CollapsedUsageChip[] {
-  const hasToday =
-    data.cursorModelsTodayUsedPercent != null || data.otherModelsTodayUsedPercent != null;
-  const windowLabel = hasToday ? '今日' : '周期';
-  const buckets: Array<{ key: string; label: string; full: string; percent: number | null }> = [
-    {
-      key: hasToday ? 'cursorModelsToday' : 'cursorModelsCycle',
-      label: `${windowLabel} Cursor`,
-      full: `${windowLabel} ${CURSOR_MODELS_LABEL}`,
-      percent: hasToday ? data.cursorModelsTodayUsedPercent : data.cursorModelsUsedPercent,
-    },
-    {
-      key: hasToday ? 'otherModelsToday' : 'otherModelsCycle',
-      label: `${windowLabel} Other`,
-      full: `${windowLabel} ${OTHER_MODELS_LABEL}`,
-      percent: hasToday ? data.otherModelsTodayUsedPercent : data.otherModelsUsedPercent,
-    },
-  ];
-
-  const chips: CollapsedUsageChip[] = [];
-  for (const bucket of buckets) {
-    if (bucket.percent == null || !Number.isFinite(bucket.percent)) continue;
-    const percent = clampPercent(bucket.percent);
-    chips.push({
-      key: bucket.key,
-      label: bucket.label,
-      percent,
-      title: `${bucket.full}已用 ${Math.round(percent)}%`,
-    });
-  }
-  return chips;
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
 }
 
-/**
- * 收起态小条：按 provider 口径给出需要关注的几项。
- * CommandCode 为 5 小时 / 每周 / 每月限额，Cursor 为今日两个用量池，DeepSeek 无小条。
- */
-export function providerCollapsedUsage(
-  id: SubscriptionProviderId,
-  entry: ProviderCacheEntry | undefined,
-): CollapsedUsageChip[] {
-  const data = entry?.info?.data ?? null;
-  if (!data || data.providerId !== id) return [];
-  if (data.providerId === 'commandcode') return commandCodeCollapsedChips(data);
-  if (data.providerId === 'cursor') return cursorCollapsedChips(data);
-  return [];
+function formatMonthDay(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
-/** 收起态小条分组的无障碍名称，避免 Cursor 的用量摘要被读成限额。 */
-export function collapsedUsageAriaLabel(id: SubscriptionProviderId): string {
-  return id === 'cursor' ? '用量摘要' : '限额摘要';
+function formatClock(date: Date): string {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-/** 收起态套餐标签：有真实套餐数据时返回展示文案，否则返回 null（不展示、不写死）。 */
-export function providerPlanLabel(
-  id: SubscriptionProviderId,
-  entry: ProviderCacheEntry | undefined,
+function startOfLocalDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+/** 计费周期区间：`10/25 – 11/24`；跨年时两端带年份。 */
+export function formatCycleRange(
+  start: string | number | null | undefined,
+  end: string | number | null | undefined,
 ): string | null {
+  const from = toDate(start);
+  const to = toDate(end);
+  if (!from && !to) return null;
+  if (!from || !to) return formatMonthDay((from ?? to) as Date);
+  const sameYear = from.getFullYear() === to.getFullYear();
+  const fromLabel = sameYear ? formatMonthDay(from) : `${from.getFullYear()}/${formatMonthDay(from)}`;
+  const toLabel = sameYear ? formatMonthDay(to) : `${to.getFullYear()}/${formatMonthDay(to)}`;
+  return `${fromLabel} – ${toLabel}`;
+}
+
+/** 自然日倒数：`30 天后` / `今天到期` / `已到期 12 天`。 */
+export function formatRelativeDays(
+  target: string | number | null | undefined,
+  now: number = Date.now(),
+): string | null {
+  const date = toDate(target);
+  if (!date) return null;
+  const diff = Math.round(
+    (startOfLocalDay(date) - startOfLocalDay(new Date(now))) / 86_400_000,
+  );
+  if (diff > 0) return `${diff} 天后`;
+  if (diff === 0) return '今天到期';
+  return `已到期 ${Math.abs(diff)} 天`;
+}
+
+/** 指标条下注释：`重置于 11月24日 17:54 · 30 天后`。 */
+export function formatResetNote(
+  target: string | number | null | undefined,
+  now: number = Date.now(),
+): string {
+  const date = toDate(target);
+  if (!date) return '重置时间未知';
+  const label = `${date.getMonth() + 1}月${date.getDate()}日 ${formatClock(date)}`;
+  const relative = formatRelativeDays(target, now);
+  // 重置/到期共用同一套倒数，但「今天到期」「已到期 N 天」用于重置时语义不通，
+  // 这里换成「今天重置」「已重置」。
+  const resetRelative =
+    relative === null
+      ? null
+      : relative === '今天到期'
+        ? '今天重置'
+        : relative.startsWith('已到期')
+          ? '已重置'
+          : relative;
+  return resetRelative ? `重置于 ${label} · ${resetRelative}` : `重置于 ${label}`;
+}
+
+/** 卡片页脚：`刚刚更新` / `5 分钟前更新` / `10月25日 21:36 更新`。 */
+export function formatRelativeTime(iso?: string | null, now: number = Date.now()): string {
+  if (!iso) return '尚未更新';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '尚未更新';
+  const diff = Math.max(0, now - date.getTime());
+  if (diff < 60_000) return '刚刚更新';
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 60) return `${minutes} 分钟前更新`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前更新`;
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${formatClock(date)} 更新`;
+}
+
+function formatPercentText(percent: number): string {
+  return `${Number(percent.toFixed(2))}%`;
+}
+
+/** 用量类指标：主值显示「剩余」，进度条与 tone 按已用百分比判定。 */
+function pushUsageMetric(
+  metrics: AccountMetric[],
+  key: string,
+  label: string,
+  used: number | null | undefined,
+  note: string | null,
+  title: string,
+): void {
+  if (used === null || used === undefined || !Number.isFinite(used)) return;
+  const usedPercent = clampPercent(used);
+  const remaining = clampPercent(100 - usedPercent);
+  metrics.push({
+    key,
+    label,
+    value: `剩余 ${formatPercentText(remaining)}`,
+    percent: remaining,
+    tone: limitTone(usedPercent),
+    note: note ?? undefined,
+    title: `${title}已用 ${formatPercentText(usedPercent)}`,
+  });
+}
+
+function buildCursorCardView(data: CursorSubscriptionData, now: number): AccountCardView {
+  const cycleNote = formatResetNote(data.billingCycleEnd, now);
+  const metrics: AccountMetric[] = [];
+
+  pushUsageMetric(
+    metrics,
+    'cursorModels',
+    'Cursor 模型',
+    data.cursorModelsUsedPercent,
+    cycleNote,
+    `${CURSOR_MODELS_LABEL} 周期`,
+  );
+  pushUsageMetric(
+    metrics,
+    'otherModels',
+    '其他模型',
+    data.otherModelsUsedPercent,
+    cycleNote,
+    `${OTHER_MODELS_LABEL} 周期`,
+  );
+
+  const grokBot = data.grokBot;
+  if (grokBot?.hasNonZeroIncludedLimit) {
+    // 标签直接写平台名，周额度写进注释行：窄列里不会把「Grok Bot」截掉
+    pushUsageMetric(
+      metrics,
+      'grokBot',
+      'Grok Bot',
+      grokBot.usedPercent,
+      `周额度 · ${formatResetNote(grokBot.resetsAt, now)}`,
+      'Grok Bot 周',
+    );
+  }
+
+  pushUsageMetric(metrics, 'total', '合计', data.totalUsedPercent, cycleNote, '周期总用量');
+
+  const hasToday =
+    data.cursorModelsTodayUsedPercent !== null || data.otherModelsTodayUsedPercent !== null;
+  const windowLabel = hasToday ? '今日' : '周期';
+  const todayParts: string[] = [];
+  const cursorToday = hasToday ? data.cursorModelsTodayUsedPercent : data.cursorModelsUsedPercent;
+  const otherToday = hasToday ? data.otherModelsTodayUsedPercent : data.otherModelsUsedPercent;
+  if (cursorToday !== null) {
+    todayParts.push(`${windowLabel} Cursor ${formatUsedPercent(cursorToday)}`);
+  }
+  if (otherToday !== null) {
+    todayParts.push(`${windowLabel} Other ${formatUsedPercent(otherToday)}`);
+  }
+
+  const cycleRange = formatCycleRange(data.billingCycleStart, data.billingCycleEnd);
+  const cycleRelative = formatRelativeDays(data.billingCycleEnd, now);
+  const cycleText = [cycleRange, cycleRelative].filter(Boolean).join(' · ');
+
+  const footnoteParts: string[] = [];
+  if (grokBot && !grokBot.hasNonZeroIncludedLimit) {
+    footnoteParts.push('当前套餐不含 Grok Bot 周额度');
+  }
+  if (grokBot?.hasNonZeroIncludedLimit && grokBot.onDemandEligible) {
+    footnoteParts.push('Grok Bot 周额度用尽后可设置按需额度继续使用');
+  }
+
+  return {
+    planLabel: formatCursorPlanLabel(data.membershipType),
+    planMeta: cycleText ? `计费周期 ${cycleText}` : '计费周期未知',
+    metrics,
+    todayLine: todayParts.length > 0 ? todayParts.join(' · ') : null,
+    footnote: footnoteParts.length > 0 ? footnoteParts.join('；') : null,
+    sourceLabel: data.source === 'official' ? '官方接口' : 'Dashboard Cookie',
+  };
+}
+
+function buildCommandCodeCardView(
+  data: CommandCodeSubscriptionData,
+  now: number,
+): AccountCardView {
+  const metrics: AccountMetric[] = [];
+
+  for (const limit of data.limits) {
+    const usedPercent = limitPercent(limit);
+    const remaining = clampPercent(100 - usedPercent);
+    metrics.push({
+      key: limit.key,
+      label: LIMIT_LABELS[limit.key],
+      value: `剩余 ${formatPercentText(remaining)}`,
+      percent: remaining,
+      tone: limitTone(usedPercent),
+      note: formatResetNote(limit.resetAt, now),
+      title: `${LIMIT_LABELS[limit.key]}已用 ${formatUsd(limit.used)} / ${formatUsd(limit.cap)}`,
+    });
+  }
+
+  if (data.credits) {
+    const monthlyLimit = data.limits.find((item) => item.key === 'monthly');
+    const cap = monthlyLimit?.cap ?? 0;
+    const remaining = data.credits.remainingCredits;
+    const percent = cap > 0 ? clampPercent((remaining / cap) * 100) : null;
+    metrics.push({
+      key: 'credits',
+      label: '积分',
+      value: `剩余 ${formatUsd(remaining)}`,
+      percent,
+      tone: percent === null ? 'ok' : limitTone(100 - percent),
+      note: `月度 ${formatUsd(data.credits.monthlyCredits)} · 购买 ${formatUsd(
+        data.credits.purchasedCredits,
+      )} · 赠送 ${formatUsd(data.credits.freeCredits)}`,
+      title: cap > 0 ? `${formatUsd(remaining)} / ${formatUsd(cap)}` : undefined,
+    });
+  }
+
+  const plan = data.plan;
+  const planParts: string[] = [];
+  if (plan?.status) planParts.push(plan.status);
+  const range = formatCycleRange(plan?.currentPeriodStart ?? null, plan?.currentPeriodEnd ?? null);
+  const relative = formatRelativeDays(plan?.currentPeriodEnd ?? null, now);
+  const cycleText = [range, relative].filter(Boolean).join(' · ');
+  if (cycleText) planParts.push(`计费周期 ${cycleText}`);
+
+  const footnoteParts: string[] = [];
+  if (!data.credits) footnoteParts.push('额度数据不可用');
+  if (data.unavailable.length > 0) {
+    footnoteParts.push(
+      `本次未获取：${data.unavailable.map((section) => QUOTA_SECTION_LABELS[section]).join('、')}`,
+    );
+  }
+
+  return {
+    planLabel: plan?.planId ? formatPlanLabel(plan.planId) : null,
+    planMeta: planParts.length > 0 ? planParts.join(' · ') : null,
+    metrics,
+    todayLine: null,
+    footnote: footnoteParts.length > 0 ? footnoteParts.join('；') : null,
+    sourceLabel: 'Command Code alpha',
+  };
+}
+
+function buildDeepSeekCardView(
+  data: DeepSeekSubscriptionData,
+  usage: SubscriptionUsageResult | null,
+  usageMonth: string | undefined,
+): AccountCardView {
+  const metrics: AccountMetric[] = data.balances.map((item) => ({
+    key: `balance-${item.currency}`,
+    label: `${item.currency} 余额`,
+    value: `${item.currency} ${item.totalBalance}`,
+    percent: null,
+    tone: data.isAvailable ? 'ok' : 'bad',
+    note: `充值 ${item.toppedUpBalance} · 赠送 ${item.grantedBalance}`,
+  }));
+
+  if (metrics.length === 0) {
+    metrics.push({
+      key: 'balance',
+      label: '余额',
+      value: '平台未返回余额明细',
+      percent: null,
+      tone: 'bad',
+      note: '稍后刷新重试',
+    });
+  }
+
+  const selected = usageMonth ? parseMonthValue(usageMonth) : null;
+  const cached = usage?.success ? (usage.data ?? null) : null;
+  if (
+    selected &&
+    cached &&
+    cached.providerId === 'deepseek' &&
+    cached.month === selected.month &&
+    cached.year === selected.year
+  ) {
+    metrics.push({
+      key: 'monthUsage',
+      label: `${selected.month} 月用量`,
+      value: formatIncludedUsageTokens(cached.totalTokens),
+      percent: null,
+      tone: 'ok',
+      note: `请求 ${formatCount(cached.totalRequests)} 次${
+        cached.cacheHitRatePercent === null
+          ? ''
+          : ` · 命中率 ${formatPercentText(cached.cacheHitRatePercent)}`
+      }`,
+    });
+  }
+
+  return {
+    planLabel: null,
+    planMeta: '预付费余额 · 无到期日',
+    metrics,
+    todayLine: null,
+    footnote: data.isAvailable ? null : '账户当前不可用',
+    sourceLabel: 'DeepSeek 余额接口',
+  };
+}
+
+/** 收起态卡片的完整视图；未配置 / 无数据 / 查询失败时返回 null，由卡片走占位态。 */
+export function buildAccountCardView(
+  id: SubscriptionProviderId,
+  entry: ProviderCacheEntry | undefined,
+  options: AccountCardViewOptions = {},
+): AccountCardView | null {
   const data = entry?.info?.data ?? null;
   if (!data || data.providerId !== id) return null;
-  if (data.providerId === 'commandcode') {
-    return formatPlanLabel(data.plan?.planId ?? null);
-  }
-  if (data.providerId === 'cursor') {
-    return formatCursorPlanLabel(data.membershipType);
-  }
-  return null;
-}
-
-/** provider 卡片上的一行摘要：取该平台最有信息量的一项数值。 */
-export function providerSummaryLine(
-  id: SubscriptionProviderId,
-  entry: ProviderCacheEntry | undefined,
-): string {
-  const data = entry?.info?.data ?? null;
-  if (!data || data.providerId !== id) return '暂无数据';
+  const now = options.now ?? Date.now();
   switch (data.providerId) {
     case 'cursor':
-      return `周期剩余 ${formatRemainingFromUsedPercent(data.totalUsedPercent)}`;
+      return buildCursorCardView(data, now);
     case 'commandcode':
-      return data.credits ? `剩余 ${formatUsd(data.credits.remainingCredits)}` : '额度不可用';
-    case 'deepseek': {
-      const balance = data.balances[0];
-      return balance ? `余额 ${balance.currency} ${balance.totalBalance}` : '余额不可用';
-    }
+      return buildCommandCodeCardView(data, now);
+    case 'deepseek':
+      return buildDeepSeekCardView(data, entry?.usage ?? null, options.usageMonth);
     default:
-      return '暂无数据';
+      return null;
   }
 }
 

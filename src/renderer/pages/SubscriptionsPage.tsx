@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import AccountCard, { type AccountHealth } from '../components/AccountCard';
 import ErrorHint from '../components/ErrorHint';
 import SubscriptionPanel from '../components/SubscriptionPanels';
 import TestConnectionResultPanel from '../components/TestConnectionResultPanel';
 import {
   EMPTY_PROVIDER_ENTRY,
-  collapsedUsageAriaLabel,
+  buildAccountCardView,
   formatFetchedAt,
   currentMonthValue,
-  limitTone,
   parseMonthValue,
-  providerCollapsedUsage,
-  providerPlanLabel,
-  providerSummaryLine,
   type ProviderCacheEntry,
 } from '../components/SubscriptionUtils';
 import type {
@@ -23,28 +20,14 @@ import type {
 import type { AppSettings, TestConnectionResult } from '../../shared/types';
 import type { ToastTone } from './SettingsPage';
 
-type Health = 'green' | 'gray' | 'yellow';
-
 function providerHealth(
   meta: SubscriptionProviderMeta,
   entry: ProviderCacheEntry | undefined,
-): Health {
+): AccountHealth {
   if (!meta.configured) return 'gray';
   if (entry?.infoError) return 'yellow';
   return 'green';
 }
-
-const HEALTH_TEXT: Record<Health, string> = {
-  green: '正常',
-  gray: '未配置',
-  yellow: '异常',
-};
-
-const HEALTH_TITLE: Record<Health, string> = {
-  green: '已配置 · 数据正常',
-  gray: '未配置凭据',
-  yellow: '已配置 · 最近查询失败',
-};
 
 export default function SubscriptionsPage() {
   const [providers, setProviders] = useState<SubscriptionProviderMeta[]>([]);
@@ -350,69 +333,48 @@ export default function SubscriptionsPage() {
           const isOpen = expanded[meta.id] ?? false;
           const isConfigOpen = configOpen[meta.id] ?? false;
           const isCursor = meta.id === 'cursor';
-          const collapsedChips = providerCollapsedUsage(meta.id, entry);
-          const planLabel = providerPlanLabel(meta.id, entry);
+          const data = entry.info?.data ?? null;
+          // 收起态常显区：套餐 + 周期 + 关键额度，全部由纯函数组装
+          const view = buildAccountCardView(meta.id, entry, { usageMonth });
+          const updatedAt = entry.info?.fetchedAt ?? entry.usage?.fetchedAt;
           return (
-            <section
+            <AccountCard
               key={meta.id}
-              className={`account-card${isOpen ? ' account-card--open' : ''}${meta.configured ? '' : ' account-card--unconfigured'}`}
+              meta={meta}
+              view={view}
+              health={health}
+              open={isOpen}
+              onToggle={() => toggleExpanded(meta.id)}
+              updatedAt={updatedAt}
+              placeholder={
+                !meta.configured ? (
+                  <div className="account-card__placeholder">
+                    <ErrorHint
+                      tone="info"
+                      message={
+                        isCursor
+                          ? '尚未配置 Cookie，无法查询该账户'
+                          : '尚未配置 API Key，无法查询该账户'
+                      }
+                      action="展开本卡，在下方「凭据配置」中完成配置，保存后自动开始查询"
+                    />
+                  </div>
+                ) : data ? null : entry.infoError ? (
+                  <div className="account-card__placeholder">
+                    <ErrorHint tone="error" message={entry.infoError} />
+                  </div>
+                ) : (
+                  <div className="account-card__placeholder">
+                    <ErrorHint
+                      tone="info"
+                      message={
+                        refreshing ? '正在查询，请稍候…' : '暂无数据，展开后点「刷新」立即查询'
+                      }
+                    />
+                  </div>
+                )
+              }
             >
-              <button
-                type="button"
-                className="account-card__header"
-                aria-expanded={isOpen}
-                onClick={() => toggleExpanded(meta.id)}
-                title={HEALTH_TITLE[health]}
-              >
-                <span className={`provider-card__dot provider-card__dot--${health}`} aria-hidden />
-                <span className="account-card__title">
-                  <span className="account-card__name-row">
-                    <span className="account-card__name">{meta.label}</span>
-                    {planLabel && (
-                      <span className="account-card__plan" title="订阅套餐">
-                        {planLabel}
-                      </span>
-                    )}
-                    {collapsedChips.length > 0 && (
-                      <span className="account-card__limits" aria-label={collapsedUsageAriaLabel(meta.id)}>
-                        {collapsedChips.map((chip) => {
-                          const tone = limitTone(chip.percent);
-                          return (
-                            <span
-                              key={chip.key}
-                              className={`limit-chip limit-chip--${tone}`}
-                              title={chip.title}
-                            >
-                              <span className="limit-chip__label">{chip.label}</span>
-                              <span className="limit-chip__bar" aria-hidden>
-                                <span
-                                  className={`limit-chip__fill limit-chip__fill--${tone}`}
-                                  style={{ width: `${chip.percent}%` }}
-                                />
-                              </span>
-                              <span className="limit-chip__value">{Math.round(chip.percent)}%</span>
-                            </span>
-                          );
-                        })}
-                      </span>
-                    )}
-                  </span>
-                  <span className="account-card__summary">
-                    {providerSummaryLine(meta.id, entry)}
-                  </span>
-                </span>
-                <span className="account-card__header-actions">
-                  <span className={`account-card__status account-card__status--${health}`}>
-                    {HEALTH_TEXT[health]}
-                  </span>
-                  <span className="account-card__chevron" aria-hidden>
-                    {isOpen ? '▴' : '▾'}
-                  </span>
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="account-card__body">
                   <div className="account-card__toolbar">
                     <span className="field-hint">
                       {entry.info?.fetchedAt || entry.usage?.fetchedAt
@@ -437,14 +399,13 @@ export default function SubscriptionsPage() {
                   )}
 
                   <SubscriptionPanel
-                    meta={meta}
                     info={entry.info}
                     usage={entry.usage}
-                    infoError={entry.infoError}
                     usageError={entry.usageError}
                     refreshing={refreshing}
                     usageMonth={usageMonth}
                     onUsageMonthChange={setUsageMonth}
+                    usageConfigured={meta.usageConfigured}
                   />
 
                   <section className="settings-section account-card__config">
@@ -600,9 +561,7 @@ export default function SubscriptionsPage() {
                       </div>
                     )}
                   </section>
-                </div>
-              )}
-            </section>
+            </AccountCard>
           );
         })}
       </div>
