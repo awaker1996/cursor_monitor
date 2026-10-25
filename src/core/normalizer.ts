@@ -369,11 +369,96 @@ function sumEventCycleTokens(
   return { apiTokens, autoTokens, reliable: true };
 }
 
+interface CycleTokenDetail {
+  apiTokens: number;
+  autoTokens: number;
+  /** 明细可信：来源完整/权威，此时 0 是真实值而非「取不到」。 */
+  reliable: boolean;
+}
+
+/** 聚合接口是否返回了本周期的汇总行（有行 = 服务端整周期视图）。 */
+function hasAggregatedRows(aggregatedUsage: RawAggregatedUsageResponse | null | undefined): boolean {
+  const rows = aggregatedUsage?.aggregations;
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+/**
+ * 解析周期 token 明细。
+ *
+ * 优先用服务端整周期聚合，其次用完整事件样本；两者都没有非零值时，
+ * 若「周期视图完整」且「用量汇总也确认本周期没有用量」，则 0 是**真实值**
+ * ——本周期确实没有可计入用量（例如用量全部来自被剔除的 grok-bot 调用），
+ * 必须与「明细取不到」区分开。
+ *
+ * `noUsageConfirmed` 为 false（汇总接口报告了周期用量）时不能断言 0：
+ * 说明明细样本没有覆盖全部用量，仍按「取不到」处理。
+ */
 function resolveCycleTokens(
   aggregatedUsage: RawAggregatedUsageResponse | null | undefined,
   cycleEvents: RawUsageEventsResponse | null | undefined,
-): BucketCycleTokens | null {
-  return sumAggregatedCycleTokens(aggregatedUsage) ?? sumEventCycleTokens(cycleEvents);
+  noUsageConfirmed: boolean,
+): CycleTokenDetail | null {
+  const aggregated = sumAggregatedCycleTokens(aggregatedUsage);
+  if (aggregated) {
+    return { apiTokens: aggregated.apiTokens, autoTokens: aggregated.autoTokens, reliable: true };
+  }
+
+  const events = sumEventCycleTokens(cycleEvents);
+  if (events) {
+    return { apiTokens: events.apiTokens, autoTokens: events.autoTokens, reliable: true };
+  }
+
+  if (!noUsageConfirmed) return null;
+
+  // 事件样本完整 → 剔除 grok-bot 后为 0 是真实值。
+  if (cycleEvents?.eventsComplete === true) {
+    return { apiTokens: 0, autoTokens: 0, reliable: true };
+  }
+
+  // 服务端整周期聚合有行但 token 合计为 0 → 同样是真实值（事件样本可被截断）。
+  if (hasAggregatedRows(aggregatedUsage)) {
+    return { apiTokens: 0, autoTokens: 0, reliable: true };
+  }
+
+  return null;
+}
+
+/**
+ * 周期 token 明细的 0 / null 语义。
+ *
+ * 明细可信（完整事件样本或服务端整周期聚合）时，0 是**真实值**——本周期确实
+ * 没有可计入用量，与「明细取不到」必须区分开，如实上报为 0（与今日口径一致，
+ * 见 `apiTodayTokens`）。明细不可信时，0 与「取不到」无法区分，只能记 null，
+ * 由 UI 提示明细不可用。
+ */
+function cycleTokenDetail(value: number, detailKnown: boolean): number | null {
+  if (value > 0) return value;
+  return detailKnown ? 0 : null;
+}
+
+/**
+ * 用量汇总是否确认本周期没有用量。
+ *
+ * 汇总是账单的权威口径：只有它也报告「没有用量」，才允许把「事件样本剔除
+ * grok-bot 后为 0」认定为真实的 0。反之（例如事件查询因缺少 userId 而静默
+ * 返回空列表）明细依旧按「取不到」处理，避免谎报 0。
+ *
+ * 优先看百分比（与 UI 的「总消耗」口径一致）；百分比缺失时退到 used/limit，
+ * 且 limit 必须已知，否则无法判断。
+ */
+function summaryReportsNoUsage(
+  used: number | null,
+  limit: number | null,
+  totalUsedPercent: number | null,
+  apiUsedPercent: number | null,
+  autoUsedPercent: number | null,
+): boolean {
+  const percents = [totalUsedPercent, apiUsedPercent, autoUsedPercent].filter(
+    (value): value is number => value !== null,
+  );
+  if (percents.length > 0) return percents.every((value) => value <= 0);
+  if (used !== null && limit !== null && limit > 0) return used <= 0;
+  return false;
 }
 
 interface TokenAggregate {
@@ -393,6 +478,8 @@ function aggregateTokenEvents(
   aggregatedUsage: RawAggregatedUsageResponse | null | undefined,
   apiUsedPercent: number | null,
   autoUsedPercent: number | null,
+  /** 用量汇总是否确认本周期没有用量（用于区分「真的是 0」与「明细取不到」）。 */
+  noUsageConfirmed: boolean,
 ): Pick<
   UsageMetrics,
   | 'totalTokens'
@@ -424,7 +511,7 @@ function aggregateTokenEvents(
 
   // Prefer aggregated (or complete-event) cycle tokens so today% denominator
   // matches the token totals shown in the UI — not a truncated 15-page sample.
-  const cycleTokens = resolveCycleTokens(aggregatedUsage, cycleEvents);
+  const cycleTokens = resolveCycleTokens(aggregatedUsage, cycleEvents, noUsageConfirmed);
   if (cycleTokens) {
     result.apiTokens = cycleTokens.apiTokens;
     result.autoTokens = cycleTokens.autoTokens;
@@ -471,12 +558,13 @@ function aggregateTokenEvents(
   // unreliable when we had to fall back to (or lack) event totals.
   const cycleEventsIncomplete =
     cycleTokens?.reliable === true ? false : isCycleEventsPaginatedIncomplete(cycleEvents);
+  // 周期明细可信（来自完整事件样本或服务端整周期聚合）时，0 是真实值。
+  const cycleDetailKnown = cycleTokens?.reliable === true;
 
   return {
-    totalTokens:
-      result.apiTokens + result.autoTokens > 0 ? result.apiTokens + result.autoTokens : null,
-    apiTokens: result.apiTokens > 0 ? result.apiTokens : null,
-    autoTokens: result.autoTokens > 0 ? result.autoTokens : null,
+    totalTokens: cycleTokenDetail(result.apiTokens + result.autoTokens, cycleDetailKnown),
+    apiTokens: cycleTokenDetail(result.apiTokens, cycleDetailKnown),
+    autoTokens: cycleTokenDetail(result.autoTokens, cycleDetailKnown),
     // A complete today sample is authoritative: report a real 0 instead of null,
     // otherwise `mergeTodayMetricsFromCache` reads the 0 as "could not compute",
     // re-injects a cached nonzero value and latches `stale` on every refresh.
@@ -754,6 +842,7 @@ function buildMetricsFromPlan(
     aggregatedUsage,
     apiUsedPercent,
     autoUsedPercent,
+    summaryReportsNoUsage(used, limit, totalUsedPercent, apiUsedPercent, autoUsedPercent),
   );
 
   return {
@@ -789,6 +878,7 @@ function buildMetricsFromOverall(
     aggregatedUsage,
     apiUsedPercent,
     autoUsedPercent,
+    summaryReportsNoUsage(used, limit, totalUsedPercent, apiUsedPercent, autoUsedPercent),
   );
 
   return {

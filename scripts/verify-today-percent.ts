@@ -3,7 +3,7 @@
  * Run: npx tsx scripts/verify-today-percent.ts
  */
 import { todayUsedPercent, normalizeCookie } from '../src/core/normalizer';
-import { formatOrbSummary } from '../src/shared/format';
+import { buildDashboardSummary, formatOrbSummary } from '../src/shared/format';
 import { mergeCycleTokensFromCache, mergeTodayMetricsFromCache } from '../src/core/snapshotMerge';
 
 const CYCLE = 42.5;
@@ -713,6 +713,163 @@ console.log('exclude grok-bot from today percent');
     'cycle auto percent stays official API',
     approx(snapshot.metrics.autoUsedPercent, 40),
   );
+}
+
+console.log('cycle detail zero vs unavailable');
+
+{
+  // Real-world case: the whole billing cycle only contains grok-bot calls.
+  // The event sample is complete, and the summary reports no usage → the
+  // countable cycle usage really is 0, which must NOT be reported as null
+  // (null renders as "token 明细不可用" and reads as a fetch failure).
+  const zeroCycle = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            used: 0,
+            limit: 2000,
+            remaining: 2000,
+            apiPercentUsed: 0,
+            autoPercentUsed: 0,
+            totalPercentUsed: 0,
+          },
+        },
+      },
+      todayEvents: {
+        eventsComplete: true,
+        usageEventsDisplay: [
+          { model: 'grok-bot-default', tokenUsage: { inputTokens: 900_000 }, chargedCents: 90 },
+        ],
+      },
+      cycleEvents: {
+        totalUsageEventsCount: 2,
+        eventsComplete: true,
+        usageEventsDisplay: [
+          { model: 'grok-bot-default', tokenUsage: { inputTokens: 900_000 }, chargedCents: 90 },
+          { model: 'grok-bot-automation', tokenUsage: { inputTokens: 400_000 }, chargedCents: 40 },
+        ],
+      },
+      // Server-side aggregation returns no rows for a grok-bot-only cycle.
+      aggregatedUsage: null,
+    },
+    new Date().toISOString(),
+  );
+
+  assert('complete zero cycle reports 0 tokens', zeroCycle.metrics.totalTokens === 0);
+  assert('complete zero cycle reports 0 api tokens', zeroCycle.metrics.apiTokens === 0);
+  assert('complete zero cycle reports 0 auto tokens', zeroCycle.metrics.autoTokens === 0);
+  assert(
+    'complete zero cycle renders as 0 tokens',
+    buildDashboardSummary(zeroCycle)?.totalTokens === '0 tokens',
+  );
+  assert(
+    'complete zero cycle is not labelled unavailable',
+    buildDashboardSummary(zeroCycle)?.totalTokens !== 'token 明细不可用',
+  );
+}
+
+{
+  // Same event sample, but the summary reports usage → the zero is only
+  // because the sample missed something, so it stays null ("明细不可用").
+  const unreliable = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            used: 500,
+            limit: 2000,
+            remaining: 1500,
+            apiPercentUsed: 10,
+            autoPercentUsed: 15,
+            totalPercentUsed: 25,
+          },
+        },
+      },
+      cycleEvents: {
+        totalUsageEventsCount: 2,
+        eventsComplete: true,
+        usageEventsDisplay: [
+          { model: 'grok-bot-default', tokenUsage: { inputTokens: 900_000 }, chargedCents: 90 },
+        ],
+      },
+      aggregatedUsage: null,
+    },
+    new Date().toISOString(),
+  );
+
+  assert('cycle zero with reported usage stays null', unreliable.metrics.totalTokens === null);
+  assert(
+    'cycle zero with reported usage renders as unavailable',
+    buildDashboardSummary(unreliable)?.totalTokens === 'token 明细不可用',
+  );
+}
+
+{
+  // Incomplete event sample (pagination truncated) + no summary usage → the
+  // cycle total is unknown, so it must stay null rather than claim 0.
+  const truncated = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            used: 0,
+            limit: 2000,
+            remaining: 2000,
+            apiPercentUsed: 0,
+            autoPercentUsed: 0,
+            totalPercentUsed: 0,
+          },
+        },
+      },
+      cycleEvents: {
+        totalUsageEventsCount: 50_000,
+        eventsComplete: false,
+        usageEventsDisplay: [
+          { model: 'grok-bot-default', tokenUsage: { inputTokens: 900_000 }, chargedCents: 90 },
+        ],
+      },
+      aggregatedUsage: null,
+    },
+    new Date().toISOString(),
+  );
+
+  assert('truncated cycle sample stays null', truncated.metrics.totalTokens === null);
+}
+
+{
+  // Aggregated rows present but every one is a zero-token row → the server
+  // side cycle view is authoritative, so the cycle total is a real 0.
+  const aggregatedZero = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            used: 0,
+            limit: 2000,
+            remaining: 2000,
+            apiPercentUsed: 0,
+            autoPercentUsed: 0,
+            totalPercentUsed: 0,
+          },
+        },
+      },
+      aggregatedUsage: {
+        aggregations: [{ modelIntent: 'grok-bot-default', inputTokens: '0', totalCents: 0, tier: 2 }],
+      },
+    },
+    new Date().toISOString(),
+  );
+
+  assert('aggregated zero rows report 0 tokens', aggregatedZero.metrics.totalTokens === 0);
 }
 
 console.log('\nAll today-percent checks passed.');
