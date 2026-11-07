@@ -103,12 +103,16 @@ function percentFromUsed(used: number | null, limit: number | null): number | nu
   return (used / limit) * 100;
 }
 
-/** Grok Bot models that should not count toward local IDE usage stats. */
-const EXCLUDED_GROK_BOT_MODELS = new Set(['grok-bot-automation', 'grok-bot-default']);
+/**
+ * Bot model family that should not count toward local IDE usage stats.
+ * Matched by prefix so new variants (knowledge-work, …) stay excluded;
+ * IDE models such as `grok-4.5-*` do not carry this prefix and are kept.
+ */
+const EXCLUDED_GROK_BOT_PREFIX = 'grok-bot-';
 
 function isExcludedGrokBotModel(model: string | undefined): boolean {
   if (!model) return false;
-  return EXCLUDED_GROK_BOT_MODELS.has(model.trim().toLowerCase());
+  return model.trim().toLowerCase().startsWith(EXCLUDED_GROK_BOT_PREFIX);
 }
 
 function isAutoModel(model: string | undefined): boolean {

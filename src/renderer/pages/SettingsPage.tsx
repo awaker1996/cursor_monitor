@@ -61,8 +61,14 @@ export default function SettingsPage() {
     <div className="settings-page">
       <SettingsTitleBar />
       <header className="settings-page__topbar">
-        <h1>设置</h1>
-        <p>Cursor Token Monitor 偏好设置 · 改动即时保存</p>
+        <div className="settings-page__identity">
+          <h1>Cursor Token Monitor</h1>
+          <span className="settings-page__identity-chip">偏好设置</span>
+        </div>
+        <span className="settings-page__autosave">
+          <span className="settings-page__autosave-dot" aria-hidden />
+          改动即时保存
+        </span>
       </header>
       <div className="settings-page__layout">
         <SettingsNav active={active} onChange={handleSelect} />

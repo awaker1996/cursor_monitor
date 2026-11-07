@@ -1,10 +1,11 @@
-﻿import { useEffect, useRef, useState, type ReactNode as ReactNodeLike } from 'react';
+import { useEffect, useRef, useState, type ReactNode as ReactNodeLike } from 'react';
 import {
   REFRESH_INTERVAL_MAX,
   REFRESH_INTERVAL_MIN,
   type AppSettings,
 } from '../../shared/types';
-import { SettingsRow, Segmented, SliderInput, Switch, TimeRangeSelect } from './SettingsControls';
+import { SettingsRow, SliderInput, Switch, TimeRangeSelect } from './SettingsControls';
+import { DayWindowTrack, StylePicker } from './StylePicker';
 import { UI_STYLE_LABELS, UI_STYLE_OPTIONS, useSystemPrefersDark } from '../uiStyle';
 import type { UiStyleMode } from '../../shared/types';
 import {
@@ -28,8 +29,14 @@ function GlassCard({
 
 export { GlassCard };
 
+/** 把刷新间隔说成人话：秒 / 分钟。 */
+function humanInterval(seconds: number): string {
+  if (seconds < 60) return `${seconds} 秒`;
+  return `${Math.round(seconds / 60)} 分钟`;
+}
+
 /** 数据刷新与统计偏好。由 SettingsPage 挂在「数据刷新」分区下。
- * 保存逻辑与原实现一致：滑杆/输入 600ms 防抖后写盘。 */
+ * 顶部先给三块当前节奏的读数，再往下才是开关与间隔；保存逻辑不变。 */
 export function DataRefreshPrefs({
   settings,
   onToast,
@@ -100,9 +107,33 @@ export function DataRefreshPrefs({
     void saveInterval(value);
   };
 
+  const intervalSec = Math.max(1, Number(intervalInput) || settings.refreshIntervalSec);
+  const requestsPerDay = Math.round(86_400 / intervalSec);
+
   return (
     <GlassCard>
       <div className="set-card__body">
+        <div className="refresh-summary">
+          <div className="refresh-summary__tile">
+            <span className="refresh-summary__label">刷新节奏</span>
+            <span className="refresh-summary__value">每 {humanInterval(intervalSec)}</span>
+            <span className="refresh-summary__hint">
+              {settings.autoRefreshEnabled ? '后台自动拉取中' : '自动刷新已暂停'}
+            </span>
+          </div>
+          <div className="refresh-summary__tile">
+            <span className="refresh-summary__label">每日请求</span>
+            <span className="refresh-summary__value">
+              {requestsPerDay.toLocaleString('zh-CN')} 次
+            </span>
+            <span className="refresh-summary__hint">按当前间隔估算</span>
+          </div>
+          <div className="refresh-summary__tile">
+            <span className="refresh-summary__label">数据新鲜度</span>
+            <span className="refresh-summary__value">≤ {humanInterval(intervalSec)}</span>
+            <span className="refresh-summary__hint">两次拉取之间的最大延迟</span>
+          </div>
+        </div>
         <SettingsRow
           title="自动刷新"
           description="开启后按下方间隔在后台拉取全部账户数据；关闭仅暂停自动查询，手动「刷新」不受影响"
@@ -140,8 +171,9 @@ export function DataRefreshPrefs({
   );
 }
 
-/** 界面风格：自动跟随（跟随系统 / 跟随时间）与手动固定（清爽纸面 / 极光玻璃）分组排列，
- *  切换即作用于悬浮球与设置窗口；「跟随时间」的时段设置收在卡片底部弱化子区里。 */
+/** 界面风格：四个档位以带缩略预览的选择卡呈现，自动跟随在上、手动固定在下；
+ *  切换即作用于悬浮球与设置窗口；「跟随时间」的时段设置收在卡片底部，
+ *  并配一条 24 小时昼夜轨道，一眼看清当前落在哪个时段。 */
 export function AppearancePrefs({
   settings,
   onToast,
@@ -159,7 +191,19 @@ export function AppearancePrefs({
   }));
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [switchedTo, setSwitchedTo] = useState<UiStyleMode | null>(null);
+  const lastMode = useRef(settings.uiStyle);
   const systemDark = useSystemPrefersDark();
+
+  // 切换瞬间给新档位放一次扫光：既确认「已经切过去了」，
+  // 也把底色的一次跳变收进这 0.7 秒里，不至于突兀。
+  useEffect(() => {
+    if (lastMode.current === settings.uiStyle) return;
+    lastMode.current = settings.uiStyle;
+    setSwitchedTo(settings.uiStyle);
+    const timer = window.setTimeout(() => setSwitchedTo(null), 720);
+    return () => window.clearTimeout(timer);
+  }, [settings.uiStyle]);
 
   useEffect(() => {
     setDraft({ start: formatMinutes(startMin), end: formatMinutes(endMin) });
@@ -189,7 +233,9 @@ export function AppearancePrefs({
       : '系统浅色'
     : isAuto
       ? describeDayWindow(startMin, endMin)
-      : null;
+      : settings.uiStyle === 'calm'
+        ? '固定浅色'
+        : '固定深色';
 
   const styleToast: Record<UiStyleMode, string> = {
     system: '已改为跟随系统',
@@ -225,41 +271,66 @@ export function AppearancePrefs({
             <span className="set-row__title">界面风格</span>
             <span className="style-card__status" data-effective={effective}>
               <span className="style-card__status-dot" aria-hidden />
-              当前 {UI_STYLE_LABELS[effective]}
-              {statusNote && <em>{statusNote}</em>}
+              <span className="style-card__status-label">当前生效</span>
+              <strong className="style-card__status-value">{UI_STYLE_LABELS[effective]}</strong>
+              <span className="style-card__status-sep" aria-hidden />
+              <em className="style-card__status-note">{statusNote}</em>
             </span>
           </div>
           <span className="set-row__desc">
             {current ? current.description : '选择界面的配色方案'}
           </span>
         </div>
-        <Segmented<UiStyleMode>
+        <StylePicker
           value={settings.uiStyle}
-          wide
-          options={UI_STYLE_OPTIONS.map(({ value, label, group }) => ({ value, label, group }))}
+          switchedTo={switchedTo}
           onChange={(next) => {
             void window.electronAPI
               .updateSettings({ uiStyle: next })
               .then(() => onToast(styleToast[next]));
           }}
-          ariaLabel="界面风格"
         />
         <span className="style-card__note">改动即时生效，悬浮球与设置窗口同步</span>
         {isAuto && (
           <div className="style-schedule">
-            <div className="style-schedule__text">
-              <span className="style-schedule__title">自动切换时段</span>
-              <span className="style-schedule__hint">
-                时段内用清爽纸面，其余时间用极光玻璃
+            <div className="style-schedule__head">
+              <span className="style-schedule__icon-frame">
+                <svg
+                  className="style-schedule__icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <circle cx="8" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                  <path
+                    d="M8 5.4v1.5M8 17.1v1.5M1.4 12h1.5M13.1 12h1.5M3.4 7.4l1.1 1.1M11.5 15.5l1.1 1.1M11.5 8.5l1.1-1.1M3.4 16.6l1.1-1.1"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    opacity=".7"
+                  />
+                  <path
+                    d="M20.4 16.2a5.4 5.4 0 1 1-6.6-7.1 4.4 4.4 0 0 0 6.6 7.1z"
+                    fill="currentColor"
+                    opacity=".9"
+                  />
+                </svg>
               </span>
+              <div className="style-schedule__text">
+                <span className="style-schedule__title">自动切换时段</span>
+                <span className="style-schedule__hint">
+                  时段内用清爽纸面，其余时间用极光玻璃
+                </span>
+              </div>
+              <TimeRangeSelect
+                start={draft.start}
+                end={draft.end}
+                overnight={isOvernightWindow(startMin, endMin)}
+                invalid={error !== null}
+                onChange={handleRangeChange}
+              />
             </div>
-            <TimeRangeSelect
-              start={draft.start}
-              end={draft.end}
-              overnight={isOvernightWindow(startMin, endMin)}
-              invalid={error !== null}
-              onChange={handleRangeChange}
-            />
+            <DayWindowTrack startMin={startMin} endMin={endMin} now={now} />
           </div>
         )}
         {error && <p className="set-row__error">{error}</p>}

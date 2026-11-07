@@ -375,14 +375,18 @@ export default function SubscriptionPanel({
     return <CommandCodeDetails data={data} />;
   }
 
-  return (
-    <DeepSeekDetails
-      usage={usage}
-      usageMonth={usageMonth}
-      onUsageMonthChange={onUsageMonthChange}
-      usageConfigured={usageConfigured}
-      usageError={usageError}
-      refreshing={refreshing}
-    />
-  );
+  if (data.providerId === 'deepseek') {
+    return (
+      <DeepSeekDetails
+        usage={usage}
+        usageMonth={usageMonth}
+        onUsageMonthChange={onUsageMonthChange}
+        usageConfigured={usageConfigured}
+        usageError={usageError}
+        refreshing={refreshing}
+      />
+    );
+  }
+
+  return null;
 }

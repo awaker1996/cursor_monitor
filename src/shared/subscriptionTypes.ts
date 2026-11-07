@@ -169,7 +169,10 @@ export interface CursorModelItem {
 }
 
 /** 可辨识联合：新增订阅源时在此追加对应的数据类型。 */
-export type SubscriptionData = DeepSeekSubscriptionData | CommandCodeSubscriptionData | CursorSubscriptionData;
+export type SubscriptionData =
+  | DeepSeekSubscriptionData
+  | CommandCodeSubscriptionData
+  | CursorSubscriptionData;
 
 export interface SubscriptionInfoResult {
   success: boolean;

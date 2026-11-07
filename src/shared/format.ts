@@ -87,6 +87,8 @@ export interface DashboardSummary {
   totalPercent: string;
   totalPercentValue: number | null;
   totalTokens: string;
+  /** token 明细沿用上轮缓存（本轮明细接口失败）。 */
+  detailCached: boolean;
   statusLevel: MetricStatusLevel;
   sourceLabel: string;
   updatedAt: string;
@@ -295,6 +297,7 @@ export function buildDashboardSummary(snapshot: TokenSnapshot | null): Dashboard
     totalPercent: formatUsedPercent(snapshot.metrics.totalUsedPercent),
     totalPercentValue: percentValue,
     totalTokens: formatTokenDetail(snapshot.metrics.totalTokens) ?? 'token 明细不可用',
+    detailCached: snapshot.tokenDetailCached === true,
     statusLevel: getPercentStatusLevel(snapshot.metrics.totalUsedPercent),
     sourceLabel: snapshot.source === 'official' ? '官方' : 'Cookie',
     updatedAt: new Date(snapshot.fetchedAt).toLocaleTimeString('zh-CN', {

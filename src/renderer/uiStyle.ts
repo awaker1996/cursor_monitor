@@ -8,30 +8,36 @@ import { resolveEffectiveUiStyle } from '../shared/uiStyle';
 export const UI_STYLE_OPTIONS: Array<{
   value: UiStyleMode;
   label: string;
+  /** 短提示：选择卡里的一行说明，比 description 更短，便于并排扫读。 */
+  hint: string;
   description: string;
   group: 'auto' | 'manual';
 }> = [
   {
     value: 'system',
     label: '跟随系统',
+    hint: '随 Windows 深浅色',
     description: '跟着 Windows 的深色 / 浅色设置走，系统换主题时同步切换',
     group: 'auto',
   },
   {
     value: 'auto',
     label: '跟随时间',
+    hint: '白天浅色 · 夜间深色',
     description: '白天用清爽纸面，夜间用极光玻璃，时段可自定义',
     group: 'auto',
   },
   {
     value: 'calm',
     label: '清爽纸面',
+    hint: '浅色实底 · 高对比',
     description: '浅色实底、高对比文字，白天与强光下更清晰',
     group: 'manual',
   },
   {
     value: 'aurora',
     label: '极光玻璃',
+    hint: '深色玻璃 · 极光流光',
     description: '深色玻璃质感与极光流光，夜间与暗光下更柔和',
     group: 'manual',
   },

@@ -599,7 +599,8 @@ console.log('mergeCycleTokensFromCache');
   assert('cycle merge restores apiTokens', merged.metrics.apiTokens === 10000);
   assert('cycle merge restores autoTokens', merged.metrics.autoTokens === 5000);
   assert('cycle merge keeps fresh percent', approx(merged.metrics.totalUsedPercent, 43));
-  assert('cycle merge marks stale', merged.stale === true);
+  assert('cycle merge marks token detail cached', merged.tokenDetailCached === true);
+  assert('cycle merge does not latch stale', merged.stale === false);
 
   const otherCycle = {
     ...withDetail,
@@ -610,7 +611,12 @@ console.log('mergeCycleTokensFromCache');
   assert('different cycle not merged', notMerged.metrics.totalTokens === null);
 
   const fresh = mergeCycleTokensFromCache(withDetail, withDetail);
-  assert('fresh detail untouched', fresh.stale === false && fresh.metrics.totalTokens === 15000);
+  assert(
+    'fresh detail untouched',
+    fresh.stale === false &&
+      fresh.tokenDetailCached !== true &&
+      fresh.metrics.totalTokens === 15000,
+  );
 }
 
 console.log('orb summary');
@@ -711,6 +717,73 @@ console.log('exclude grok-bot from today percent');
   );
   assert(
     'cycle auto percent stays official API',
+    approx(snapshot.metrics.autoUsedPercent, 40),
+  );
+}
+
+console.log('exclude grok-bot-* prefix variants from today percent');
+
+{
+  // A newly introduced bot variant must be excluded by prefix, not exact name.
+  const snapshot = normalizeCookie(
+    {
+      summary: {
+        billingCycleStart: '2026-07-01T00:00:00.000Z',
+        billingCycleEnd: '2026-08-01T00:00:00.000Z',
+        individualUsage: {
+          plan: {
+            limit: 100,
+            apiPercentUsed: 10,
+            autoPercentUsed: 40,
+            totalPercentUsed: 50,
+          },
+        },
+      },
+      aggregatedUsage: {
+        aggregations: [
+          {
+            modelIntent: 'composer-2.5-fast',
+            inputTokens: '8000',
+            totalCents: 800,
+            tier: 2,
+          },
+          {
+            modelIntent: 'grok-bot-knowledge-work',
+            inputTokens: '2000',
+            totalCents: 200,
+            tier: 2,
+          },
+        ],
+      },
+      todayEvents: {
+        eventsComplete: true,
+        usageEventsDisplay: [
+          {
+            model: 'composer-2.5-fast',
+            tokenUsage: { inputTokens: 800 },
+            chargedCents: 80,
+          },
+          {
+            model: ' Grok-Bot-Knowledge-Work ',
+            tokenUsage: { inputTokens: 400 },
+            chargedCents: 40,
+          },
+        ],
+      },
+    },
+    new Date().toISOString(),
+  );
+
+  assert(
+    'cycle auto tokens exclude prefix bot variant',
+    snapshot.metrics.autoTokens === 8000,
+  );
+  assert(
+    'today auto percent excludes prefix bot variant',
+    approx(snapshot.metrics.autoTodayUsedPercent, 4),
+  );
+  assert(
+    'cycle auto percent still official API',
     approx(snapshot.metrics.autoUsedPercent, 40),
   );
 }

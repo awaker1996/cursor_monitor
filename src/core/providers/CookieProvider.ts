@@ -7,6 +7,7 @@ import type {
 } from '../../shared/types';
 import { credentialVault } from '../../security/CredentialVault';
 import { createLogger } from '../../utils/logger';
+import { httpRequest, type HttpRequestInit, type HttpResponseLike } from '../httpClient';
 
 const log = createLogger('CookieProvider');
 
@@ -19,14 +20,18 @@ const DASHBOARD_SUMMARY_ENDPOINTS = [
 
 const DASHBOARD_EVENTS_ENDPOINTS = [
   'https://cursor.com/api/dashboard/get-filtered-usage-events',
-  'https://www.cursor.com/api/dashboard/get-filtered-usage-events',
 ];
 
 /** Billing Included Usage uses this server-side aggregation (no event pagination). */
 const DASHBOARD_AGGREGATED_ENDPOINTS = [
   'https://cursor.com/api/dashboard/get-aggregated-usage-events',
-  'https://www.cursor.com/api/dashboard/get-aggregated-usage-events',
 ];
+
+/**
+ * `www.cursor.com` 已从事件 / 聚合端点里移除：实测它对 dashboard POST 返回
+ * 308 且 Location 指回自身（自我重定向），保留它只会每轮多打几次无效请求。
+ * 汇总端点仍保留 www 作为兜底。
+ */
 
 /**
  * 今日窗口起点 = 本地零点与计费周期起点的较晚者。
@@ -138,14 +143,86 @@ function extractUserId(input: string): string | null {
   return null;
 }
 
-async function readJsonResponse(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return { rawText: text.slice(0, 500) };
+function isNumericId(value: string | null | undefined): boolean {
+  return Boolean(value) && Number.isInteger(Number(value));
+}
+
+/**
+ * 结构化描述 Cookie 形态（不含任何密文）。
+ *
+ * dashboard 的明细接口按 `userId` 过滤：Cookie 若是新式不透明会话令牌
+ * （既没有 `userId::jwt` 前缀，`sub` 也不是数字），解析必然失败，服务端
+ * 就会回「空聚合窗口」。这里把形态打出来，省得靠猜。
+ */
+export function describeCookieShape(input: string): Record<string, unknown> {
+  const value = input.trim();
+  const match = value.match(/WorkosCursorSessionToken=([^;]+)/);
+  const sessionToken = match?.[1] ?? value;
+  const decoded = sessionToken.replace(/%3A%3A/gi, '::');
+  const [head, ...rest] = decoded.split('::');
+  const tail = rest.join('::');
+  const jwt = tail || (looksLikeJwt(decoded) ? decoded : '');
+  const parts = jwt ? jwt.split('.') : [];
+
+  let subKind = 'missing';
+  if (parts.length === 3) {
+    try {
+      const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+      const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as {
+        sub?: string;
+      };
+      const sub = payload.sub ?? '';
+      const lastSegment = sub.split('|').pop() ?? '';
+      subKind = isNumericId(lastSegment) ? 'numeric' : sub ? 'prefixed' : 'missing';
+    } catch {
+      subKind = 'unparsable';
+    }
   }
+
+  return {
+    hasWorkosPrefix: Boolean(match),
+    hasDoubleColon: decoded.includes('::'),
+    numericHead: isNumericId(head),
+    jwtParts: parts.length,
+    subKind,
+    length: sessionToken.length,
+  };
+}
+
+async function readJsonResponse(response: HttpResponseLike): Promise<unknown> {
+  return (await readTextAndPayload(response)).payload;
+}
+
+/** 一次读出文本与解析结果，供需要把响应体片段写进日志的调用方复用。 */
+async function readTextAndPayload(
+  response: HttpResponseLike,
+): Promise<{ text: string; payload: unknown }> {
+  const text = await response.text();
+  if (!text) return { text, payload: null };
+  try {
+    return { text, payload: JSON.parse(text) as unknown };
+  } catch {
+    return { text, payload: { rawText: text.slice(0, 500) } };
+  }
+}
+
+/** 截断响应体，便于在日志里直接看出是 HTML 登录页还是 JSON 错误。 */
+function bodyPreview(text: string, limit = 160): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+/**
+ * 登录重定向是「Cookie 对 dashboard 接口不再授权」的明确信号：
+ * 未授权时 `get-aggregated-usage-events` 返回 307 指向 WorkOS 登录页，
+ * fetch 自动跟随后就变成 200 的 HTML，旧日志只能看到「200 但不可用」。
+ */
+function describeAuthRedirect(response: HttpResponseLike): string | null {
+  if (response.status < 300 || response.status >= 400) return null;
+  const location = response.headers.get('location') ?? '';
+  return location.includes('workos') || location.includes('/login')
+    ? 'Cookie 可能已过期：接口被重定向到登录页'
+    : `接口返回 ${response.status} 重定向到 ${location || '未知地址'}`;
 }
 
 function extractErrorMessage(payload: unknown): string | null {
@@ -164,7 +241,8 @@ const NETWORK_RETRY_ATTEMPTS = 3;
 const NETWORK_RETRY_BASE_DELAY_MS = 400;
 
 function isAbortError(err: unknown): boolean {
-  return err instanceof Error && err.name === 'AbortError';
+  if (!(err instanceof Error)) return false;
+  return err.name === 'AbortError' || (err as NodeJS.ErrnoException).code === 'ABORT_ERR';
 }
 
 function delay(ms: number): Promise<void> {
@@ -177,16 +255,19 @@ function delay(ms: number): Promise<void> {
  * refresh cycle. Retry only thrown network errors — HTTP responses (401/500
  * etc.) are returned to the caller untouched, and caller-driven aborts stop
  * the retry loop immediately.
+ *
+ * 请求统一经 `httpRequest` 发出：检测到系统代理时走 CONNECT 隧道，
+ * 否则退回原生 fetch（脚本与无代理环境行为不变）。
  */
 async function fetchWithNetworkRetry(
   url: string,
-  init: RequestInit,
+  init: HttpRequestInit,
   attempts = NETWORK_RETRY_ATTEMPTS,
-): Promise<Response> {
+): Promise<HttpResponseLike> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await fetch(url, init);
+      return await httpRequest(url, init);
     } catch (err) {
       lastError = err;
       if (isAbortError(err)) throw err;
@@ -255,6 +336,53 @@ export function isUsableCookieSummary(payload: unknown): payload is RawCookieRes
   );
 }
 
+/** 从 `/api/auth/me` 之类的身份响应里挑出数字用户 id。 */
+export function extractNumericIdFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  const nestedUser = record.user;
+  const candidates: unknown[] = [
+    record.id,
+    record.userId,
+    record.user_id,
+    nestedUser && typeof nestedUser === 'object' ? (nestedUser as Record<string, unknown>).id : null,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isInteger(candidate) && candidate > 0) {
+      return String(candidate);
+    }
+    if (isNumericId(candidate as string | null | undefined)) return String(candidate);
+  }
+  return null;
+}
+
+/**
+ * Cookie 是不含 `userId` 的新式会话令牌时，退一步问 `/api/auth/me`。
+ *
+ * dashboard 明细接口按 userId 过滤，拿不到就只能得到「空聚合窗口」；这个
+ * 端点未登录时返回 204，登录后大概率带数字 id。解析失败就安静放弃。
+ */
+async function fetchUserIdFromAuthMe(
+  cookieHeader: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  try {
+    const response = await fetchWithNetworkRetry('https://cursor.com/api/auth/me', {
+      method: 'GET',
+      headers: buildDashboardHeaders(cookieHeader),
+      signal,
+    });
+    if (!response.ok) return null;
+    return extractNumericIdFromPayload(await readJsonResponse(response));
+  } catch {
+    return null;
+  }
+}
+
+let cachedAuthMeUserId: string | null = null;
+/** 失败后冷却一段时间再试，避免每轮刷新都白打一次 /api/auth/me。 */
+let authMeCooldownUntil = 0;
+
 export class CookieProvider implements TokenProvider {
   readonly name = 'cookie' as const;
 
@@ -262,6 +390,28 @@ export class CookieProvider implements TokenProvider {
 
   async isConfigured(): Promise<boolean> {
     return credentialVault.hasCookie();
+  }
+
+  private async resolveUserIdFromAuthMe(cookieHeader: string): Promise<string | null> {
+    if (cachedAuthMeUserId) return cachedAuthMeUserId;
+    if (Date.now() < authMeCooldownUntil) return null;
+
+    const timeoutMs = Math.min(this.getSettings().requestTimeoutSec, 10) * 1000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const resolved = await fetchUserIdFromAuthMe(cookieHeader, controller.signal);
+      if (resolved) {
+        cachedAuthMeUserId = resolved;
+        log.info('从 /api/auth/me 补齐数字 userId', { source: 'auth/me' });
+        return resolved;
+      }
+      authMeCooldownUntil = Date.now() + 10 * 60 * 1000;
+      log.info('/api/auth/me 未提供数字 userId，明细按无 userId 请求，10 分钟后再试');
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async fetch(): Promise<ProviderResult> {
@@ -276,7 +426,13 @@ export class CookieProvider implements TokenProvider {
       settings.cookieEndpoint,
     ].filter((endpoint, index, all) => all.indexOf(endpoint) === index);
     const cookieHeader = normalizeWorkosCookie(cookie);
-    const userId = extractUserId(cookie);
+    let userId = extractUserId(cookie);
+    if (!userId) {
+      // dashboard 明细接口按 userId 过滤，解析不出来时服务端会给「空聚合窗口」，
+      // 这里把 Cookie 形态结构化打出来（不含任何密文），方便判断要不要重贴。
+      log.warn('Cookie 中未解析出数字 userId，dashboard 明细可能返回空窗口', describeCookieShape(cookie));
+      userId = await this.resolveUserIdFromAuthMe(cookieHeader);
+    }
 
     let lastError: Error | null = null;
     for (const endpoint of endpoints) {
@@ -349,7 +505,7 @@ export class CookieProvider implements TokenProvider {
                 15,
                 userId,
               ),
-              fetchAggregatedUsage(cookieHeader, cycleRange, aggregatedController.signal),
+              fetchAggregatedUsage(cookieHeader, cycleRange, aggregatedController.signal, userId),
             ]);
 
             return {
@@ -364,12 +520,16 @@ export class CookieProvider implements TokenProvider {
           }
         }
 
+        const authHint = describeAuthRedirect(response);
         lastError = new Error(
-          extractErrorMessage(summary) || `Cookie API returned ${response.status}: ${response.statusText}`,
+          authHint ?? extractErrorMessage(summary) ?? `Cookie API returned ${response.status}`,
         );
         log.warn('Cookie endpoint returned unusable response', {
           endpoint,
           status: response.status,
+          contentType: response.headers.get('content-type'),
+          redirect: authHint,
+          bodyPreview: bodyPreview(await response.text()),
           error: lastError.message,
         });
       } catch (err) {
@@ -487,14 +647,24 @@ async function fetchUsageEventsPage(
         signal,
       });
 
-      const payload = await readJsonResponse(response);
-      if (response.ok) {
-        return payload as { usageEventsDisplay?: unknown[]; totalUsageEventsCount?: number };
+      const { text, payload } = await readTextAndPayload(response);
+      if (response.ok && payload && typeof payload === 'object') {
+        const record = payload as { usageEventsDisplay?: unknown[]; totalUsageEventsCount?: number };
+        // 登录页/占位 HTML 也是 200，必须确认结构真的是事件列表，否则空样本会被误判成「今天没用量」。
+        if (
+          Array.isArray(record.usageEventsDisplay) ||
+          Number.isFinite(Number(record.totalUsageEventsCount))
+        ) {
+          return record;
+        }
       }
 
       log.warn('Usage events endpoint returned unusable response', {
         endpoint,
         status: response.status,
+        contentType: response.headers.get('content-type'),
+        redirect: describeAuthRedirect(response),
+        bodyPreview: bodyPreview(text),
         error: extractErrorMessage(payload),
       });
     } catch (err) {
@@ -516,53 +686,117 @@ async function fetchAggregatedUsage(
   cookieHeader: string,
   range: { startDate: string; endDate: string },
   signal: AbortSignal,
+  userId: string | null,
 ): Promise<unknown | null> {
   const startDate = Number(range.startDate);
   const endDate = Number(range.endDate);
   if (!Number.isFinite(startDate) || !Number.isFinite(endDate)) return null;
 
-  // teamId -1 = individual (matches Cursor dashboard / Billing page)
-  const bodyVariants: Array<Record<string, unknown>> = [
-    { teamId: -1, startDate, endDate },
-    { teamId: 0, startDate, endDate },
-  ];
-
+  const userIdNum = userId && /^\d+$/.test(userId) ? Number(userId) : undefined;
+  // teamId -1 = individual (matches Cursor dashboard / Billing page)；
+  // userId 是 dashboard 会话身份的辅助字段，带上后再退回不带的老形态。
+  // 日期编码同样影响命中：按 ms 数字 → ms 字符串 → ISO 逐个试，成功的记下来优先复用。
+  const encodings = buildDateEncodings(startDate, endDate);
   for (const endpoint of DASHBOARD_AGGREGATED_ENDPOINTS) {
-    for (const body of bodyVariants) {
-      try {
-        const response = await fetchWithNetworkRetry(endpoint, {
-          method: 'POST',
-          headers: buildDashboardHeaders(cookieHeader),
-          body: JSON.stringify(body),
-          signal,
-        });
-        const payload = await readJsonResponse(response);
-        if (response.ok && payload && typeof payload === 'object') {
-          const record = payload as { aggregations?: unknown };
-          if (Array.isArray(record.aggregations)) {
-            log.info('Aggregated usage fetched', {
-              endpoint,
-              teamId: body.teamId,
-              models: record.aggregations.length,
-            });
-            return payload;
+    // 一种编码只要拿到 2xx JSON，就说明服务端认这种编码；此时再换编码毫无
+    // 意义（只会多打出 500 噪音），直接停止探测。
+    for (const encoding of encodings) {
+      let encodingAccepted = false;
+      for (const teamId of [-1, 0]) {
+        const body: Record<string, unknown> = {
+          teamId,
+          startDate: encoding.startDate,
+          endDate: encoding.endDate,
+          ...(userIdNum !== undefined ? { userId: userIdNum } : {}),
+        };
+        try {
+          const response = await fetchWithNetworkRetry(endpoint, {
+            method: 'POST',
+            headers: buildDashboardHeaders(cookieHeader),
+            body: JSON.stringify(body),
+            signal,
+          });
+          const { text, payload } = await readTextAndPayload(response);
+          if (response.ok && payload && typeof payload === 'object') {
+            encodingAccepted = true;
+            const record = payload as { aggregations?: unknown };
+            if (Array.isArray(record.aggregations)) {
+              preferredDateEncoding = encoding.label;
+              log.info('Aggregated usage fetched', {
+                endpoint,
+                teamId,
+                encoding: encoding.label,
+                models: record.aggregations.length,
+              });
+              return payload;
+            }
           }
+          log.warn('Aggregated usage endpoint returned unusable response', {
+            endpoint,
+            teamId,
+            encoding: encoding.label,
+            hasUserId: userIdNum !== undefined,
+            status: response.status,
+            contentType: response.headers.get('content-type'),
+            redirect: describeAuthRedirect(response),
+            hint: describeAggregatedPayload(payload),
+            bodyPreview: bodyPreview(text),
+            error: extractErrorMessage(payload),
+          });
+        } catch (err) {
+          log.warn('Aggregated usage endpoint failed, trying next candidate', {
+            endpoint,
+            teamId,
+            encoding: encoding.label,
+            error: errorToMessage(err),
+          });
         }
-        log.warn('Aggregated usage endpoint returned unusable response', {
-          endpoint,
-          teamId: body.teamId,
-          status: response.status,
-          error: extractErrorMessage(payload),
-        });
-      } catch (err) {
-        log.warn('Aggregated usage endpoint failed, trying next candidate', {
-          endpoint,
-          teamId: body.teamId,
-          error: errorToMessage(err),
-        });
       }
+      if (encodingAccepted) break;
     }
   }
 
+  log.warn('Included Usage 聚合不可用，回退事件聚合', {
+    hasUserId: userIdNum !== undefined,
+    hint: userIdNum === undefined ? '缺少数字 userId，服务端只会回空聚合窗口' : '窗口内没有可聚合行',
+  });
+
   return null;
+}
+
+/** 记住上一次成功的日期编码，刷新时优先使用，避免每轮都试满三种。 */
+let preferredDateEncoding: string | null = null;
+
+interface DateEncoding {
+  label: string;
+  startDate: number | string;
+  endDate: number | string;
+}
+
+export function buildDateEncodings(startDate: number, endDate: number): DateEncoding[] {
+  const variants: DateEncoding[] = [
+    { label: 'ms-number', startDate, endDate },
+    { label: 'ms-string', startDate: String(startDate), endDate: String(endDate) },
+    {
+      label: 'iso',
+      startDate: new Date(startDate).toISOString(),
+      endDate: new Date(endDate).toISOString(),
+    },
+  ];
+  if (!preferredDateEncoding) return variants;
+  const index = variants.findIndex((variant) => variant.label === preferredDateEncoding);
+  if (index <= 0) return variants;
+  const [preferred] = variants.splice(index, 1);
+  return [preferred, ...variants];
+}
+
+/** 把「200 但没有 aggregations」的响应归类，便于日志一眼定性。 */
+export function describeAggregatedPayload(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return '响应体不是对象';
+  const keys = Object.keys(payload as Record<string, unknown>);
+  if (keys.length === 0) return '空对象响应';
+  if (keys.length === 1 && keys[0] === 'startDate') {
+    return '空聚合窗口：只回显 startDate，服务端没有返回任何模型行';
+  }
+  return `响应字段：${keys.slice(0, 6).join(', ')}`;
 }

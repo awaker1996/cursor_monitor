@@ -29,6 +29,48 @@ function providerHealth(
   return 'green';
 }
 
+/** 每个平台「凭据配置」块的文案：字段名、占位、获取方式、按钮文案。 */
+interface CredentialMeta {
+  /** 凭据类型名，用于「Cookie 已配置」「访问令牌 已配置」这类状态文案 */
+  kindLabel: string;
+  fieldLabel: string;
+  placeholder: string;
+  hint: string;
+  multiline: boolean;
+  saveLabel: string;
+  clearLabel: string;
+}
+
+const CREDENTIAL_META: Record<SubscriptionProviderId, CredentialMeta> = {
+  cursor: {
+    kindLabel: 'Cookie',
+    fieldLabel: 'WorkosCursorSessionToken',
+    placeholder: '粘贴 WorkosCursorSessionToken 值或完整 Cookie...',
+    hint: '登录 cursor.com/dashboard/usage 后，按 F12 打开开发者工具，在 Application → Cookies 中复制 WorkosCursorSessionToken 的值粘贴到下方；也可以直接粘贴包含该字段的完整 Cookie 字符串，应用会自动提取。',
+    multiline: true,
+    saveLabel: '保存 Cookie',
+    clearLabel: '清除 Cookie',
+  },
+  commandcode: {
+    kindLabel: '凭据',
+    fieldLabel: 'Command Code 凭据',
+    placeholder: '粘贴 Studio 密钥完整内容或浏览器 Token',
+    hint: '二选一：控制台密钥完整内容（user_ / sk 开头，整体复制勿截断），或浏览器登录 commandcode.ai 后 F12 在 Network 里找 api.commandcode.ai 请求、复制 Authorization Bearer 后面那段 / Cookie 整段。加密保存在本机，保存后不再回显。',
+    multiline: false,
+    saveLabel: '保存凭据',
+    clearLabel: '清除凭据',
+  },
+  deepseek: {
+    kindLabel: 'API Key',
+    fieldLabel: 'DeepSeek API Key',
+    placeholder: 'sk-...',
+    hint: '仅用于查询账户余额；凭据加密保存在本机，保存后不再回显',
+    multiline: false,
+    saveLabel: '保存 Key',
+    clearLabel: '清除 Key',
+  },
+};
+
 export default function SubscriptionsPage() {
   const [providers, setProviders] = useState<SubscriptionProviderMeta[]>([]);
   const [cache, setCache] = useState<Partial<Record<SubscriptionProviderId, ProviderCacheEntry>>>({});
@@ -37,6 +79,7 @@ export default function SubscriptionsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [usageMonth, setUsageMonth] = useState(currentMonthValue());
   const [testing, setTesting] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<SubscriptionProviderId | null>(null);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
   const [expanded, setExpanded] = useState<Partial<Record<SubscriptionProviderId, boolean>>>({});
   const [configOpen, setConfigOpen] = useState<Partial<Record<SubscriptionProviderId, boolean>>>({});
@@ -299,11 +342,38 @@ export default function SubscriptionsPage() {
     setTesting(false);
   };
 
+  /** 非 Cursor 平台：直接查一次该平台的订阅信息当作连通性测试。 */
+  const handleTestProvider = async (meta: SubscriptionProviderMeta) => {
+    setTestingProvider(meta.id);
+    try {
+      const result = await window.electronAPI.fetchSubscriptionInfo(meta.id);
+      if (result.success && result.data) {
+        setCache((prev) => ({
+          ...prev,
+          [meta.id]: {
+            info: result,
+            usage: prev[meta.id]?.usage ?? null,
+            infoError: null,
+            usageError: null,
+          },
+        }));
+        showToast(`${meta.label} 连接正常`);
+      } else {
+        showToast(result.message ?? `${meta.label} 连接失败`, 'error');
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      setTestingProvider(null);
+    }
+  };
+
   const latestFetchedAt = providers
     .map((p) => cache[p.id]?.info?.fetchedAt ?? cache[p.id]?.usage?.fetchedAt)
     .filter((v): v is string => Boolean(v))
     .sort()
     .pop();
+  const configuredCount = providers.filter((p) => p.configured).length;
   const autoRefreshLabel = autoRefreshEnabled
     ? `每 ${Math.max(1, Math.round(refreshIntervalSec / 60))} 分钟自动刷新`
     : '自动刷新已暂停（可在「数据刷新」中开启）';
@@ -311,17 +381,42 @@ export default function SubscriptionsPage() {
   return (
     <div className="sub-accounts">
       <div className="sub-accounts__toolbar">
+        <span className="sub-accounts__toolbar-icon" aria-hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M16.6 10a6.6 6.6 0 1 1-1.93-4.67" strokeLinecap="round" />
+            <path d="M16.9 3.3v3.3h-3.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
         <div className="sub-accounts__meta">
-          <span>{latestFetchedAt ? `上次查询 ${formatFetchedAt(latestFetchedAt)}` : '尚未查询，点击右侧按钮开始'}</span>
-          <span aria-hidden>·</span>
-          <span>{autoRefreshLabel}</span>
+          <span className="sub-accounts__meta-line">
+            {latestFetchedAt
+              ? `上次查询 ${formatFetchedAt(latestFetchedAt)}`
+              : '尚未查询，点右侧按钮开始'}
+          </span>
+          <span className="sub-accounts__meta-sub">
+            <span className="sub-accounts__chip">
+              {configuredCount}/{providers.length} 已配置
+            </span>
+            <span>{autoRefreshLabel}</span>
+          </span>
         </div>
         <button
           type="button"
-          className="btn-primary btn-primary--compact"
+          className="btn-primary btn-primary--compact sub-accounts__refresh"
           onClick={handleRefreshAll}
           disabled={refreshing}
         >
+          <svg
+            className={`sub-accounts__refresh-icon${refreshing ? ' is-spinning' : ''}`}
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            aria-hidden
+          >
+            <path d="M13.4 8a5.4 5.4 0 1 1-1.59-3.82" strokeLinecap="round" />
+            <path d="M13.6 2.6v2.9h-2.9" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           {refreshing ? '正在查询…' : '刷新全部'}
         </button>
       </div>
@@ -333,6 +428,7 @@ export default function SubscriptionsPage() {
           const isOpen = expanded[meta.id] ?? false;
           const isConfigOpen = configOpen[meta.id] ?? false;
           const isCursor = meta.id === 'cursor';
+          const credential = CREDENTIAL_META[meta.id];
           const data = entry.info?.data ?? null;
           // 收起态常显区：套餐 + 周期 + 关键额度，全部由纯函数组装
           const view = buildAccountCardView(meta.id, entry, { usageMonth });
@@ -341,23 +437,39 @@ export default function SubscriptionsPage() {
             <AccountCard
               key={meta.id}
               meta={meta}
-              view={view}
+              view={meta.configured ? view : null}
               health={health}
               open={isOpen}
               onToggle={() => toggleExpanded(meta.id)}
               updatedAt={updatedAt}
               placeholder={
                 !meta.configured ? (
-                  <div className="account-card__placeholder">
-                    <ErrorHint
-                      tone="info"
-                      message={
-                        isCursor
-                          ? '尚未配置 Cookie，无法查询该账户'
-                          : '尚未配置 API Key，无法查询该账户'
-                      }
-                      action="展开本卡，在下方「凭据配置」中完成配置，保存后自动开始查询"
-                    />
+                  <div className="account-card__empty">
+                    <span className="account-card__empty-icon" aria-hidden>
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M7.4 3.5v3M12.6 3.5v3" strokeLinecap="round" />
+                        <rect x="4" y="6.5" width="12" height="10" rx="3" />
+                        <path d="M10 10.2v3.2" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    <span className="account-card__empty-text">
+                      <span className="account-card__empty-title">
+                        {isCursor ? '尚未配置 Cookie' : '尚未配置 API Key'}
+                      </span>
+                      <span className="account-card__empty-hint">
+                        配置后自动查询额度与用量，凭据加密保存在本机
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-ghost btn-ghost--compact"
+                      onClick={() => {
+                        setExpanded((prev) => ({ ...prev, [meta.id]: true }));
+                        setConfigOpen((prev) => ({ ...prev, [meta.id]: true }));
+                      }}
+                    >
+                      去配置
+                    </button>
                   </div>
                 ) : data ? null : entry.infoError ? (
                   <div className="account-card__placeholder">
@@ -417,12 +529,9 @@ export default function SubscriptionsPage() {
                     >
                       <span>{meta.label} 凭据配置</span>
                       <span className="sub-config-toggle__meta">
-                        {isCursor
-                          ? `Cookie ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`
-                          : meta.id === 'commandcode'
-                            ? `凭据 ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`
-                            : `API Key ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`}
-                        {!isCursor && meta.usageSupported &&
+                        {`${credential.kindLabel} ${meta.configured ? '已配置' : '未配置 · 配置后才能查询'}`}
+                        {!isCursor &&
+                          meta.usageSupported &&
                           ` · 用量 Token ${meta.usageConfigured ? '已配置' : '未配置'}`}
                         <span className="sub-config-toggle__chevron">{isConfigOpen ? '▴' : '▾'}</span>
                       </span>
@@ -430,31 +539,31 @@ export default function SubscriptionsPage() {
 
                     {isConfigOpen && (
                       <div className="sub-config-body">
-                        {isCursor ? (
+                        {credential.multiline ? (
                           <div className="sub-config-group">
                             <div
                               className={`settings-section__status ${meta.configured ? 'settings-section__status--ok' : 'settings-section__status--warn'}`}
                             >
-                              {meta.configured ? '✓ 已配置 Cookie' : '未配置 Cookie'}
+                              {meta.configured
+                                ? `✓ 已配置${credential.kindLabel}`
+                                : `未配置${credential.kindLabel}`}
                             </div>
-                            <p className="field-hint">
-                              登录 cursor.com/dashboard/usage 后，按 F12 打开开发者工具，在 Application
-                              → Cookies 中复制 WorkosCursorSessionToken 的值粘贴到下方；也可以直接粘贴包含该字段的完整
-                              Cookie 字符串，应用会自动提取。
-                            </p>
+                            <p className="field-hint">{credential.hint}</p>
                             <div className="form-group">
-                              <label htmlFor="subscription-cookie">WorkosCursorSessionToken</label>
+                              <label htmlFor={`subscription-cred-${meta.id}`}>
+                                {credential.fieldLabel}
+                              </label>
                               <textarea
-                                id="subscription-cookie"
+                                id={`subscription-cred-${meta.id}`}
                                 rows={4}
-                                placeholder="粘贴 WorkosCursorSessionToken 值或完整 Cookie..."
+                                placeholder={credential.placeholder}
                                 value={cookieInput}
                                 onChange={(e) => setCookieInput(e.target.value)}
                               />
                             </div>
                             <div className="btn-row">
                               <button type="button" className="btn-primary" onClick={handleSaveCookie}>
-                                保存 Cookie
+                                {credential.saveLabel}
                               </button>
                               <button
                                 type="button"
@@ -462,7 +571,7 @@ export default function SubscriptionsPage() {
                                 onClick={handleClearCookie}
                                 disabled={!meta.configured}
                               >
-                                清除 Cookie
+                                {credential.clearLabel}
                               </button>
                               <button
                                 type="button"
@@ -477,36 +586,35 @@ export default function SubscriptionsPage() {
                           </div>
                         ) : (
                           <div className="sub-config-group">
+                            <div
+                              className={`settings-section__status ${meta.configured ? 'settings-section__status--ok' : 'settings-section__status--warn'}`}
+                            >
+                              {meta.configured
+                                ? `✓ 已配置${credential.kindLabel}`
+                                : `未配置${credential.kindLabel}`}
+                            </div>
                             <div className="form-group">
-                              <label htmlFor={`subscription-key-${meta.id}`}>
-                                {meta.id === 'commandcode'
-                                  ? 'Command Code 凭据'
-                                  : `${meta.label} API Key`}
+                              <label htmlFor={`subscription-cred-${meta.id}`}>
+                                {credential.fieldLabel}
                               </label>
                               <input
-                                id={`subscription-key-${meta.id}`}
+                                id={`subscription-cred-${meta.id}`}
                                 type="password"
                                 value={keyInputs[meta.id] ?? ''}
-                                placeholder={meta.id === 'commandcode' ? '粘贴 Studio 密钥完整内容或浏览器 Token' : 'sk-...'}
+                                placeholder={credential.placeholder}
                                 onChange={(e) =>
                                   setKeyInputs((prev) => ({ ...prev, [meta.id]: e.target.value }))
                                 }
                               />
-                              {meta.id === 'commandcode' ? (
-                                <p className="field-hint">
-                                  二选一：控制台密钥完整内容（user_ / sk 开头，整体复制勿截断），或浏览器登录 commandcode.ai 后
-                                  F12 在 Network 里找 api.commandcode.ai 请求、复制 Authorization Bearer 后面那段 / Cookie 整段。
-                                  加密保存在本机，保存后不再回显。
-                                </p>
-                              ) : (
-                                <p className="field-hint">
-                                  仅用于查询账户余额；凭据加密保存在本机，保存后不再回显
-                                </p>
-                              )}
+                              <p className="field-hint">{credential.hint}</p>
                             </div>
                             <div className="btn-row">
-                              <button type="button" className="btn-primary" onClick={() => handleSaveKey(meta.id)}>
-                                {meta.id === 'commandcode' ? '保存凭据' : '保存 Key'}
+                              <button
+                                type="button"
+                                className="btn-primary"
+                                onClick={() => handleSaveKey(meta.id)}
+                              >
+                                {credential.saveLabel}
                               </button>
                               <button
                                 type="button"
@@ -514,7 +622,15 @@ export default function SubscriptionsPage() {
                                 onClick={() => handleClearKey(meta.id)}
                                 disabled={!meta.configured}
                               >
-                                {meta.id === 'commandcode' ? '清除凭据' : '清除 Key'}
+                                {credential.clearLabel}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={() => handleTestProvider(meta)}
+                                disabled={testingProvider === meta.id || !meta.configured}
+                              >
+                                {testingProvider === meta.id ? '测试中...' : '测试连接'}
                               </button>
                             </div>
                           </div>

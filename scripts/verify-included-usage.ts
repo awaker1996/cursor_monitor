@@ -535,4 +535,72 @@ console.log('exclude grok-bot from Included Usage');
   assert('category header keeps official percent', aggFp?.usagePercent === 50);
 }
 
+console.log('exclude grok-bot-* prefix variants');
+
+{
+  // New bot variants must be excluded by prefix rather than by exact name.
+  const fromEvents = aggregateIncludedUsageByModel(
+    {
+      usageEventsDisplay: [
+        {
+          model: 'composer-2.5-fast',
+          tokenUsage: { inputTokens: 3_000_000 },
+          chargedCents: 300,
+        },
+        {
+          model: ' Grok-Bot-Knowledge-Work ',
+          tokenUsage: { inputTokens: 512_000 },
+          chargedCents: 100,
+        },
+      ],
+    },
+    null,
+    50,
+  );
+
+  const firstParty = fromEvents.categories.find((c) => c.key === 'firstParty');
+  assert(
+    'prefix bot variant omitted from list',
+    firstParty?.models.some((m) => m.model.toLowerCase().includes('grok-bot')) === false,
+  );
+  assert('prefix bot variant excluded from tokens', firstParty?.totalTokens === 3_000_000);
+  const composer = firstParty?.models.find((m) => m.model === 'composer-2.5-fast');
+  // denom cost = 300 + 100 = 400; composer share = 300/400 * 50 = 37.5
+  assert(
+    'prefix bot variant stays in denominator',
+    approx(composer?.usagePercent ?? null, 37.5),
+  );
+
+  const fromAgg = aggregateIncludedUsageFromAggregations(
+    {
+      aggregations: [
+        {
+          modelIntent: 'composer-2.5-fast',
+          inputTokens: '3000000',
+          totalCents: 300,
+          tier: 2,
+        },
+        {
+          modelIntent: 'grok-bot-knowledge-work',
+          inputTokens: '512000',
+          totalCents: 100,
+          tier: 2,
+        },
+      ],
+    },
+    null,
+    50,
+  );
+  const aggFp = fromAgg.categories.find((c) => c.key === 'firstParty');
+  assert(
+    'prefix bot variant omitted from aggregations',
+    aggFp?.models.some((m) => m.model.includes('grok-bot')) === false,
+  );
+  const aggComposer = aggFp?.models.find((m) => m.model === 'composer-2.5-fast');
+  assert(
+    'aggregated prefix bot variant stays in denominator',
+    approx(aggComposer?.usagePercent ?? null, 37.5),
+  );
+}
+
 console.log('\nAll included-usage checks passed.');

@@ -72,6 +72,11 @@ export interface TokenSnapshot {
   membershipType?: string | null;
   fetchedAt: string;
   stale: boolean;
+  /**
+   * 周期 token 明细本轮取不到、已沿用上一计费周期的缓存值。
+   * 与 `stale` 区分开：整轮失败才置 `stale`，这里只是明细缺失。
+   */
+  tokenDetailCached?: boolean;
   rawVersion: string;
 }
 

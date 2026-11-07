@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   AppSettings,
   PollerState,
   PowerMode,
@@ -6,8 +6,13 @@
   TokenSnapshot,
 } from '../shared/types';
 import type {
+  CommandCodeSubscriptionData,
+  CursorSubscriptionData,
+  DeepSeekSubscriptionData,
+  DeepSeekUsageData,
   SubscriptionCacheSnapshot,
   SubscriptionProviderId,
+  SubscriptionProviderMeta,
   SubscriptionUsageQuery,
 } from '../shared/subscriptionTypes';
 import type { ElectronAPI } from './vite-env';
@@ -89,6 +94,173 @@ const TEST_RESULT: TestConnectionResult = {
   message: '浏览器预览模式：跳过真实连接测试',
 };
 
+/* ── 订阅演示数据（仅浏览器预览）──
+   让 /settings.html 在纯浏览器里也能看到三张已配置的账户卡：卡片头部、
+   指标条、展开明细都有真实形状可核对。Electron 里走 preload 注入的真实 API，
+   这段不会被使用。 */
+
+const isoDaysFromNow = (days: number): string =>
+  new Date(Date.now() + days * 86_400_000).toISOString();
+
+const DEMO_CURSOR_DATA: CursorSubscriptionData = {
+  providerId: 'cursor',
+  cursorModelsUsedPercent: 63,
+  otherModelsUsedPercent: 27,
+  cursorModelsTodayUsedPercent: 42,
+  otherModelsTodayUsedPercent: 18,
+  totalUsedPercent: 63,
+  billingCycleStart: isoDaysFromNow(-22),
+  billingCycleEnd: isoDaysFromNow(8),
+  cursorModels: [
+    { model: 'composer-1', tokens: 21_600_000, usagePercent: 38.1 },
+    { model: 'auto', tokens: 14_200_000, usagePercent: 24.9 },
+  ],
+  otherModels: [
+    { model: 'gpt-5', tokens: 6_100_000, usagePercent: 13.2 },
+    { model: 'claude-sonnet-4.5', tokens: 4_300_000, usagePercent: 9.4 },
+    { model: 'gemini-2.5-pro', tokens: 2_000_000, usagePercent: 4.4 },
+  ],
+  source: 'cookie',
+  hasCookie: true,
+  membershipType: 'pro',
+  grokBot: {
+    usedPercent: 12.4,
+    periodStart: isoDaysFromNow(-3),
+    resetsAt: isoDaysFromNow(4),
+    hasAvailableUsage: true,
+    hasNonZeroIncludedLimit: true,
+    onDemandEligible: true,
+    planLabel: 'Grok Bot Plan',
+    brand: 'cursor',
+  },
+};
+
+const DEMO_COMMANDCODE_DATA: CommandCodeSubscriptionData = {
+  providerId: 'commandcode',
+  account: { login: 'demo-user', orgId: 'org_demo', keyName: 'preview-key' },
+  credits: {
+    monthlyCredits: 500,
+    purchasedCredits: 40,
+    freeCredits: 20,
+    remainingCredits: 312,
+  },
+  plan: {
+    planId: 'pro',
+    status: 'active',
+    currentPeriodStart: isoDaysFromNow(-22),
+    currentPeriodEnd: isoDaysFromNow(8),
+  },
+  summary: {
+    totalCost: 12.4,
+    totalCount: 128,
+    totalTokens: 8_400_000,
+    monthlyCreditsUsed: 188,
+    totalTokensIn: 6_400_000,
+    totalTokensOut: 2_000_000,
+    completedCount: 124,
+    failedCount: 4,
+    successRate: 96.9,
+    averageCost: 0.097,
+    periodBasis: 'billing-period',
+  },
+  limits: [
+    { key: 'fiveHour', used: 12, cap: 60, resetAt: Math.floor(Date.now() / 1000) + 3 * 3600 },
+    { key: 'weekly', used: 140, cap: 300, resetAt: Math.floor(Date.now() / 1000) + 4 * 86_400 },
+    { key: 'monthly', used: 188, cap: 500, resetAt: Math.floor(Date.now() / 1000) + 8 * 86_400 },
+  ],
+  unavailable: [],
+  credentialSource: 'manual',
+};
+
+const DEMO_DEEPSEEK_DATA: DeepSeekSubscriptionData = {
+  providerId: 'deepseek',
+  isAvailable: true,
+  balances: [
+    {
+      currency: 'CNY',
+      totalBalance: '128.42',
+      grantedBalance: '20.00',
+      toppedUpBalance: '108.42',
+    },
+  ],
+};
+
+const DEMO_DEEPSEEK_USAGE: DeepSeekUsageData = {
+  providerId: 'deepseek',
+  month: new Date().getMonth() + 1,
+  year: new Date().getFullYear(),
+  models: [
+    {
+      model: 'deepseek-chat',
+      cacheHitTokens: 4_200_000,
+      cacheMissTokens: 1_800_000,
+      responseTokens: 1_100_000,
+      requests: 820,
+      totalTokens: 7_100_000,
+      cacheHitRatePercent: 70,
+    },
+    {
+      model: 'deepseek-reasoner',
+      cacheHitTokens: 1_500_000,
+      cacheMissTokens: 900_000,
+      responseTokens: 700_000,
+      requests: 260,
+      totalTokens: 3_100_000,
+      cacheHitRatePercent: 62.5,
+    },
+  ],
+  totalTokens: 10_200_000,
+  totalRequests: 1080,
+  totalResponseTokens: 1_800_000,
+  cacheHitRatePercent: 68,
+  zeroUsageModelCount: 1,
+};
+
+const DEMO_PROVIDERS: SubscriptionProviderMeta[] = [
+  { id: 'cursor', label: 'Cursor', configured: true, usageSupported: false, usageConfigured: false },
+  {
+    id: 'commandcode',
+    label: 'Command Code',
+    configured: true,
+    usageSupported: true,
+    usageConfigured: true,
+  },
+  { id: 'deepseek', label: 'DeepSeek', configured: true, usageSupported: true, usageConfigured: true },
+];
+
+const DEMO_SUBSCRIPTIONS: SubscriptionCacheSnapshot = {
+  cursor: {
+    info: {
+      success: true,
+      providerId: 'cursor',
+      fetchedAt: isoDaysFromNow(-0.004),
+      data: DEMO_CURSOR_DATA,
+    },
+  },
+  commandcode: {
+    info: {
+      success: true,
+      providerId: 'commandcode',
+      fetchedAt: isoDaysFromNow(-0.006),
+      data: DEMO_COMMANDCODE_DATA,
+    },
+  },
+  deepseek: {
+    info: {
+      success: true,
+      providerId: 'deepseek',
+      fetchedAt: isoDaysFromNow(-0.008),
+      data: DEMO_DEEPSEEK_DATA,
+    },
+    usage: {
+      success: true,
+      providerId: 'deepseek',
+      fetchedAt: isoDaysFromNow(-0.008),
+      data: DEMO_DEEPSEEK_USAGE,
+    },
+  },
+};
+
 export function installBrowserMock(): void {
   if (typeof window === 'undefined' || window.electronAPI) return;
 
@@ -126,30 +298,29 @@ export function installBrowserMock(): void {
     },
     onDockStateChanged: () => () => undefined,
     openSettings: () => undefined,
-    listSubscriptionProviders: async () => [
-      {
-        id: 'cursor',
-        label: 'Cursor',
-        configured: false,
-        usageSupported: false,
-        usageConfigured: false,
-      },
-    ],
-    getCachedSubscriptions: async () => ({}) as SubscriptionCacheSnapshot,
+    listSubscriptionProviders: async () => DEMO_PROVIDERS,
+    getCachedSubscriptions: async () => DEMO_SUBSCRIPTIONS,
     saveSubscriptionKey: async () => true,
     clearSubscriptionKey: async () => true,
     fetchSubscriptionInfo: async (providerId: SubscriptionProviderId) => ({
-      success: false,
+      success: true,
       providerId,
-      message: '浏览器预览模式：无真实数据',
+      fetchedAt: new Date().toISOString(),
+      data:
+        providerId === 'cursor'
+          ? DEMO_CURSOR_DATA
+          : providerId === 'commandcode'
+            ? DEMO_COMMANDCODE_DATA
+            : DEMO_DEEPSEEK_DATA,
     }),
     fetchSubscriptionUsage: async (
       providerId: SubscriptionProviderId,
       _query: SubscriptionUsageQuery,
     ) => ({
-      success: false,
+      success: true,
       providerId,
-      message: '浏览器预览模式：无真实数据',
+      fetchedAt: new Date().toISOString(),
+      data: providerId === 'deepseek' ? DEMO_DEEPSEEK_USAGE : null,
     }),
     setOrbMode: () => undefined,
     setOrbModeAsync: async () => undefined,

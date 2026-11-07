@@ -630,7 +630,17 @@ export default function App() {
                               />
                             </div>
                           )}
-                          <div className="dashboard-summary__detail">{dashboardSummary.totalTokens}</div>
+                          <div className="dashboard-summary__detail">
+                            {dashboardSummary.totalTokens}
+                            {dashboardSummary.detailCached && (
+                              <span
+                                className="dashboard-summary__detail-tag"
+                                title="本轮明细接口取数失败，显示的是上一轮缓存值"
+                              >
+                                缓存
+                              </span>
+                            )}
+                          </div>
                           <div className="dashboard-summary__meta">
                             <span className={`health-pill health-pill--${health}`}>{statusLabel}</span>
                             <span className={`source-tag source-tag--${snapshot.source}`}>

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { SubscriptionProviderMeta } from '../../shared/subscriptionTypes';
+import type { SubscriptionProviderId, SubscriptionProviderMeta } from '../../shared/subscriptionTypes';
 import { formatRelativeTime, type AccountCardView } from './SubscriptionUtils';
 
 export type AccountHealth = 'green' | 'gray' | 'yellow';
@@ -14,6 +14,13 @@ const HEALTH_TITLE: Record<AccountHealth, string> = {
   green: '已配置 · 数据正常',
   gray: '未配置凭据',
   yellow: '已配置 · 最近查询失败',
+};
+
+/** 平台标识：用首字母缩写代替品牌图标 —— 不引入外部素材，也能在卡片左端形成识别锚点。 */
+const PROVIDER_MARK: Record<SubscriptionProviderId, string> = {
+  cursor: 'C',
+  commandcode: 'CC',
+  deepseek: 'D',
 };
 
 interface AccountCardProps {
@@ -47,6 +54,7 @@ export default function AccountCard({
 }: AccountCardProps) {
   const classes = [
     'account-card',
+    `account-card--${meta.id}`,
     open ? 'account-card--open' : '',
     meta.configured ? '' : 'account-card--unconfigured',
   ]
@@ -62,7 +70,11 @@ export default function AccountCard({
         onClick={onToggle}
         title={HEALTH_TITLE[health]}
       >
-        <span className={`provider-card__dot provider-card__dot--${health}`} aria-hidden />
+        {/* 平台牌：首字母 + 品牌渐变，右下角一枚健康状态点 */}
+        <span className={`account-card__badge account-card__badge--${meta.id}`} aria-hidden>
+          <span className="account-card__badge-mark">{PROVIDER_MARK[meta.id]}</span>
+          <span className={`account-card__badge-dot account-card__badge-dot--${health}`} />
+        </span>
         <span className="account-card__title">
           <span className="account-card__name-row">
             <span className="account-card__name">{meta.label}</span>

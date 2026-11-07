@@ -39,6 +39,10 @@ function hasCycleTokenValue(metrics: UsageMetrics): boolean {
  * When a refresh loses the cycle token detail (events + aggregated endpoints
  * both failed, e.g. TLS resets), keep the last known values from the same
  * billing cycle instead of showing "token 明细不可用".
+ *
+ * 只标记明细来自缓存（`tokenDetailCached`），不再污染整颗快照的 `stale`：
+ * 状态灯与「缓存数据」pill 留给真正的整轮失败，避免明细接口偶发失败时
+ * 状态标记常驻。
  */
 export function mergeCycleTokensFromCache(
   next: TokenSnapshot,
@@ -63,7 +67,7 @@ export function mergeCycleTokensFromCache(
   return {
     ...next,
     metrics,
-    stale: next.stale || usesCachedValue,
+    tokenDetailCached: true,
   };
 }
 
